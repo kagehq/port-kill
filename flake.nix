@@ -2,24 +2,29 @@
     description = "Rust 1.75 project using flake-utils (Darwin only)";
 
     inputs = {
-        nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
         flake-utils.url = "github:numtide/flake-utils";
+        nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+        fenix.url = "github:nix-community/fenix";
+        # nixpkgs.url = "github:NixOS/nixpkgs/6f884c2#nodejs-slim";
+        home-manager.url = "github:nix-community/home-manager/release-25.05";
+        home-manager.inputs.nixpkgs.follows = "nixpkgs";
+        xome.url = "github:jeff-hykin/xome";
+        xome.inputs.nixpkgs.follows = "nixpkgs";
+        xome.inputs.home-manager.follows = "home-manager";
     };
 
-    outputs = { self, nixpkgs, flake-utils, ... }:
+    outputs = { self, flake-utils, nixpkgs, fenix, home-manager, xome, ... }:
         flake-utils.lib.eachSystem [ "x86_64-darwin" "aarch64-darwin" ] (system:
             let
-                pkgs = import nixpkgs {
-                    inherit system;
-                    overlays = [
-                        (final: prev: {
-                            rust-bin = prev.rust-bin.stable."1.75.0";
-                        })
-                    ];
+                pkgs = import nixpkgs { inherit system; };
+                # rustToolchain = fenix.packages.${system}.stable.toolchain;
+                rustToolchain = fenix.packages.${system}.toolchainOf {
+                    channel = "1.75.0";
+                    components = [ "rustc" "cargo" ];
                 };
                 rustPlatform = pkgs.makeRustPlatform {
-                    cargo = pkgs.rust-bin;
-                    rustc = pkgs.rust-bin;
+                    cargo = rustToolchain;
+                    rustc = rustToolchain;
                 };
             in {
                 packages.default = rustPlatform.buildRustPackage {
