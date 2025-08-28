@@ -58,7 +58,7 @@ impl TrayMenu {
     pub fn create_menu(processes: &HashMap<u16, ProcessInfo>, show_pid: bool) -> Result<Menu> {
         let menu = Menu::new();
 
-        // Add "Kill All Processes" item
+        // Add "Kill All Processes" item with confirmation
         let kill_all_item = MenuItem::new("Kill All Processes", true, None);
         menu.append(&kill_all_item)?;
 

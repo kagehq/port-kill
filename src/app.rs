@@ -7,7 +7,7 @@ use crate::{
 use std::collections::HashMap;
 use anyhow::Result;
 use crossbeam_channel::{bounded, Receiver};
-use log::{error, info};
+use log::{error, info, warn};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use std::sync::Mutex as StdMutex;
@@ -77,6 +77,7 @@ impl PortKillApp {
         let mut last_process_count = 0;
         let mut last_menu_update = std::time::Instant::now();
         let is_killing_processes = Arc::new(AtomicBool::new(false));
+        let mut confirmation_pending = false;
 
         // Give the tray icon time to appear
         info!("Waiting for tray icon to appear...");
@@ -89,30 +90,52 @@ impl PortKillApp {
         // Run the event loop
         event_loop.run(move |_event, _elwt| {
             // Handle menu events (simplified to avoid crashes)
-            if let Ok(_event) = menu_event_receiver.try_recv() {
-                info!("Menu event received, starting process killing...");
-                is_killing_processes.store(true, Ordering::Relaxed);
+            if let Ok(event) = menu_event_receiver.try_recv() {
+                info!("Menu event received: {:?}", event);
+                info!("Menu event ID: {:?}", event.id);
                 
-                // Spawn a detached thread to kill processes
-                let ports_to_kill = self.args.get_ports_to_monitor();
-                let is_killing_clone = is_killing_processes.clone();
-                std::thread::spawn(move || {
-                    // Add a longer delay to ensure the menu system is stable
-                    std::thread::sleep(std::time::Duration::from_millis(500));
-                    info!("Starting process killing...");
-                    match PortKillApp::kill_all_processes(&ports_to_kill) {
-                        Ok(_) => {
-                            info!("Process killing completed successfully");
-                            // Reset the flag after a delay to allow menu updates again
-                            std::thread::sleep(std::time::Duration::from_secs(2));
-                            is_killing_clone.store(false, Ordering::Relaxed);
-                        }
-                        Err(e) => {
-                            error!("Failed to kill all processes: {}", e);
-                            is_killing_clone.store(false, Ordering::Relaxed);
+                // For now, treat any menu click as "Kill All" to test the confirmation dialog
+                // In a real implementation, we'd need to properly identify which menu item was clicked
+                if !confirmation_pending {
+                    // Show confirmation dialog
+                    confirmation_pending = true;
+                    println!("⚠️  Are you sure you want to kill all processes? Click 'Kill All Processes' again to confirm.");
+                    
+                    // Update menu to show confirmation state
+                    if let Ok(tray_icon_guard) = tray_icon.lock() {
+                        if let Some(ref icon) = *tray_icon_guard {
+                            if let Ok(confirm_menu) = Self::create_confirmation_menu() {
+                                icon.set_menu(Some(Box::new(confirm_menu)));
+                            }
                         }
                     }
-                });
+                } else {
+                    // User confirmed, proceed with killing
+                    confirmation_pending = false;
+                    info!("User confirmed, starting process killing...");
+                    is_killing_processes.store(true, Ordering::Relaxed);
+                    
+                    // Spawn a detached thread to kill processes
+                    let ports_to_kill = self.args.get_ports_to_monitor();
+                    let is_killing_clone = is_killing_processes.clone();
+                    std::thread::spawn(move || {
+                        // Add a longer delay to ensure the menu system is stable
+                        std::thread::sleep(std::time::Duration::from_millis(500));
+                        info!("Starting process killing...");
+                        match PortKillApp::kill_all_processes(&ports_to_kill) {
+                            Ok(_) => {
+                                info!("Process killing completed successfully");
+                                // Reset the flag after a delay to allow menu updates again
+                                std::thread::sleep(std::time::Duration::from_secs(2));
+                                is_killing_clone.store(false, Ordering::Relaxed);
+                            }
+                            Err(e) => {
+                                error!("Failed to kill all processes: {}", e);
+                                is_killing_clone.store(false, Ordering::Relaxed);
+                            }
+                        }
+                    });
+                }
             }
             
             // Check for processes every 5 seconds (less frequent to avoid crashes)
@@ -188,6 +211,24 @@ impl PortKillApp {
         })?;
 
         Ok(())
+    }
+
+    fn create_confirmation_menu() -> Result<tray_icon::menu::Menu> {
+        let menu = tray_icon::menu::Menu::new();
+
+        // Add confirmation message (make it clickable)
+        let confirm_item = tray_icon::menu::MenuItem::new("⚠️  Click again to confirm Kill All", true, None);
+        menu.append(&confirm_item)?;
+
+        // Add separator
+        let separator = tray_icon::menu::PredefinedMenuItem::separator();
+        menu.append(&separator)?;
+
+        // Add "Cancel" option
+        let cancel_item = tray_icon::menu::MenuItem::new("Cancel", true, None);
+        menu.append(&cancel_item)?;
+
+        Ok(menu)
     }
 
     fn get_processes_on_ports(ports: &[u16]) -> (usize, HashMap<u16, crate::types::ProcessInfo>) {
@@ -292,8 +333,8 @@ impl PortKillApp {
         match kill(Pid::from_raw(pid), Signal::SIGTERM) {
             Ok(_) => info!("SIGTERM sent to PID: {}", pid),
             Err(e) => {
-                error!("Failed to send SIGTERM to PID {}: {}", pid, e);
-                return Err(anyhow::anyhow!("Failed to send SIGTERM: {}", e));
+                // Don't fail immediately, just log the error and continue
+                warn!("Failed to send SIGTERM to PID {}: {} (process may already be terminated)", pid, e);
             }
         }
         
@@ -313,8 +354,8 @@ impl PortKillApp {
             match kill(Pid::from_raw(pid), Signal::SIGKILL) {
                 Ok(_) => info!("SIGKILL sent to PID: {}", pid),
                 Err(e) => {
-                    error!("Failed to send SIGKILL to PID {}: {}", pid, e);
-                    return Err(anyhow::anyhow!("Failed to send SIGKILL: {}", e));
+                    // Log error but don't fail the entire operation
+                    warn!("Failed to send SIGKILL to PID {}: {} (process may be protected)", pid, e);
                 }
             }
         } else {

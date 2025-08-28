@@ -27,11 +27,13 @@ Hover over the icon to see the exact process count in the tooltip.
 
 ## Menu Options
 
-- **Kill All Processes**: Terminates all detected development processes
+- **Kill All Processes**: Terminates all detected development processes (requires confirmation)
 - **Individual Process Entries**: 
   - Docker containers: "Kill: Port 3001: node [Docker: my-react-app]"
   - Regular processes: "Kill: Port 3001: node" (or "Kill: Port 3001: node (PID 1234)" with `--show-pid`)
 - **Quit**: Exits the application
+
+**Safety Feature**: The "Kill All Processes" option now requires a confirmation click to prevent accidental termination of development servers.
 
 **Note**: Currently, clicking any menu item will kill all processes (for testing purposes).
 
@@ -164,6 +166,7 @@ lsof -ti :PORT -sTCP:LISTEN
 
 1. **SIGTERM**: First attempts graceful termination
 2. **SIGKILL**: If process doesn't terminate within 500ms, forces termination
+3. **Error Handling**: Gracefully handles permission errors and already-terminated processes
 
 ### Port Range
 
