@@ -38,4 +38,8 @@ if [ ! -f "./target/release/port-kill" ]; then
 fi
 
 # Run the Linux application with logging and pass through all arguments
+echo "🚀 Starting Port Kill..."
+echo "📊 If system tray is not available, it will automatically switch to console mode"
+echo ""
+
 RUST_LOG=info ./target/release/port-kill "$@"

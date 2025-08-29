@@ -69,7 +69,8 @@ Hover over the icon to see the exact process count in the tooltip.
 - Rust 1.70 or later
 - `lsof` command
 - Docker (optional, for container monitoring)
-- **Required packages**: `libatk1.0-dev libgdk-pixbuf2.0-dev libgtk-3-dev libxdo-dev`
+- **Required packages for system tray**: `libatk1.0-dev libgdk-pixbuf2.0-dev libgtk-3-dev libxdo-dev`
+- **Note**: If GTK packages are missing, the app automatically falls back to console mode
 
 ### Windows
 - Windows 10 or later
@@ -363,6 +364,32 @@ If the application fails to start:
 1. Check if another instance is already running
 2. Verify all dependencies are installed
 3. Check system logs for error messages
+
+### Linux System Tray Issues
+
+If the Linux system tray is not working:
+
+1. **Install GTK packages** (required for system tray):
+   ```bash
+   # Ubuntu/Debian
+   sudo apt-get install libatk1.0-dev libgdk-pixbuf2.0-dev libgtk-3-dev libxdo-dev
+   
+   # Fedora/RHEL
+   sudo dnf install atk-devel gdk-pixbuf2-devel gtk3-devel libxdo-devel
+   
+   # Arch Linux
+   sudo pacman -S atk gdk-pixbuf2 gtk3 libxdo
+   ```
+
+2. **Use console mode** (works without GUI dependencies):
+   ```bash
+   ./run-linux.sh --console --ports 3000,8000 --verbose
+   ```
+
+3. **Check display environment**:
+   - Ensure you're running in a desktop environment (not SSH without X11 forwarding)
+   - Verify `DISPLAY` environment variable is set: `echo $DISPLAY`
+   - Try running in a terminal emulator (not pure console)
 
 ### Docker Issues
 

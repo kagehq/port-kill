@@ -11,9 +11,10 @@ use anyhow::Result;
 use clap::Parser;
 use log::{error, info};
 use std::collections::HashMap;
-
 use std::thread;
 use std::time::Duration;
+
+
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -39,17 +40,43 @@ async fn main() -> Result<()> {
         console_app.run().await
     } else {
         // Use Linux tray mode
-        run_linux_tray_mode(args)
+        run_linux_tray_mode(args).await
     }
 }
 
-fn run_linux_tray_mode(args: Args) -> Result<()> {
+async fn run_linux_tray_mode(args: Args) -> Result<()> {
     info!("Starting Linux tray mode...");
     
+    // Set required environment variables for GTK
+    if std::env::var("DISPLAY").is_err() {
+        std::env::set_var("DISPLAY", ":0");
+    }
+    std::env::set_var("GTK_THEME", "Adwaita");
+    std::env::set_var("GDK_BACKEND", "x11");
+    
     // Create the tray item
-    let mut tray = TrayItem::new("Port Kill", "Port Kill").map_err(|e| {
-        anyhow::anyhow!("Failed to create Linux tray item: {}", e)
-    })?;
+    let mut tray = match TrayItem::new("Port Kill", "Port Kill") {
+        Ok(tray) => tray,
+        Err(e) => {
+            error!("Failed to create Linux tray item: {}", e);
+            error!("This might be due to missing GTK packages or running in a headless environment");
+            error!("Falling back to console mode...");
+            println!("⚠️  System tray not available, switching to console mode");
+            println!("💡 To fix this, install GTK packages:");
+            println!("   Ubuntu/Debian: sudo apt-get install libatk1.0-dev libgdk-pixbuf2.0-dev libgtk-3-dev libxdo-dev");
+            println!("   Fedora/RHEL: sudo dnf install atk-devel gdk-pixbuf2-devel gtk3-devel libxdo-devel");
+            println!("   Arch Linux: sudo pacman -S atk gdk-pixbuf2 gtk3 libxdo");
+            println!("");
+            
+            // Fall back to console mode
+            let console_args = Args {
+                console: true,
+                ..args
+            };
+            let console_app = ConsolePortKillApp::new(console_args)?;
+            return console_app.run().await;
+        }
+    };
     
     info!("Linux tray created successfully!");
     println!("🔍 Look for the Port Kill icon in your system tray!");
