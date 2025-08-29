@@ -58,7 +58,7 @@ impl TrayMenu {
     pub fn create_menu(processes: &HashMap<u16, ProcessInfo>, show_pid: bool) -> Result<Menu> {
         let menu = Menu::new();
 
-        // Add "Kill All Processes" item with confirmation
+        // Add "Kill All Processes" item with proper ID
         let kill_all_item = MenuItem::new("Kill All Processes", true, None);
         menu.append(&kill_all_item)?;
 
@@ -66,7 +66,7 @@ impl TrayMenu {
         let separator = PredefinedMenuItem::separator();
         menu.append(&separator)?;
 
-        // Add individual process items
+        // Add individual process items with proper IDs
         for (port, process_info) in processes {
             let menu_text = if let (Some(_container_id), Some(container_name)) = (&process_info.container_id, &process_info.container_name) {
                 format!(
@@ -84,7 +84,9 @@ impl TrayMenu {
                     port, process_info.name
                 )
             };
-            let _menu_id = format!("process_{}", process_info.pid);
+            
+            // Create unique menu ID for each process
+            let _menu_id = format!("process_{}_{}", port, process_info.pid);
             
             let process_item = MenuItem::new(&menu_text, true, None);
             menu.append(&process_item)?;
@@ -96,12 +98,14 @@ impl TrayMenu {
             menu.append(&separator)?;
         }
 
-        // Add "Quit" item
+        // Add "Quit" item with proper ID
         let quit_item = MenuItem::new("Quit", true, None);
         menu.append(&quit_item)?;
 
         Ok(menu)
     }
+
+
 
     pub fn create_icon(text: &str) -> Result<Icon> {
         // Create a simple but visible icon for the status bar

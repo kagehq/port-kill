@@ -128,6 +128,29 @@ The application now supports configurable port ranges and specific port monitori
 ./run.sh --console --docker --ports 3000,8000,8080
 ```
 
+#### Ignoring System Processes
+```bash
+# Ignore common system ports (Chromecast, AirDrop, etc.)
+./run.sh --ignore-ports 5353,5000,7000
+
+# Ignore specific process names
+./run.sh --ignore-processes Chrome,ControlCe,rapportd
+
+# Combine both ignore options
+./run.sh --ignore-ports 5353,5000,7000 --ignore-processes Chrome,ControlCe
+
+# Console mode with ignore options
+./run.sh --console --ignore-ports 5353,5000,7000 --ignore-processes Chrome,ControlCe
+```
+
+**Common System Processes to Ignore:**
+- **Port 5353**: Google Chromecast service
+- **Port 5000**: Apple AirDrop service (ControlCe)
+- **Port 7000**: Apple AirDrop service
+- **Process "Chrome"**: Google Chrome browser
+- **Process "ControlCe"**: Apple Control Center/AirDrop
+- **Process "rapportd"**: Apple Rapport service
+
 **Docker Features:**
 - Detects processes running inside Docker containers
 - Shows container names prominently in the menu and console output (no PID for containers)
@@ -138,6 +161,8 @@ The application now supports configurable port ranges and specific port monitori
 - `--start-port, -s`: Starting port for range scanning (default: 2000)
 - `--end-port, -e`: Ending port for range scanning (default: 6000)
 - `--ports, -p`: Specific ports to monitor (comma-separated, overrides start/end range)
+- `--ignore-ports`: Ports to ignore (comma-separated, e.g., 5353,5000,7000 for Chromecast/AirDrop)
+- `--ignore-processes`: Process names to ignore (comma-separated, e.g., Chrome,ControlCe)
 - `--console, -c`: Run in console mode instead of status bar mode
 - `--verbose, -v`: Enable verbose logging
 - `--docker, -d`: Enable Docker container monitoring (includes containers in process detection)
