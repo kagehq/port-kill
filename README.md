@@ -95,13 +95,14 @@ git clone <repository-url>
 cd port-kill
 ```
 
-2. Build the macOS version:
+2. Install and build (recommended):
 ```bash
-./build-macos.sh
+./install.sh
 ```
 
-3. Run the application:
+Or manually:
 ```bash
+./build-macos.sh
 ./run.sh
 ```
 
@@ -125,13 +126,14 @@ sudo dnf install atk-devel gdk-pixbuf2-devel gtk3-devel libxdo-devel
 sudo pacman -S atk gdk-pixbuf2 gtk3 libxdo
 ```
 
-3. Build the Linux version:
+3. Install and build (recommended):
 ```bash
-./build-linux.sh
+./install.sh
 ```
 
-4. Run the application:
+Or manually:
 ```bash
+./build-linux.sh
 ./run-linux.sh
 ```
 
@@ -148,13 +150,14 @@ cd port-kill
 # Download and run rustup-init.exe from https://rustup.rs/
 ```
 
-3. Build the Windows version:
+3. Install and build (recommended):
 ```bash
-build-windows.bat
+./install.sh
 ```
 
-4. Run the application:
+Or manually:
 ```bash
+build-windows.bat
 run-windows.bat
 ```
 
