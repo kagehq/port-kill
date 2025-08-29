@@ -5,6 +5,7 @@ A lightweight cross-platform status bar app that monitors and manages developmen
 **Supported Platforms:**
 - ✅ **macOS**: Native system tray with full functionality
 - ✅ **Linux**: Native system tray with full functionality (requires GTK packages)
+- ✅ **Windows**: Native system tray with full functionality
 - ✅ **Console Mode**: Works on all platforms without GUI dependencies
 
 ![Port Kill Status Bar Icon](image-short.png)
@@ -24,6 +25,7 @@ A lightweight cross-platform status bar app that monitors and manages developmen
 ### Platform-Specific Features
 - **macOS**: Native system tray with dynamic context menu and visual status icon
 - **Linux**: Native system tray with dynamic context menu and visual status icon
+- **Windows**: Native system tray with dynamic context menu and visual status icon
 - **Console Mode**: Cross-platform console interface with real-time updates
 
 ### Advanced Features
@@ -69,9 +71,17 @@ Hover over the icon to see the exact process count in the tooltip.
 - Docker (optional, for container monitoring)
 - **Required packages**: `libatk1.0-dev libgdk-pixbuf2.0-dev libgtk-3-dev libxdo-dev`
 
+### Windows
+- Windows 10 or later
+- Rust 1.70 or later
+- `netstat` command (included with Windows)
+- `tasklist` command (included with Windows)
+- Docker (optional, for container monitoring)
+
 ### Console Mode (All Platforms)
 - Rust 1.70 or later
-- `lsof` command
+- `lsof` command (Unix-like systems)
+- `netstat` command (Windows)
 - Docker (optional, for container monitoring)
 - **No GUI dependencies required**
 
@@ -125,6 +135,29 @@ sudo pacman -S atk gdk-pixbuf2 gtk3 libxdo
 ./run-linux.sh
 ```
 
+### Windows Installation
+
+1. Clone the repository:
+```bash
+git clone <repository-url>
+cd port-kill
+```
+
+2. Install Rust (if not already installed):
+```bash
+# Download and run rustup-init.exe from https://rustup.rs/
+```
+
+3. Build the Windows version:
+```bash
+build-windows.bat
+```
+
+4. Run the application:
+```bash
+run-windows.bat
+```
+
 ### Console Mode (All Platforms)
 
 Console mode works on all platforms without GUI dependencies:
@@ -145,6 +178,7 @@ cargo build --release
 **Platform-Specific Run Scripts:**
 - **macOS**: Use `./run.sh` 
 - **Linux**: Use `./run-linux.sh`
+- **Windows**: Use `run-windows.bat`
 
 1. **Start the Application**: Run the appropriate script for your platform with default settings (ports 2000-6000)
 2. **Monitor Status**: Check the status bar for the process count indicator
@@ -163,10 +197,12 @@ The application now supports configurable port ranges and specific port monitori
 # Monitor ports 3000-8080
 ./run.sh --start-port 3000 --end-port 8080          # macOS
 ./run-linux.sh --start-port 3000 --end-port 8080    # Linux
+run-windows.bat --start-port 3000 --end-port 8080   # Windows
 
 # Monitor ports 8000-9000
 ./run.sh -s 8000 -e 9000                            # macOS
 ./run-linux.sh -s 8000 -e 9000                      # Linux
+run-windows.bat -s 8000 -e 9000                     # Windows
 ```
 
 #### Specific Ports Examples
@@ -174,10 +210,12 @@ The application now supports configurable port ranges and specific port monitori
 # Monitor only specific ports (common dev ports)
 ./run.sh --ports 3000,8000,8080,5000                # macOS
 ./run-linux.sh --ports 3000,8000,8080,5000          # Linux
+run-windows.bat --ports 3000,8000,8080,5000         # Windows
 
 # Monitor React, Node.js, and Python dev servers
 ./run.sh -p 3000,3001,8000,8080                     # macOS
 ./run-linux.sh -p 3000,3001,8000,8080               # Linux
+run-windows.bat -p 3000,3001,8000,8080              # Windows
 ```
 
 #### Console Mode

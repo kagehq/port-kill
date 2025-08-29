@@ -2,7 +2,9 @@ use crate::types::{ProcessInfo, ProcessUpdate};
 use anyhow::{Context, Result};
 use crossbeam_channel::Sender;
 use log::{error, info, warn};
+#[cfg(not(target_os = "windows"))]
 use nix::sys::signal::{kill, Signal};
+#[cfg(not(target_os = "windows"))]
 use nix::unistd::Pid;
 use std::collections::HashMap;
 use std::process::Command;
@@ -77,21 +79,54 @@ impl ProcessMonitor {
     }
 
     async fn get_process_on_port(&self, port: u16) -> Result<ProcessInfo> {
-        // Use lsof to find processes listening on the port
-        let output = Command::new("lsof")
-            .args(&["-ti", &format!(":{}", port), "-sTCP:LISTEN"])
-            .output()
-            .context("Failed to execute lsof command")?;
+        #[cfg(target_os = "windows")]
+        {
+            // Windows: Use netstat to find processes listening on the port
+            let output = Command::new("netstat")
+                .args(&["-ano"])
+                .output()
+                .context("Failed to execute netstat command")?;
 
-        if output.status.success() {
-            let output_str = String::from_utf8_lossy(&output.stdout);
-            let pid_str = output_str.trim();
-            if !pid_str.is_empty() {
-                let pid: i32 = pid_str.parse().context("Failed to parse PID")?;
-                
-                // Get process details using ps
-                let process_info = self.get_process_details(pid, port).await?;
-                return Ok(process_info);
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                for line in stdout.lines() {
+                    let parts: Vec<&str> = line.split_whitespace().collect();
+                    if parts.len() >= 5 {
+                        // Extract port from local address (e.g., "0.0.0.0:3000")
+                        if let Some(port_str) = parts[1].split(':').last() {
+                            if let Ok(found_port) = port_str.parse::<u16>() {
+                                if found_port == port {
+                                    if let Ok(pid) = parts[4].parse::<i32>() {
+                                        // Get process details
+                                        let process_info = self.get_process_details_windows(pid, port).await?;
+                                        return Ok(process_info);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        #[cfg(not(target_os = "windows"))]
+        {
+            // Unix-like systems: Use lsof to find processes listening on the port
+            let output = Command::new("lsof")
+                .args(&["-ti", &format!(":{}", port), "-sTCP:LISTEN"])
+                .output()
+                .context("Failed to execute lsof command")?;
+
+            if output.status.success() {
+                let output_str = String::from_utf8_lossy(&output.stdout);
+                let pid_str = output_str.trim();
+                if !pid_str.is_empty() {
+                    let pid: i32 = pid_str.parse().context("Failed to parse PID")?;
+                    
+                    // Get process details using ps
+                    let process_info = self.get_process_details(pid, port).await?;
+                    return Ok(process_info);
+                }
             }
         }
 
@@ -130,6 +165,65 @@ impl ProcessMonitor {
             port,
             command,
             name,
+            container_id,
+            container_name,
+        })
+    }
+
+    #[cfg(target_os = "windows")]
+    async fn get_process_details_windows(&self, pid: i32, port: u16) -> Result<ProcessInfo> {
+        // Get process name using tasklist
+        let output = Command::new("tasklist")
+            .args(&["/FI", &format!("PID eq {}", pid), "/FO", "CSV", "/NH"])
+            .output()
+            .context("Failed to execute tasklist command")?;
+
+        let command = if output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            for line in stdout.lines() {
+                // Parse CSV format: "process.exe","PID","Session Name","Session#","Mem Usage"
+                if let Some(name_part) = line.split(',').next() {
+                    // Remove quotes and .exe extension
+                    let name = name_part.trim_matches('"');
+                    if let Some(name_without_ext) = name.strip_suffix(".exe") {
+                        return Ok(ProcessInfo {
+                            pid,
+                            port,
+                            command: name.to_string(),
+                            name: name_without_ext.to_string(),
+                            container_id: None,
+                            container_name: None,
+                        });
+                    }
+                    return Ok(ProcessInfo {
+                        pid,
+                        port,
+                        command: name.to_string(),
+                        name: name.to_string(),
+                        container_id: None,
+                        container_name: None,
+                    });
+                }
+            }
+            "unknown".to_string()
+        } else {
+            "unknown".to_string()
+        };
+
+        // For Windows, Docker container detection is more complex
+        // For now, we'll skip it and focus on basic process detection
+        let (container_id, container_name) = if self.docker_enabled {
+            // TODO: Implement Windows Docker container detection
+            (None, None)
+        } else {
+            (None, None)
+        };
+
+        Ok(ProcessInfo {
+            pid,
+            port,
+            command,
+            name: command.clone(),
             container_id,
             container_name,
         })
@@ -239,35 +333,55 @@ impl ProcessMonitor {
             }
         }
 
-        // First try SIGTERM
-        match kill(Pid::from_raw(pid), Signal::SIGTERM) {
-            Ok(_) => {
-                info!("Sent SIGTERM to process {}", pid);
-                
-                // Wait a bit and check if process is still alive
-                sleep(Duration::from_millis(500)).await;
-                
-                // Check if process is still running
-                if self.is_process_running(pid).await {
-                    warn!("Process {} still running after SIGTERM, sending SIGKILL", pid);
-                    
-                    // Send SIGKILL if process is still alive
-                    match kill(Pid::from_raw(pid), Signal::SIGKILL) {
-                        Ok(_) => {
-                            info!("Sent SIGKILL to process {}", pid);
-                        }
-                        Err(e) => {
-                            error!("Failed to send SIGKILL to process {}: {}", pid, e);
-                            return Err(anyhow::anyhow!("Failed to kill process: {}", e));
-                        }
-                    }
-                } else {
-                    info!("Process {} terminated successfully with SIGTERM", pid);
-                }
+        #[cfg(target_os = "windows")]
+        {
+            // Windows: Use taskkill
+            let output = Command::new("taskkill")
+                .args(&["/PID", &pid.to_string(), "/F"])
+                .output()
+                .context("Failed to execute taskkill command")?;
+
+            if output.status.success() {
+                info!("Successfully killed process {} on Windows", pid);
+            } else {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                error!("Failed to kill process {} on Windows: {}", pid, stderr);
+                return Err(anyhow::anyhow!("Failed to kill process on Windows: {}", stderr));
             }
-            Err(e) => {
-                error!("Failed to send SIGTERM to process {}: {}", pid, e);
-                return Err(anyhow::anyhow!("Failed to kill process: {}", e));
+        }
+
+        #[cfg(not(target_os = "windows"))]
+        {
+            // Unix-like systems: Use SIGTERM then SIGKILL
+            match kill(Pid::from_raw(pid), Signal::SIGTERM) {
+                Ok(_) => {
+                    info!("Sent SIGTERM to process {}", pid);
+                    
+                    // Wait a bit and check if process is still alive
+                    sleep(Duration::from_millis(500)).await;
+                    
+                    // Check if process is still running
+                    if self.is_process_running(pid).await {
+                        warn!("Process {} still running after SIGTERM, sending SIGKILL", pid);
+                        
+                        // Send SIGKILL if process is still alive
+                        match kill(Pid::from_raw(pid), Signal::SIGKILL) {
+                            Ok(_) => {
+                                info!("Sent SIGKILL to process {}", pid);
+                            }
+                            Err(e) => {
+                                error!("Failed to send SIGKILL to process {}: {}", pid, e);
+                                return Err(anyhow::anyhow!("Failed to kill process: {}", e));
+                            }
+                        }
+                    } else {
+                        info!("Process {} terminated successfully with SIGTERM", pid);
+                    }
+                }
+                Err(e) => {
+                    error!("Failed to send SIGTERM to process {}: {}", pid, e);
+                    return Err(anyhow::anyhow!("Failed to kill process: {}", e));
+                }
             }
         }
 
