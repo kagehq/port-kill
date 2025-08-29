@@ -14,6 +14,12 @@ use std::collections::HashMap;
 use std::thread;
 use std::time::Duration;
 
+// GTK initialization for Linux
+#[cfg(target_os = "linux")]
+use gtk::prelude::*;
+#[cfg(target_os = "linux")]
+use gtk;
+
 
 
 #[tokio::main]
@@ -39,6 +45,9 @@ async fn main() -> Result<()> {
         let console_app = ConsolePortKillApp::new(args)?;
         console_app.run().await
     } else {
+        // Initialize GTK for Linux tray mode
+        gtk::init().map_err(|e| anyhow::anyhow!("Failed to initialize GTK: {}", e))?;
+        
         // Use Linux tray mode
         run_linux_tray_mode(args).await
     }
@@ -47,25 +56,74 @@ async fn main() -> Result<()> {
 async fn run_linux_tray_mode(args: Args) -> Result<()> {
     info!("Starting Linux tray mode...");
     
+    // Check if we're in a proper desktop environment
+    let display = std::env::var("DISPLAY").unwrap_or_else(|_| ":0".to_string());
+    let wayland_display = std::env::var("WAYLAND_DISPLAY").is_ok();
+    
+    info!("Display: {}, Wayland: {}", display, wayland_display);
+    
+    // Run diagnostics
+    run_linux_diagnostics();
+    
     // Set required environment variables for GTK
     if std::env::var("DISPLAY").is_err() {
         std::env::set_var("DISPLAY", ":0");
     }
     std::env::set_var("GTK_THEME", "Adwaita");
-    std::env::set_var("GDK_BACKEND", "x11");
     
-    // Create the tray item
-    let mut tray = match TrayItem::new("Port Kill", "Port Kill") {
-        Ok(tray) => tray,
-        Err(e) => {
-            error!("Failed to create Linux tray item: {}", e);
-            error!("This might be due to missing GTK packages or running in a headless environment");
+    // Try different GDK backends
+    let backends = if wayland_display {
+        vec!["wayland", "x11"]
+    } else {
+        vec!["x11", "wayland"]
+    };
+    
+    let mut tray = None;
+    let mut last_error = None;
+    
+    // Try to create tray with different backends
+    for backend in backends {
+        std::env::set_var("GDK_BACKEND", backend);
+        info!("Trying GDK backend: {}", backend);
+        
+        match TrayItem::new("Port Kill", "Port Kill") {
+            Ok(t) => {
+                tray = Some(t);
+                info!("Successfully created tray with backend: {}", backend);
+                break;
+            }
+            Err(e) => {
+                let error_msg = e.to_string();
+                last_error = Some(e);
+                error!("Failed to create tray with backend {}: {}", backend, error_msg);
+                continue;
+            }
+        }
+    }
+    
+    // If all backends failed, fall back to console mode
+    let mut tray = match tray {
+        Some(t) => t,
+        None => {
+            let error_msg = last_error.map(|e| e.to_string()).unwrap_or_else(|| "Unknown error".to_string());
+            error!("Failed to create Linux tray item: {}", error_msg);
+            error!("This might be due to:");
+            error!("  - Missing GTK packages");
+            error!("  - Running in a headless environment");
+            error!("  - Display server issues");
+            error!("  - Wayland/X11 compatibility issues");
             error!("Falling back to console mode...");
             println!("⚠️  System tray not available, switching to console mode");
-            println!("💡 To fix this, install GTK packages:");
-            println!("   Ubuntu/Debian: sudo apt-get install libatk1.0-dev libgdk-pixbuf2.0-dev libgtk-3-dev libxdo-dev");
-            println!("   Fedora/RHEL: sudo dnf install atk-devel gdk-pixbuf2-devel gtk3-devel libxdo-devel");
-            println!("   Arch Linux: sudo pacman -S atk gdk-pixbuf2 gtk3 libxdo");
+            println!("💡 Common solutions:");
+            println!("   1. Install GTK packages:");
+            println!("      Ubuntu/Debian: sudo apt-get install libatk1.0-dev libgdk-pixbuf2.0-dev libgtk-3-dev libxdo-dev");
+            println!("      Fedora/RHEL: sudo dnf install atk-devel gdk-pixbuf2-devel gtk3-devel libxdo-devel");
+            println!("      Arch Linux: sudo pacman -S atk gdk-pixbuf2 gtk3 libxdo");
+            println!("   2. Check display environment:");
+            println!("      echo $DISPLAY (should show :0 or similar)");
+            println!("      echo $WAYLAND_DISPLAY (should be empty for X11)");
+            println!("   3. Try running in a terminal emulator (not pure console)");
+            println!("   4. Use console mode: ./run-linux.sh --console");
             println!("");
             
             // Fall back to console mode
@@ -381,4 +439,70 @@ fn kill_single_process(pid: i32, args: &Args) -> Result<()> {
     
     // Process is not ignored, proceed with killing
     kill_process(pid)
+}
+
+fn run_linux_diagnostics() {
+    println!("🔍 Linux Environment Diagnostics:");
+    println!("==================================");
+    
+    // Check DISPLAY
+    match std::env::var("DISPLAY") {
+        Ok(display) => println!("✅ DISPLAY: {}", display),
+        Err(_) => println!("❌ DISPLAY: Not set"),
+    }
+    
+    // Check WAYLAND_DISPLAY
+    match std::env::var("WAYLAND_DISPLAY") {
+        Ok(wayland) => println!("✅ WAYLAND_DISPLAY: {}", wayland),
+        Err(_) => println!("❌ WAYLAND_DISPLAY: Not set"),
+    }
+    
+    // Check XDG_SESSION_TYPE
+    match std::env::var("XDG_SESSION_TYPE") {
+        Ok(session) => println!("✅ XDG_SESSION_TYPE: {}", session),
+        Err(_) => println!("❌ XDG_SESSION_TYPE: Not set"),
+    }
+    
+    // Check if we're in a terminal
+    match std::env::var("TERM") {
+        Ok(term) => println!("✅ TERM: {}", term),
+        Err(_) => println!("❌ TERM: Not set"),
+    }
+    
+    // Check if we're in SSH
+    if std::env::var("SSH_CLIENT").is_ok() || std::env::var("SSH_CONNECTION").is_ok() {
+        println!("⚠️  SSH: Detected SSH session");
+    } else {
+        println!("✅ SSH: Not detected");
+    }
+    
+    // Check for common desktop environments
+    let desktop = std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_else(|_| "Unknown".to_string());
+    println!("✅ Desktop Environment: {}", desktop);
+    
+    // Check for GTK packages
+    println!("\n🔧 GTK Package Check:");
+    let gtk_check = std::process::Command::new("pkg-config")
+        .args(&["--exists", "gtk+-3.0"])
+        .output();
+    
+    match gtk_check {
+        Ok(output) if output.status.success() => {
+            println!("✅ GTK+3.0: Available");
+            
+            // Get GTK version
+            let version_check = std::process::Command::new("pkg-config")
+                .args(&["--modversion", "gtk+-3.0"])
+                .output();
+            
+            if let Ok(version_output) = version_check {
+                let version_str = String::from_utf8_lossy(&version_output.stdout);
+                let version = version_str.trim();
+                println!("✅ GTK Version: {}", version);
+            }
+        }
+        _ => println!("❌ GTK+3.0: Not available (install GTK development packages)"),
+    }
+    
+    println!("");
 }

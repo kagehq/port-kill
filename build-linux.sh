@@ -42,6 +42,7 @@ clap = { version = "4.0", features = ["derive"] }
 
 # Linux-specific tray support
 tray-item = "0.7"
+gtk = "0.15"
 EOF
 
 # Create a temporary lib.rs that excludes macOS-specific modules
