@@ -100,17 +100,71 @@ impl PortKillApp {
                     info!("Processing menu event, starting process killing...");
                     is_killing_processes.store(true, Ordering::Relaxed);
                     
-                    // Spawn a detached thread to kill processes
-                    let ports_to_kill = args.get_ports_to_monitor();
+                    // Get current processes for menu handling
+                    let current_processes_clone = current_processes.clone();
                     let is_killing_clone = is_killing_processes.clone();
                     let args_clone = args.clone();
                     
                     std::thread::spawn(move || {
                         // Add a delay to ensure the menu system is stable
                         std::thread::sleep(std::time::Duration::from_millis(100));
-                        info!("Starting process killing...");
                         
-                        match PortKillApp::kill_all_processes(&ports_to_kill, &args_clone) {
+                        // Handle different menu actions based on event
+                        let result = if let Ok(current_processes_guard) = current_processes_clone.lock() {
+                            let processes = &*current_processes_guard;
+                            
+                            // Parse the menu event to determine action
+                            let menu_id_str = event.id.0.clone();
+                            info!("Menu ID: {}", menu_id_str);
+                            
+                            // For now, we'll use a simple approach: check if it's the first menu item (Kill All)
+                            // or if it's a process-specific item by checking the menu position
+                            // The tray-icon library doesn't provide easy access to menu text, so we'll use position
+                            
+                            // Menu structure:
+                            // 0: "Kill All Processes"
+                            // 1: separator
+                            // 2+: individual processes
+                            // last: separator + "Quit"
+                            
+                            if menu_id_str == "0" {
+                                // "Kill All Processes" clicked
+                                info!("Kill All Processes clicked, killing all processes...");
+                                let ports_to_kill = args_clone.get_ports_to_monitor();
+                                Self::kill_all_processes(&ports_to_kill, &args_clone)
+                            } else if let Ok(menu_index) = menu_id_str.parse::<usize>() {
+                                if menu_index > 1 && menu_index < processes.len() + 2 {
+                                    // Individual process clicked (accounting for "Kill All" and separator)
+                                    let process_index = menu_index - 2;
+                                    let process_entries: Vec<_> = processes.iter().collect();
+                                    if process_index < process_entries.len() {
+                                        let (port, process_info) = process_entries[process_index];
+                                        info!("Killing individual process on port {} with PID {}", port, process_info.pid);
+                                        Self::kill_single_process(process_info.pid, &args_clone)
+                                    } else {
+                                        error!("Invalid process index: {}", process_index);
+                                        Ok(())
+                                    }
+                                                            } else {
+                                // "Quit" or other menu item clicked
+                                info!("Quit clicked, killing all processes and exiting...");
+                                let ports_to_kill = args_clone.get_ports_to_monitor();
+                                let _ = Self::kill_all_processes(&ports_to_kill, &args_clone);
+                                // Exit the application gracefully
+                                std::process::exit(0);
+                            }
+                            } else {
+                                // Default to kill all processes for unknown menu items
+                                info!("Unknown menu item clicked, killing all processes...");
+                                let ports_to_kill = args_clone.get_ports_to_monitor();
+                                Self::kill_all_processes(&ports_to_kill, &args_clone)
+                            }
+                        } else {
+                            error!("Failed to access current processes");
+                            Ok(())
+                        };
+                        
+                        match result {
                             Ok(_) => {
                                 info!("Process killing completed successfully");
                                 // Reset the flag after a delay to allow menu updates again
@@ -118,7 +172,7 @@ impl PortKillApp {
                                 is_killing_clone.store(false, Ordering::Relaxed);
                             }
                             Err(e) => {
-                                error!("Failed to kill all processes: {}", e);
+                                error!("Failed to kill processes: {}", e);
                                 is_killing_clone.store(false, Ordering::Relaxed);
                             }
                         }
@@ -156,45 +210,46 @@ impl PortKillApp {
                     }
                 }
                 
-                // Update tooltip and icon (avoid menu updates to prevent crashes)
-                if let Ok(tray_icon_guard) = tray_icon.lock() {
-                    if let Some(ref icon) = *tray_icon_guard {
-                        // Update tooltip
-                        if let Err(e) = icon.set_tooltip(Some(&status_info.tooltip)) {
-                            error!("Failed to update tooltip: {}", e);
-                        }
-                        
-                        // Update icon with new status
-                        if let Ok(new_icon) = TrayMenu::create_icon(&status_info.text) {
-                            if let Err(e) = icon.set_icon(Some(new_icon)) {
-                                error!("Failed to update icon: {}", e);
+                                                                // Update tooltip and icon (avoid menu updates to prevent crashes)
+                        if let Ok(tray_icon_guard) = tray_icon.lock() {
+                            if let Some(ref icon) = *tray_icon_guard {
+                                // Update tooltip
+                                if let Err(e) = icon.set_tooltip(Some(&status_info.tooltip)) {
+                                    error!("Failed to update tooltip: {}", e);
+                                }
+                                
+                                // Update icon with new status
+                                if let Ok(new_icon) = TrayMenu::create_icon(&status_info.text) {
+                                    if let Err(e) = icon.set_icon(Some(new_icon)) {
+                                        error!("Failed to update icon: {}", e);
+                                    }
+                                }
+                                
+                                // Only update menu if process count changed and we're not killing processes
+                                // Add extra delay after killing processes to prevent crashes
+                                if !is_killing_processes.load(Ordering::Relaxed) && 
+                                   process_count != last_process_count && 
+                                   last_menu_update.elapsed() >= std::time::Duration::from_secs(5) {
+                                    
+                                    // Use a try-catch approach to prevent crashes
+                                    match std::panic::catch_unwind(|| {
+                                        TrayMenu::create_menu(&processes, args.show_pid)
+                                    }) {
+                                        Ok(Ok(new_menu)) => {
+                                            icon.set_menu(Some(Box::new(new_menu)));
+                                            last_process_count = process_count;
+                                            last_menu_update = std::time::Instant::now();
+                                        }
+                                        Ok(Err(e)) => {
+                                            error!("Failed to create menu: {}", e);
+                                        }
+                                        Err(_) => {
+                                            error!("Menu creation panicked, skipping menu update");
+                                        }
+                                    }
+                                }
                             }
                         }
-                        
-                        // Only update menu if process count changed and we're not killing processes
-                        if !is_killing_processes.load(Ordering::Relaxed) && 
-                           process_count != last_process_count && 
-                           last_menu_update.elapsed() >= std::time::Duration::from_secs(3) {
-                            
-                            // Use a try-catch approach to prevent crashes
-                            match std::panic::catch_unwind(|| {
-                                TrayMenu::create_menu(&processes, args.show_pid)
-                            }) {
-                                Ok(Ok(new_menu)) => {
-                                    icon.set_menu(Some(Box::new(new_menu)));
-                                }
-                                Ok(Err(e)) => {
-                                    error!("Failed to create menu: {}", e);
-                                }
-                                Err(_) => {
-                                    error!("Menu creation panicked, skipping menu update");
-                                }
-                            }
-                            last_process_count = process_count;
-                            last_menu_update = std::time::Instant::now();
-                        }
-                    }
-                }
             }
         })?;
 
@@ -366,5 +421,51 @@ impl PortKillApp {
         }
         
         Ok(())
+    }
+
+    fn kill_single_process(pid: i32, args: &Args) -> Result<()> {
+        info!("Killing single process PID: {}", pid);
+        
+        // Check if this process should be ignored
+        let ignore_ports = args.get_ignore_ports_set();
+        let ignore_processes = args.get_ignore_processes_set();
+        
+        // Get process info to check if it should be ignored
+        let output = std::process::Command::new("ps")
+            .args(&["-p", &pid.to_string(), "-o", "comm="])
+            .output();
+            
+        if let Ok(output) = output {
+            let process_name = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            
+            // Check if process name should be ignored
+            if ignore_processes.contains(&process_name) {
+                info!("Ignoring process {} (PID {}) - process name is in ignore list", process_name, pid);
+                return Ok(());
+            }
+        }
+        
+        // Get port info to check if it should be ignored
+        let output = std::process::Command::new("lsof")
+            .args(&["-p", &pid.to_string(), "-i", "-P", "-n"])
+            .output();
+            
+        if let Ok(output) = output {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            for line in stdout.lines() {
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                if parts.len() >= 9 {
+                    if let Ok(port) = parts[8].split(':').last().unwrap_or("0").parse::<u16>() {
+                        if ignore_ports.contains(&port) {
+                            info!("Ignoring process on port {} (PID {}) - port is in ignore list", port, pid);
+                            return Ok(());
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Process is not ignored, proceed with killing
+        Self::kill_process(pid)
     }
 }
