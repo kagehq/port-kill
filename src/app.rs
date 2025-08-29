@@ -256,7 +256,7 @@ impl PortKillApp {
         Ok(())
     }
 
-    fn get_processes_on_ports(ports: &[u16], args: &Args) -> (usize, HashMap<u16, crate::types::ProcessInfo>) {
+    pub fn get_processes_on_ports(ports: &[u16], args: &Args) -> (usize, HashMap<u16, crate::types::ProcessInfo>) {
         // Build port range string for lsof
         let port_range = if ports.len() <= 10 {
             // For small number of ports, list them individually
@@ -312,7 +312,7 @@ impl PortKillApp {
         }
     }
 
-    fn kill_all_processes(ports: &[u16], args: &Args) -> Result<()> {
+    pub fn kill_all_processes(ports: &[u16], args: &Args) -> Result<()> {
         // Build port range string for lsof
         let port_range = if ports.len() <= 10 {
             // For small number of ports, list them individually
@@ -423,7 +423,7 @@ impl PortKillApp {
         Ok(())
     }
 
-    fn kill_single_process(pid: i32, args: &Args) -> Result<()> {
+    pub fn kill_single_process(pid: i32, args: &Args) -> Result<()> {
         info!("Killing single process PID: {}", pid);
         
         // Check if this process should be ignored

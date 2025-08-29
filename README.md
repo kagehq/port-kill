@@ -1,19 +1,36 @@
 # 🚧 Port Kill
 
-A lightweight macOS status bar app that monitors and manages development processes running on ports 2000-6000. The app provides real-time process detection and allows you to kill individual processes or all processes at once.
+A lightweight cross-platform status bar app that monitors and manages development processes running on configurable ports. The app provides real-time process detection and allows you to kill individual processes or all processes at once.
+
+**Supported Platforms:**
+- ✅ **macOS**: Native system tray with full functionality
+- ✅ **Linux**: Native system tray with full functionality (requires GTK packages)
+- ✅ **Console Mode**: Works on all platforms without GUI dependencies
 
 ![Port Kill Status Bar Icon](image-short.png)
 
 ## Features
 
-- **Real-time Monitoring**: Scans ports 2000-6000 every 5 seconds using `lsof` commands
-- **Visual Status Bar Icon**: Shows process count with color-coded center (green=0, red=1-9, orange=10+)
-- **Dynamic Context Menu**: Updates every 3 seconds with current processes and kill options
-- **One-Click Process Killing**: Click any menu item to kill all detected processes
+### Core Features (All Platforms)
+- **Real-time Monitoring**: Scans configurable ports every 5 seconds using `lsof` commands
+- **Process Detection**: Identifies processes by name, PID, and Docker containers
 - **Safe Process Termination**: Uses SIGTERM → SIGKILL termination strategy
-- **Stable Architecture**: Built with winit event loop for macOS compatibility
+- **Configurable Port Ranges**: Monitor specific ports or port ranges
+- **Ignore Lists**: Exclude specific ports or processes from monitoring
+- **Docker Support**: Detect and display Docker container information
+- **PID Display**: Optional PID display for better process identification
 - **Graceful Error Handling**: Handles permission errors and process failures
-- **No Windows**: Pure status bar application with no main window
+
+### Platform-Specific Features
+- **macOS**: Native system tray with dynamic context menu and visual status icon
+- **Linux**: Native system tray with dynamic context menu and visual status icon
+- **Console Mode**: Cross-platform console interface with real-time updates
+
+### Advanced Features
+- **Individual Process Killing**: Kill specific processes by clicking menu items
+- **Bulk Process Killing**: Kill all detected processes with one click
+- **Ignore Configuration**: Exclude system processes (Chromecast, AirDrop, etc.)
+- **Docker Integration**: Display container names and IDs for Docker processes
 
 ## Status Bar Icon
 
@@ -39,12 +56,28 @@ Hover over the icon to see the exact process count in the tooltip.
 
 ## Requirements
 
+### macOS
 - macOS 10.15 or later
 - Rust 1.70 or later
 - `lsof` command (included with macOS)
 - Docker (optional, for container monitoring)
 
+### Linux
+- Linux with GTK support
+- Rust 1.70 or later
+- `lsof` command
+- Docker (optional, for container monitoring)
+- **Required packages**: `libatk1.0-dev libgdk-pixbuf2.0-dev libgtk-3-dev libxdo-dev`
+
+### Console Mode (All Platforms)
+- Rust 1.70 or later
+- `lsof` command
+- Docker (optional, for container monitoring)
+- **No GUI dependencies required**
+
 ## Installation
+
+### macOS Installation
 
 1. Clone the repository:
 ```bash
@@ -52,29 +85,68 @@ git clone <repository-url>
 cd port-kill
 ```
 
-2. Build the application:
+2. Build the macOS version:
 ```bash
-cargo build --release
+./build-macos.sh
 ```
 
-3. Run the application (easy way):
+3. Run the application:
 ```bash
 ./run.sh
 ```
 
-4. Run manually (alternative):
+### Linux Installation
+
+1. Clone the repository:
 ```bash
-cargo run --release
+git clone <repository-url>
+cd port-kill
 ```
 
-Or
-Install with: `brew install rust`
+2. Install required packages:
+```bash
+# Ubuntu/Debian
+sudo apt-get install libatk1.0-dev libgdk-pixbuf2.0-dev libgtk-3-dev libxdo-dev
+
+# Fedora/RHEL
+sudo dnf install atk-devel gdk-pixbuf2-devel gtk3-devel libxdo-devel
+
+# Arch Linux
+sudo pacman -S atk gdk-pixbuf2 gtk3 libxdo
+```
+
+3. Build the Linux version:
+```bash
+./build-linux.sh
+```
+
+4. Run the application:
+```bash
+./run-linux.sh
+```
+
+### Console Mode (All Platforms)
+
+Console mode works on all platforms without GUI dependencies:
+
+```bash
+# Build (works on any platform)
+cargo build --release
+
+# Run console mode
+./target/release/port-kill-console --console --ports 3000,8000 --verbose
+```
 
 
 ## Usage
 
 ### Basic Usage
-1. **Start the Application**: Run `./run.sh` to start the application with default settings (ports 2000-6000)
+
+**Platform-Specific Run Scripts:**
+- **macOS**: Use `./run.sh` 
+- **Linux**: Use `./run-linux.sh`
+
+1. **Start the Application**: Run the appropriate script for your platform with default settings (ports 2000-6000)
 2. **Monitor Status**: Check the status bar for the process count indicator
 3. **Access Menu**: Click on the status bar icon to open the context menu
 4. **Kill Processes**: 
@@ -89,19 +161,23 @@ The application now supports configurable port ranges and specific port monitori
 #### Port Range Examples
 ```bash
 # Monitor ports 3000-8080
-./run.sh --start-port 3000 --end-port 8080
+./run.sh --start-port 3000 --end-port 8080          # macOS
+./run-linux.sh --start-port 3000 --end-port 8080    # Linux
 
 # Monitor ports 8000-9000
-./run.sh -s 8000 -e 9000
+./run.sh -s 8000 -e 9000                            # macOS
+./run-linux.sh -s 8000 -e 9000                      # Linux
 ```
 
 #### Specific Ports Examples
 ```bash
 # Monitor only specific ports (common dev ports)
-./run.sh --ports 3000,8000,8080,5000
+./run.sh --ports 3000,8000,8080,5000                # macOS
+./run-linux.sh --ports 3000,8000,8080,5000          # Linux
 
 # Monitor React, Node.js, and Python dev servers
-./run.sh -p 3000,3001,8000,8080
+./run.sh -p 3000,3001,8000,8080                     # macOS
+./run-linux.sh -p 3000,3001,8000,8080               # Linux
 ```
 
 #### Console Mode
