@@ -40,8 +40,8 @@ A lightweight cross-platform status bar app that monitors and manages developmen
 The status bar icon provides instant visual feedback:
 
 - **Green**: 0 processes (safe, no development servers)
-- **Red**: 1-9 processes (some development servers)
-- **Orange**: 10+ processes (many development servers)
+- **Orange**: 1-9 processes (some development servers)
+- **Red**: 10+ processes (many development servers)
 
 Hover over the icon to see the exact process count in the tooltip.
 

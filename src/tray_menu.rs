@@ -145,11 +145,11 @@ impl TrayMenu {
                     if num == 0 {
                         (0, 255, 0, 255) // Bright green when no processes
                     } else if num <= 9 {
-                        // For single digits, make the number area more prominent
-                        (255, 0, 0, 255) // Bright red background for number
+                        // For 1-9 processes, use orange
+                        (255, 165, 0, 255) // Orange for 1-9 processes
                     } else {
-                        // For double digits, use orange to indicate many processes
-                        (255, 165, 0, 255) // Orange for 10+ processes
+                        // For 10+ processes, use red to indicate many processes
+                        (255, 0, 0, 255) // Red for 10+ processes
                     }
                 } else {
                     (255, 255, 255, 255) // Clean white background
