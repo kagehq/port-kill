@@ -192,8 +192,17 @@ impl PortKillApp {
             if last_check.elapsed() >= std::time::Duration::from_secs(5) {
                 last_check = std::time::Instant::now();
                 
-                // Get detailed process information
-                let (process_count, processes) = Self::get_processes_on_ports(&args.get_ports_to_monitor(), &args);
+                // Get detailed process information with crash-safe approach
+                let (process_count, processes) = match std::panic::catch_unwind(|| {
+                    Self::get_processes_on_ports(&args.get_ports_to_monitor(), &args)
+                }) {
+                    Ok(result) => result,
+                    Err(e) => {
+                        error!("Panic caught while getting processes: {:?}", e);
+                        (0, HashMap::new())
+                    }
+                };
+                
                 let status_info = StatusBarInfo::from_process_count(process_count);
                 println!("🔄 Port Status: {} - {}", status_info.text, status_info.tooltip);
                 
@@ -214,54 +223,57 @@ impl PortKillApp {
                             println!("   • Port {}: {}", port, process_info.name);
                         }
                     }
-                    
-                    // Show notification for full-screen mode users
-                    if process_count > last_process_count {
-                        println!("🔔 New processes detected! Press Cmd+Shift+P to access menu or use console mode.");
-                    }
+                } else {
+                    println!("📋 No processes detected");
                 }
                 
-                                                                // Update tooltip and icon (avoid menu updates to prevent crashes)
-                        if let Ok(tray_icon_guard) = tray_icon.lock() {
-                            if let Some(ref icon) = *tray_icon_guard {
-                                // Update tooltip
-                                if let Err(e) = icon.set_tooltip(Some(&status_info.tooltip)) {
-                                    error!("Failed to update tooltip: {}", e);
-                                }
-                                
-                                // Update icon with new status
-                                if let Ok(new_icon) = TrayMenu::create_icon(&status_info.text) {
-                                    if let Err(e) = icon.set_icon(Some(new_icon)) {
-                                        error!("Failed to update icon: {}", e);
-                                    }
-                                }
-                                
-                                // Only update menu if process count changed and we're not killing processes
-                                // Add extra delay after killing processes to prevent crashes
-                                if !is_killing_processes.load(Ordering::Relaxed) && 
-                                   process_count != last_process_count && 
-                                   last_menu_update.elapsed() >= std::time::Duration::from_secs(5) {
-                                    
-                                    // Use a try-catch approach to prevent crashes
-                                    match std::panic::catch_unwind(|| {
-                                        TrayMenu::create_menu(&processes, args.show_pid)
-                                    }) {
-                                        Ok(Ok(new_menu)) => {
-                                            icon.set_menu(Some(Box::new(new_menu)));
-                                            last_process_count = process_count;
-                                            last_menu_update = std::time::Instant::now();
-                                            info!("Menu updated successfully for {} processes", process_count);
-                                        }
-                                        Ok(Err(e)) => {
-                                            error!("Failed to create menu: {}", e);
-                                        }
-                                        Err(e) => {
-                                            error!("Menu creation panicked: {:?}, skipping menu update", e);
-                                        }
-                                    }
-                                }
+                // Update tooltip and icon (avoid menu updates to prevent crashes)
+                if let Ok(tray_icon_guard) = tray_icon.lock() {
+                    if let Some(ref icon) = *tray_icon_guard {
+                        // Update tooltip
+                        if let Err(e) = icon.set_tooltip(Some(&status_info.tooltip)) {
+                            error!("Failed to update tooltip: {}", e);
+                        }
+                        
+                        // Update icon with new status
+                        if let Ok(new_icon) = TrayMenu::create_icon(&status_info.text) {
+                            if let Err(e) = icon.set_icon(Some(new_icon)) {
+                                error!("Failed to update icon: {}", e);
                             }
                         }
+                        
+                        // Only update menu if process count changed significantly and we're not killing processes
+                        // Add extra delay after killing processes to prevent crashes
+                        let process_count_changed = process_count != last_process_count;
+                        let enough_time_passed = last_menu_update.elapsed() >= std::time::Duration::from_secs(10); // Increased delay
+                        let not_killing = !is_killing_processes.load(Ordering::Relaxed);
+                        
+                        if not_killing && process_count_changed && enough_time_passed {
+                            info!("Process count changed from {} to {}, updating menu...", last_process_count, process_count);
+                            
+                            // Use a try-catch approach to prevent crashes
+                            match std::panic::catch_unwind(|| {
+                                TrayMenu::create_menu(&processes, args.show_pid)
+                            }) {
+                                Ok(Ok(new_menu)) => {
+                                    icon.set_menu(Some(Box::new(new_menu)));
+                                    last_process_count = process_count;
+                                    last_menu_update = std::time::Instant::now();
+                                    info!("Menu updated successfully for {} processes", process_count);
+                                }
+                                Ok(Err(e)) => {
+                                    error!("Failed to create menu: {}", e);
+                                }
+                                Err(e) => {
+                                    error!("Menu creation panicked: {:?}, skipping menu update", e);
+                                }
+                            }
+                        } else if process_count_changed {
+                            info!("Process count changed from {} to {} but skipping menu update (killing: {}, time passed: {})", 
+                                  last_process_count, process_count, !not_killing, enough_time_passed);
+                        }
+                    }
+                }
             }
         })?;
 
