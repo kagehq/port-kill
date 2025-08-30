@@ -143,7 +143,7 @@ async fn run_linux_tray_mode(args: Args) -> Result<()> {
     // Create channels for communication
     let (menu_sender, menu_receiver) = std::sync::mpsc::channel();
     
-    // Add menu items
+    // Add menu items (static menu for Linux - tray-item doesn't support dynamic updates)
     let sender_clone = menu_sender.clone();
     tray.add_menu_item("Kill All Processes", move || {
         if let Err(e) = sender_clone.send("kill_all") {
@@ -158,9 +158,15 @@ async fn run_linux_tray_mode(args: Args) -> Result<()> {
         }
     }).map_err(|e| anyhow::anyhow!("Failed to add Quit menu item: {}", e))?;
     
+    // Add a note about process monitoring
+    tray.add_menu_item("(Processes monitored in console)", move || {
+        // This is just informational, no action needed
+    }).map_err(|e| anyhow::anyhow!("Failed to add info menu item: {}", e))?;
+    
     // Main monitoring loop
     let mut last_check = std::time::Instant::now();
     let mut last_process_count = 0;
+    let mut last_processes = HashMap::new();
     
     loop {
         // Check for menu events
@@ -189,31 +195,46 @@ async fn run_linux_tray_mode(args: Args) -> Result<()> {
         if last_check.elapsed() >= Duration::from_secs(5) {
             last_check = std::time::Instant::now();
             
-            // Get process information
-            let (process_count, processes) = get_processes_on_ports(&args.get_ports_to_monitor(), &args);
+            // Get process information with error handling
+            let (process_count, processes) = match std::panic::catch_unwind(|| {
+                get_processes_on_ports(&args.get_ports_to_monitor(), &args)
+            }) {
+                Ok(result) => result,
+                Err(e) => {
+                    error!("Panic caught while getting processes: {:?}", e);
+                    (0, HashMap::new())
+                }
+            };
+            
             let status_info = StatusBarInfo::from_process_count(process_count);
             
-            // Update tray tooltip (tray-item doesn't support dynamic tooltip updates)
-            // The tooltip is set when creating the tray item
-            
-            // Print status to console as well
-            println!("🔄 Port Status: {} - {}", status_info.text, status_info.tooltip);
-            
-            // Print detected processes
-            if process_count > 0 {
-                println!("📋 Detected Processes:");
-                for (port, process_info) in &processes {
-                    if let (Some(_container_id), Some(container_name)) = (&process_info.container_id, &process_info.container_name) {
-                        println!("   • Port {}: {} [Docker: {}]", port, process_info.name, container_name);
-                    } else if args.show_pid {
-                        println!("   • Port {}: {} (PID {})", port, process_info.name, process_info.pid);
-                    } else {
-                        println!("   • Port {}: {}", port, process_info.name);
+            // Only update if processes have actually changed
+            if process_count != last_process_count || processes != last_processes {
+                info!("Process list changed: {} processes (was: {})", process_count, last_process_count);
+                
+                // Print status to console
+                println!("🔄 Port Status: {} - {}", status_info.text, status_info.tooltip);
+                
+                // Print detected processes
+                if process_count > 0 {
+                    println!("📋 Detected Processes:");
+                    for (port, process_info) in &processes {
+                        if let (Some(_container_id), Some(container_name)) = (&process_info.container_id, &process_info.container_name) {
+                            println!("   • Port {}: {} [Docker: {}]", port, process_info.name, container_name);
+                        } else if args.show_pid {
+                            println!("   • Port {}: {} (PID {})", port, process_info.name, process_info.pid);
+                        } else {
+                            println!("   • Port {}: {}", port, process_info.name);
+                        }
                     }
+                } else {
+                    println!("📋 No processes detected");
                 }
+                
+                // Update our tracking
+                last_process_count = process_count;
+                last_processes = processes;
             }
-            
-            last_process_count = process_count;
         }
         
 
@@ -238,50 +259,81 @@ fn get_processes_on_ports(ports: &[u16], args: &Args) -> (usize, HashMap<u16, Pr
         format!("{}-{}", ports.first().unwrap_or(&0), ports.last().unwrap_or(&0))
     };
     
-    // Use lsof to get detailed process information
-    let output = std::process::Command::new("lsof")
+    // Use lsof to get detailed process information with error handling
+    let output = match std::process::Command::new("lsof")
         .args(&["-i", &format!(":{}", port_range), "-sTCP:LISTEN", "-P", "-n"])
-        .output();
-        
-    match output {
-        Ok(output) => {
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            let mut processes = HashMap::new();
-            
-            // Get ignore sets for efficient lookup
-            let ignore_ports = args.get_ignore_ports_set();
-            let ignore_processes = args.get_ignore_processes_set();
-            
-            for line in stdout.lines().skip(1) { // Skip header
-                let parts: Vec<&str> = line.split_whitespace().collect();
-                if parts.len() >= 9 {
-                    if let (Ok(pid), Ok(port)) = (parts[1].parse::<i32>(), parts[8].split(':').last().unwrap_or("0").parse::<u16>()) {
-                        let command = parts[0].to_string();
-                        let name = parts[0].to_string();
-                        
-                        // Check if this process should be ignored
-                        let should_ignore = ignore_ports.contains(&port) || ignore_processes.contains(&name);
-                        
-                        if !should_ignore {
-                            processes.insert(port, ProcessInfo {
-                                pid,
-                                port,
-                                command,
-                                name,
-                                container_id: None,
-                                container_name: None,
-                            });
-                        } else {
-                            info!("Ignoring process {} (PID {}) on port {} (ignored by user configuration)", name, pid, port);
-                        }
-                    }
-                }
-            }
-            
-            (processes.len(), processes)
+        .output() {
+        Ok(output) => output,
+        Err(e) => {
+            error!("Failed to execute lsof command: {}", e);
+            return (0, HashMap::new());
         }
-        Err(_) => (0, HashMap::new())
+    };
+    
+    // Check if lsof command was successful
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        error!("lsof command failed: {}", stderr);
+        return (0, HashMap::new());
     }
+    
+    let stdout = match String::from_utf8(output.stdout) {
+        Ok(stdout) => stdout,
+        Err(e) => {
+            error!("Failed to parse lsof output: {}", e);
+            return (0, HashMap::new());
+        }
+    };
+    
+    let mut processes = HashMap::new();
+    
+    // Get ignore sets for efficient lookup
+    let ignore_ports = args.get_ignore_ports_set();
+    let ignore_processes = args.get_ignore_processes_set();
+    
+    for line in stdout.lines().skip(1) { // Skip header
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() >= 9 {
+            // Parse PID with error handling
+            let pid = match parts[1].parse::<i32>() {
+                Ok(pid) => pid,
+                Err(e) => {
+                    error!("Failed to parse PID '{}': {}", parts[1], e);
+                    continue;
+                }
+            };
+            
+            // Parse port with error handling
+            let port = match parts[8].split(':').last().unwrap_or("0").parse::<u16>() {
+                Ok(port) => port,
+                Err(e) => {
+                    error!("Failed to parse port from '{}': {}", parts[8], e);
+                    continue;
+                }
+            };
+            
+            let command = parts[0].to_string();
+            let name = parts[0].to_string();
+            
+            // Check if this process should be ignored
+            let should_ignore = ignore_ports.contains(&port) || ignore_processes.contains(&name);
+            
+            if !should_ignore {
+                processes.insert(port, ProcessInfo {
+                    pid,
+                    port,
+                    command,
+                    name,
+                    container_id: None,
+                    container_name: None,
+                });
+            } else {
+                info!("Ignoring process {} (PID {}) on port {} (ignored by user configuration)", name, pid, port);
+            }
+        }
+    }
+    
+    (processes.len(), processes)
 }
 
 fn kill_all_processes(ports: &[u16], args: &Args) -> Result<()> {

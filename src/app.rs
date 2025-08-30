@@ -142,20 +142,22 @@ impl PortKillApp {
                                         info!("Killing individual process on port {} with PID {}", port, process_info.pid);
                                         Self::kill_single_process(process_info.pid, &args_clone)
                                     } else {
-                                        error!("Invalid process index: {}", process_index);
+                                        error!("Invalid process index: {} (max: {})", process_index, process_entries.len());
                                         Ok(())
                                     }
-                                                            } else {
-                                // "Quit" or other menu item clicked
-                                info!("Quit clicked, killing all processes and exiting...");
-                                let ports_to_kill = args_clone.get_ports_to_monitor();
-                                let _ = Self::kill_all_processes(&ports_to_kill, &args_clone);
-                                // Exit the application gracefully
-                                std::process::exit(0);
-                            }
+                                } else if menu_index >= processes.len() + 2 {
+                                    // "Quit" clicked - just exit gracefully without killing processes
+                                    info!("Quit clicked, exiting gracefully...");
+                                    // Exit the application gracefully without killing processes
+                                    std::process::exit(0);
+                                } else {
+                                    // Invalid menu index
+                                    error!("Invalid menu index: {} (processes: {})", menu_index, processes.len());
+                                    Ok(())
+                                }
                             } else {
                                 // Default to kill all processes for unknown menu items
-                                info!("Unknown menu item clicked, killing all processes...");
+                                info!("Unknown menu item clicked: {}, killing all processes...", menu_id_str);
                                 let ports_to_kill = args_clone.get_ports_to_monitor();
                                 Self::kill_all_processes(&ports_to_kill, &args_clone)
                             }
@@ -239,12 +241,13 @@ impl PortKillApp {
                                             icon.set_menu(Some(Box::new(new_menu)));
                                             last_process_count = process_count;
                                             last_menu_update = std::time::Instant::now();
+                                            info!("Menu updated successfully for {} processes", process_count);
                                         }
                                         Ok(Err(e)) => {
                                             error!("Failed to create menu: {}", e);
                                         }
-                                        Err(_) => {
-                                            error!("Menu creation panicked, skipping menu update");
+                                        Err(e) => {
+                                            error!("Menu creation panicked: {:?}, skipping menu update", e);
                                         }
                                     }
                                 }

@@ -72,6 +72,7 @@ fn run_windows_tray_mode(args: Args) -> Result<()> {
     // Main monitoring loop
     let mut last_check = std::time::Instant::now();
     let mut last_process_count = 0;
+    let mut last_processes = HashMap::new();
     
     loop {
         // Check for menu events
@@ -80,7 +81,7 @@ fn run_windows_tray_mode(args: Args) -> Result<()> {
                 "kill_all" => {
                     info!("Kill All Processes clicked");
                     let ports_to_kill = args.get_ports_to_monitor();
-                    if let Err(e) = port_kill::app::kill_all_processes(&ports_to_kill, &args) {
+                    if let Err(e) = kill_all_processes(&ports_to_kill, &args) {
                         error!("Failed to kill all processes: {}", e);
                     } else {
                         println!("✅ All processes killed successfully");
@@ -100,28 +101,45 @@ fn run_windows_tray_mode(args: Args) -> Result<()> {
         if last_check.elapsed() >= Duration::from_secs(5) {
             last_check = std::time::Instant::now();
             
-            // Get process information
-            let (process_count, processes) = port_kill::app::get_processes_on_ports(&args.get_ports_to_monitor(), &args);
-            let status_info = port_kill::types::StatusBarInfo::from_process_count(process_count);
-            
-            // Print status to console as well
-            println!("🔄 Port Status: {} - {}", status_info.text, status_info.tooltip);
-            
-            // Print detected processes
-            if process_count > 0 {
-                println!("📋 Detected Processes:");
-                for (port, process_info) in &processes {
-                    if let (Some(_container_id), Some(container_name)) = (&process_info.container_id, &process_info.container_name) {
-                        println!("   • Port {}: {} [Docker: {}]", port, process_info.name, container_name);
-                    } else if args.show_pid {
-                        println!("   • Port {}: {} (PID {})", port, process_info.name, process_info.pid);
-                    } else {
-                        println!("   • Port {}: {}", port, process_info.name);
-                    }
+            // Get process information with error handling
+            let (process_count, processes) = match std::panic::catch_unwind(|| {
+                get_processes_on_ports(&args.get_ports_to_monitor(), &args)
+            }) {
+                Ok(result) => result,
+                Err(e) => {
+                    error!("Panic caught while getting processes: {:?}", e);
+                    (0, HashMap::new())
                 }
-            }
+            };
+            let status_info = StatusBarInfo::from_process_count(process_count);
             
-            last_process_count = process_count;
+            // Only update if processes have actually changed
+            if process_count != last_process_count || processes != last_processes {
+                info!("Process list changed: {} processes (was: {})", process_count, last_process_count);
+                
+                // Print status to console
+                println!("🔄 Port Status: {} - {}", status_info.text, status_info.tooltip);
+                
+                // Print detected processes
+                if process_count > 0 {
+                    println!("📋 Detected Processes:");
+                    for (port, process_info) in &processes {
+                        if let (Some(_container_id), Some(container_name)) = (&process_info.container_id, &process_info.container_name) {
+                            println!("   • Port {}: {} [Docker: {}]", port, process_info.name, container_name);
+                        } else if args.show_pid {
+                            println!("   • Port {}: {} (PID {})", port, process_info.name, process_info.pid);
+                        } else {
+                            println!("   • Port {}: {}", port, process_info.name);
+                        }
+                    }
+                } else {
+                    println!("📋 No processes detected");
+                }
+                
+                // Update our tracking
+                last_process_count = process_count;
+                last_processes = processes;
+            }
         }
         
         // Small delay to prevent busy waiting
