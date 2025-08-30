@@ -24,9 +24,6 @@ use gtk;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Initialize logging
-    env_logger::init();
-    
     // Parse command line arguments
     let args = Args::parse();
     
@@ -35,6 +32,18 @@ async fn main() -> Result<()> {
         eprintln!("Error: {}", e);
         std::process::exit(1);
     }
+    
+    // Set up logging level based on log_level argument
+    let log_level = if args.verbose {
+        // Verbose flag overrides log_level for backward compatibility
+        "debug"
+    } else {
+        args.log_level.to_rust_log()
+    };
+    std::env::set_var("RUST_LOG", log_level);
+    
+    // Initialize logging
+    env_logger::init();
     
     info!("Starting Port Kill application on Linux...");
     info!("Monitoring: {}", args.get_port_description());

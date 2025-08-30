@@ -21,12 +21,13 @@ A lightweight cross-platform status bar app that monitors and manages developmen
 - **Docker Support**: Detect and display Docker container information
 - **PID Display**: Optional PID display for better process identification
 - **Graceful Error Handling**: Handles permission errors and process failures
+- **Log Level Control**: Configurable logging verbosity (info, warn, error, none)
 
 ### Platform-Specific Features
 - **macOS**: Native system tray with dynamic context menu and visual status icon
 - **Linux**: Native system tray with dynamic context menu and visual status icon
 - **Windows**: Native system tray with dynamic context menu and visual status icon
-- **Console Mode**: Cross-platform console interface with real-time updates
+- **Console Mode**: Cross-platform console interface with real-time updates (recommended for full-screen mode)
 
 ### Advanced Features
 - **Individual Process Killing**: Kill specific processes by clicking menu items
@@ -233,6 +234,26 @@ run-windows.bat -p 3000,3001,8000,8080              # Windows
 
 # Console mode with PIDs shown
 ./run.sh --console --show-pid --ports 3000,8000,8080
+
+# Console mode for full-screen mode users (recommended)
+./run.sh --console --log-level warn --ports 3000,8000,8080
+
+#### Log Level Control
+```bash
+# Show all logs (default)
+./run.sh --log-level info --ports 3000,8000
+
+# Show only warnings and errors
+./run.sh --log-level warn --ports 3000,8000
+
+# Show only errors
+./run.sh --log-level error --ports 3000,8000
+
+# Show no logs (quiet mode)
+./run.sh --log-level none --ports 3000,8000
+
+# Verbose mode (overrides log-level)
+./run.sh --verbose --ports 3000,8000
 ```
 
 #### Docker Integration
@@ -283,7 +304,8 @@ run-windows.bat -p 3000,3001,8000,8080              # Windows
 - `--ignore-ports`: Ports to ignore (comma-separated, e.g., 5353,5000,7000 for Chromecast/AirDrop)
 - `--ignore-processes`: Process names to ignore (comma-separated, e.g., Chrome,ControlCe)
 - `--console, -c`: Run in console mode instead of status bar mode
-- `--verbose, -v`: Enable verbose logging
+- `--verbose, -v`: Enable verbose logging (overrides --log-level)
+- `--log-level`: Control logging verbosity (info, warn, error, none) (default: info)
 - `--docker, -d`: Enable Docker container monitoring (includes containers in process detection)
 - `--show-pid, -P`: Show process IDs (PIDs) in the display output
 - `--help, -h`: Show help information
@@ -365,6 +387,21 @@ If the application fails to start:
 1. Check if another instance is already running
 2. Verify all dependencies are installed
 3. Check system logs for error messages
+
+### Full-Screen Mode Issues
+
+If the system tray menu is not accessible when applications are in full-screen mode:
+
+1. **Use Console Mode**: The most reliable solution is to use console mode:
+   ```bash
+   ./run.sh --console --ports 3000,8000
+   ```
+
+2. **Exit Full-Screen**: Temporarily exit full-screen mode to access the system tray
+
+3. **Use Mission Control**: On macOS, use Mission Control (F3 or three-finger swipe up) to access the menu bar
+
+4. **Alternative Access**: The app provides console output with process status updates, so you can monitor activity even when the menu is not accessible
 
 ### Linux System Tray Issues
 

@@ -1,6 +1,18 @@
 use clap::Parser;
 use std::collections::HashSet;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+pub enum LogLevel {
+    /// Show all logs (info, warn, error)
+    Info,
+    /// Show only warning and error logs
+    Warn,
+    /// Show only error logs
+    Error,
+    /// Show no logs
+    None,
+}
+
 #[derive(Parser, Debug, Clone)]
 #[command(
     name = "port-kill",
@@ -44,6 +56,10 @@ pub struct Args {
     /// Show process IDs (PIDs) in the display output
     #[arg(short = 'P', long)]
     pub show_pid: bool,
+
+    /// Log level (info, warn, error, none)
+    #[arg(long, default_value = "info", value_enum)]
+    pub log_level: LogLevel,
 }
 
 impl Args {
@@ -142,6 +158,33 @@ impl Args {
         }
 
         Ok(())
+    }
+}
+
+impl LogLevel {
+    /// Convert LogLevel to RUST_LOG environment variable value
+    pub fn to_rust_log(&self) -> &'static str {
+        match self {
+            LogLevel::Info => "info",
+            LogLevel::Warn => "warn",
+            LogLevel::Error => "error",
+            LogLevel::None => "off",
+        }
+    }
+
+    /// Check if info level logging is enabled
+    pub fn is_info_enabled(&self) -> bool {
+        matches!(self, LogLevel::Info)
+    }
+
+    /// Check if warn level logging is enabled
+    pub fn is_warn_enabled(&self) -> bool {
+        matches!(self, LogLevel::Info | LogLevel::Warn)
+    }
+
+    /// Check if error level logging is enabled
+    pub fn is_error_enabled(&self) -> bool {
+        matches!(self, LogLevel::Info | LogLevel::Warn | LogLevel::Error)
     }
 }
 

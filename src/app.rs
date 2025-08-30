@@ -18,6 +18,7 @@ use tray_icon::{
 };
 use winit::event_loop::EventLoop;
 
+
 pub struct PortKillApp {
     tray_icon: Arc<StdMutex<Option<TrayIcon>>>,
     menu_event_receiver: Receiver<MenuEvent>,
@@ -57,10 +58,12 @@ impl PortKillApp {
         // Create event loop first (before any NSApplication initialization)
         let event_loop = EventLoop::new()?;
         
+
+        
         // Now create the tray icon after the event loop is created
         info!("Creating tray icon...");
         let tray_icon = TrayIconBuilder::new()
-            .with_tooltip("Port Kill - Development Port Monitor")
+            .with_tooltip("Port Kill - Development Port Monitor (Click or press Cmd+Shift+P)")
             .with_menu(Box::new(self.tray_menu.menu.clone()))
             .with_icon(self.tray_menu.icon.clone())
             .build()?;
@@ -83,6 +86,7 @@ impl PortKillApp {
         info!("Waiting for tray icon to appear...");
         println!("🔍 Look for a white square with red/green center in your status bar!");
         println!("   It should be in the top-right area of your screen.");
+        println!("💡 When in full-screen mode, use console mode: ./run.sh --console --ports 3000,8000");
 
         // Set up menu event handling
         let menu_event_receiver = self.menu_event_receiver.clone();
@@ -209,6 +213,11 @@ impl PortKillApp {
                         } else {
                             println!("   • Port {}: {}", port, process_info.name);
                         }
+                    }
+                    
+                    // Show notification for full-screen mode users
+                    if process_count > last_process_count {
+                        println!("🔔 New processes detected! Press Cmd+Shift+P to access menu or use console mode.");
                     }
                 }
                 
