@@ -411,29 +411,45 @@ If the system tray menu is not accessible when applications are in full-screen m
 
 ### Linux System Tray Issues
 
-If the Linux system tray is not working:
+If the Linux system tray is not working or processes are not showing:
 
-1. **Install GTK packages** (required for system tray):
+1. **Run the debug script** to diagnose issues:
    ```bash
-   # Ubuntu/Debian
-   sudo apt-get install libatk1.0-dev libgdk-pixbuf2.0-dev libgtk-3-dev libxdo-dev
-   
-   # Fedora/RHEL
-   sudo dnf install atk-devel gdk-pixbuf2-devel gtk3-devel libxdo-devel
-   
-   # Arch Linux
-   sudo pacman -S atk gdk-pixbuf2 gtk3 libxdo
+   ./debug_linux.sh
    ```
 
-2. **Use console mode** (works without GUI dependencies):
+2. **Install GTK packages** (required for system tray):
+   ```bash
+   # Ubuntu/Debian
+   sudo apt-get install libatk1.0-dev libgdk-pixbuf2.0-dev libgtk-3-dev libxdo-dev pkg-config
+   
+   # Fedora/RHEL
+   sudo dnf install atk-devel gdk-pixbuf2-devel gtk3-devel libxdo-devel pkg-config
+   
+   # Arch Linux
+   sudo pacman -S atk gdk-pixbuf2 gtk3 libxdo pkg-config
+   ```
+
+3. **Use console mode** (works without GUI dependencies):
    ```bash
    ./run-linux.sh --console --ports 3000,8000 --verbose
    ```
 
-3. **Check display environment**:
+4. **Check display environment**:
    - Ensure you're running in a desktop environment (not SSH without X11 forwarding)
    - Verify `DISPLAY` environment variable is set: `echo $DISPLAY`
    - Try running in a terminal emulator (not pure console)
+
+5. **Common Linux issues**:
+   - **Tray icon not showing**: Check if you're in a desktop environment with system tray support
+   - **Processes not detected**: Verify `lsof` is installed and working: `lsof -i :3000`
+   - **GTK errors**: Install missing GTK packages or use console mode
+   - **Permission issues**: Run with appropriate permissions or use `sudo` if needed
+
+6. **For detailed debugging**:
+   ```bash
+   RUST_LOG=debug ./run-linux.sh --console --ports 3000,8000
+   ```
 
 ### Docker Issues
 

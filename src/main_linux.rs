@@ -268,6 +268,8 @@ fn get_processes_on_ports(ports: &[u16], args: &Args) -> (usize, HashMap<u16, Pr
         format!("{}-{}", ports.first().unwrap_or(&0), ports.last().unwrap_or(&0))
     };
     
+    info!("Scanning ports: {} (range: {})", ports.len(), port_range);
+    
     // Use lsof to get detailed process information with error handling
     let output = match std::process::Command::new("lsof")
         .args(&["-i", &format!(":{}", port_range), "-sTCP:LISTEN", "-P", "-n"])
@@ -293,6 +295,15 @@ fn get_processes_on_ports(ports: &[u16], args: &Args) -> (usize, HashMap<u16, Pr
             return (0, HashMap::new());
         }
     };
+    
+    info!("lsof output ({} lines):", stdout.lines().count());
+    if !stdout.trim().is_empty() {
+        for line in stdout.lines() {
+            info!("  lsof: {}", line);
+        }
+    } else {
+        info!("  lsof: (no output)");
+    }
     
     let mut processes = HashMap::new();
     
@@ -328,6 +339,7 @@ fn get_processes_on_ports(ports: &[u16], args: &Args) -> (usize, HashMap<u16, Pr
             let should_ignore = ignore_ports.contains(&port) || ignore_processes.contains(&name);
             
             if !should_ignore {
+                info!("Found process: {} (PID {}) on port {}", name, pid, port);
                 processes.insert(port, ProcessInfo {
                     pid,
                     port,
@@ -339,9 +351,12 @@ fn get_processes_on_ports(ports: &[u16], args: &Args) -> (usize, HashMap<u16, Pr
             } else {
                 info!("Ignoring process {} (PID {}) on port {} (ignored by user configuration)", name, pid, port);
             }
+        } else {
+            info!("Skipping malformed line: {}", line);
         }
     }
     
+    info!("Process detection complete: {} processes found", processes.len());
     (processes.len(), processes)
 }
 
