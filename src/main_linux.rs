@@ -5,6 +5,7 @@ use port_kill::{
     cli::Args,
     console_app::ConsolePortKillApp,
     types::{ProcessInfo, StatusBarInfo},
+    process_monitor::{get_processes_on_ports, kill_all_processes, kill_single_process},
 };
 use tray_item::TrayItem;
 use anyhow::Result;
@@ -256,7 +257,7 @@ async fn run_linux_tray_mode(args: Args) -> Result<()> {
     Ok(())
 }
 
-// Core process management functions (copied from app.rs to avoid dependencies)
+
 
 fn get_processes_on_ports(ports: &[u16], args: &Args) -> (usize, HashMap<u16, ProcessInfo>) {
     // Build port range string for lsof
