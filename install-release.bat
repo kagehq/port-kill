@@ -18,8 +18,21 @@ echo 📡 Fetching latest release information...
 for /f "tokens=*" %%i in ('powershell -Command "(Invoke-WebRequest -Uri '%LATEST_RELEASE_URL%' -UseBasicParsing).Content | ConvertFrom-Json | Select-Object -ExpandProperty tag_name"') do set LATEST_TAG=%%i
 
 if "%LATEST_TAG%"=="" (
-    echo ❌ Failed to get latest release information
-    echo    Please check: https://github.com/%REPO%/releases
+    echo ❌ No releases found or failed to get latest release information
+    echo.
+    echo 📋 No releases are currently available. You have two options:
+    echo.
+    echo    1. 🏗️  Build from source (recommended):
+    echo       install.sh
+    echo.
+    echo    2. 📦 Wait for a release to be published:
+    echo       Visit: https://github.com/%REPO%/releases
+    echo.
+    echo    To create a release, the repository owner needs to:
+    echo    - Go to GitHub repository
+    echo    - Click 'Releases' → 'Create a new release'
+    echo    - Set tag (e.g., v0.1.0) and publish
+    echo.
     pause
     exit /b 1
 )
@@ -35,12 +48,12 @@ echo 📁 Installing to: %INSTALL_DIR%
 REM Download and install binary
 echo ⬇️  Downloading port-kill-windows.exe...
 set DOWNLOAD_URL=https://github.com/%REPO%/releases/download/%LATEST_TAG%/port-kill-windows.exe
-powershell -Command "Invoke-WebRequest -Uri '%DOWNLOAD_URL%' -OutFile '%INSTALL_DIR%\port-kill.exe'"
+powershell -Command "try { Invoke-WebRequest -Uri '%DOWNLOAD_URL%' -OutFile '%INSTALL_DIR%\port-kill.exe' } catch { Write-Host '❌ Failed to download port-kill-windows.exe'; Write-Host '   URL: %DOWNLOAD_URL%'; Write-Host '   Please check if the release assets are available'; exit 1 }"
 
 REM Download and install console binary
 echo ⬇️  Downloading port-kill-console-windows.exe...
 set CONSOLE_DOWNLOAD_URL=https://github.com/%REPO%/releases/download/%LATEST_TAG%/port-kill-console-windows.exe
-powershell -Command "Invoke-WebRequest -Uri '%CONSOLE_DOWNLOAD_URL%' -OutFile '%INSTALL_DIR%\port-kill-console.exe'"
+powershell -Command "try { Invoke-WebRequest -Uri '%CONSOLE_DOWNLOAD_URL%' -OutFile '%INSTALL_DIR%\port-kill-console.exe' } catch { Write-Host '❌ Failed to download port-kill-console-windows.exe'; Write-Host '   URL: %CONSOLE_DOWNLOAD_URL%'; Write-Host '   Please check if the release assets are available'; exit 1 }"
 
 echo.
 echo ✅ Installation complete!

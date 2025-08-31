@@ -38,8 +38,21 @@ echo "📡 Fetching latest release information..."
 LATEST_TAG=$(curl -s "$LATEST_RELEASE_URL" | grep '"tag_name"' | cut -d'"' -f4)
 
 if [[ -z "$LATEST_TAG" ]]; then
-    echo "❌ Failed to get latest release information"
-    echo "   Please check: https://github.com/$REPO/releases"
+    echo "❌ No releases found or failed to get latest release information"
+    echo ""
+    echo "📋 No releases are currently available. You have two options:"
+    echo ""
+    echo "   1. 🏗️  Build from source (recommended):"
+    echo "      ./install.sh"
+    echo ""
+    echo "   2. 📦 Wait for a release to be published:"
+    echo "      Visit: https://github.com/$REPO/releases"
+    echo ""
+    echo "   To create a release, the repository owner needs to:"
+    echo "   - Go to GitHub repository"
+    echo "   - Click 'Releases' → 'Create a new release'"
+    echo "   - Set tag (e.g., v0.1.0) and publish"
+    echo ""
     exit 1
 fi
 
@@ -54,13 +67,23 @@ echo "📁 Installing to: $INSTALL_DIR"
 # Download and install binary
 echo "⬇️  Downloading $BINARY_NAME..."
 DOWNLOAD_URL="https://github.com/$REPO/releases/download/$LATEST_TAG/$BINARY_NAME"
-curl -L -o "$INSTALL_DIR/port-kill" "$DOWNLOAD_URL"
+if ! curl -L -o "$INSTALL_DIR/port-kill" "$DOWNLOAD_URL"; then
+    echo "❌ Failed to download $BINARY_NAME"
+    echo "   URL: $DOWNLOAD_URL"
+    echo "   Please check if the release assets are available"
+    exit 1
+fi
 chmod +x "$INSTALL_DIR/port-kill"
 
 # Download and install console binary
 echo "⬇️  Downloading $CONSOLE_BINARY_NAME..."
 CONSOLE_DOWNLOAD_URL="https://github.com/$REPO/releases/download/$LATEST_TAG/$CONSOLE_BINARY_NAME"
-curl -L -o "$INSTALL_DIR/port-kill-console" "$CONSOLE_DOWNLOAD_URL"
+if ! curl -L -o "$INSTALL_DIR/port-kill-console" "$CONSOLE_DOWNLOAD_URL"; then
+    echo "❌ Failed to download $CONSOLE_BINARY_NAME"
+    echo "   URL: $CONSOLE_DOWNLOAD_URL"
+    echo "   Please check if the release assets are available"
+    exit 1
+fi
 chmod +x "$INSTALL_DIR/port-kill-console"
 
 echo ""

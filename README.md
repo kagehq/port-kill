@@ -98,9 +98,9 @@ Hover over the icon to see the exact process count in the tooltip.
 
 ### Automated Releases
 
-The latest binaries for all platforms are automatically built and released on GitHub:
+The latest binaries for all platforms are automatically built and released on GitHub when a release is published.
 
-#### Quick Install
+#### Quick Install (When Releases Are Available)
 ```bash
 # macOS/Linux: Download and run the installer
 curl -fsSL https://raw.githubusercontent.com/kagehq/port-kill/main/install-release.sh | bash
@@ -110,13 +110,39 @@ curl -fsSL https://raw.githubusercontent.com/kagehq/port-kill/main/install-relea
 # powershell -Command "Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/kagehq/port-kill/main/install-release.bat' -OutFile 'install-release.bat' && install-release.bat"
 ```
 
-#### Manual Download
+**Note**: If no releases are available yet, the install scripts will guide you to build from source instead.
+
+#### Manual Download (When Releases Are Available)
 1. **Download from Releases**: Go to [GitHub Releases](https://github.com/kagehq/port-kill/releases) and download the appropriate binary for your platform
 2. **Direct Downloads**:
    - **macOS**: `port-kill-macos` (system tray) or `port-kill-console-macos` (console mode)
    - **Linux**: `port-kill-linux` (system tray) or `port-kill-console-linux` (console mode)  
    - **Windows**: `port-kill-windows.exe` (system tray) or `port-kill-console-windows.exe` (console mode)
 3. **Archive Downloads**: Compressed archives with both binaries for each platform
+
+#### Creating a Release
+
+**Option 1: Automated Release (Recommended)**
+```bash
+# Create a new release with automatic tag creation
+./release.sh 0.1.0
+```
+
+This will:
+1. Create a git tag `v0.1.0`
+2. Push the tag to GitHub
+3. Automatically trigger release creation
+4. Build and upload binaries for all platforms
+
+**Option 2: Manual Release**
+1. Go to the repository on GitHub
+2. Click "Releases" in the right sidebar
+3. Click "Create a new release"
+4. Set the tag version (e.g., `v0.1.0`)
+5. Add a title and release notes
+6. Click "Publish release"
+
+Both methods will automatically trigger the build workflow and upload all platform binaries.
 
 ### Manual Installation
 
