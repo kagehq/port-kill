@@ -728,6 +728,7 @@ jobs:
           };
           use tray_item::TrayItem;
           use anyhow::{Result, Context};
+          use clap::Parser;
           use log::{error, info};
           use std::collections::HashMap;
           use std::thread;
@@ -829,7 +830,7 @@ jobs:
                               
                               // Update tray icon based on process count
                               let status_info = StatusBarInfo::from_process_count(process_count);
-                              if let Err(e) = tray.set_icon(&status_info.text) {
+                              if let Err(e) = tray.set_icon(tray_item::IconSource::Resource(&status_info.text)) {
                                   error!("Failed to update tray icon: {}", e);
                               }
                               
