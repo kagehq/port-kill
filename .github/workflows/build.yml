@@ -6,6 +6,9 @@ on:
   push:
     branches: [ main, master ]
 
+permissions:
+  contents: write
+
 jobs:
   build-macos:
     runs-on: macos-latest
