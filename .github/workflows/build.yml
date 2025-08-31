@@ -489,7 +489,20 @@ jobs:
           }
 
           # Copy the built binary to the main target directory
-          Copy-Item ".\target\release\port-kill-console.exe" "..\target\release\port-kill-console.exe" -Force
+          Write-Host "=== Copying built binary ==="
+          Write-Host "Current directory: $(Get-Location)"
+          Write-Host "Files in target/release:"
+          Get-ChildItem ".\target\release\" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $_" }
+          
+          if (Test-Path ".\target\release\port-kill-console.exe") {
+              Copy-Item ".\target\release\port-kill-console.exe" "..\target\release\port-kill-console.exe" -Force
+              Write-Host "✅ Successfully copied port-kill-console.exe"
+          } else {
+              Write-Host "❌ port-kill-console.exe not found in target/release"
+              Write-Host "Available files:"
+              Get-ChildItem ".\target\release\" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $_" }
+              exit 1
+          }
           
           # Return to original directory
           Pop-Location
