@@ -175,19 +175,38 @@ jobs:
 
       - name: Build console binary
         run: |
-          cargo build --release --bin port-kill-console
+          echo "Building console binary..."
+          cargo build --release --bin port-kill-console --verbose
+          
+          echo "Build completed. Checking binary..."
+          ls -la ./target/release/port-kill-console
 
       - name: Test console mode
         run: |
-          # Check if binary exists
+          # Check if binary exists and is executable
+          echo "Checking binary existence and permissions..."
           ls -la ./target/release/port-kill-console
           
-          # Test help command
-          echo "Testing --help command..."
-          ./target/release/port-kill-console --help
+          # Check binary type
+          echo "Checking binary type..."
+          file ./target/release/port-kill-console
           
-          # Test version command  
+          # Test help command with error handling
+          echo "Testing --help command..."
+          if ./target/release/port-kill-console --help; then
+            echo "✅ --help command succeeded"
+          else
+            echo "❌ --help command failed with exit code $?"
+            exit 1
+          fi
+          
+          # Test version command with error handling
           echo "Testing --version command..."
-          ./target/release/port-kill-console --version
+          if ./target/release/port-kill-console --version; then
+            echo "✅ --version command succeeded"
+          else
+            echo "❌ --version command failed with exit code $?"
+            exit 1
+          fi
           
           echo "Console mode test completed successfully!"
