@@ -722,13 +722,12 @@ jobs:
 
           # Create Windows-specific main.rs (tray mode only)
           @"
-          use crate::{
+          use port_kill::{
               cli::Args,
               types::{ProcessInfo, StatusBarInfo},
           };
           use tray_item::TrayItem;
           use anyhow::{Result, Context};
-          use clap::Parser;
           use log::{error, info};
           use std::collections::HashMap;
           use std::thread;
@@ -944,7 +943,7 @@ jobs:
                       
                       if let Some(ref ignore_processes) = args.ignore_processes {
                           let process_name_lower = process_info.name.to_lowercase();
-                          let is_name_ignored = ignore_processes.iter().any(|ignored| {
+                          let is_name_ignored = ignore_processes.iter().any(|ignored: &String| {
                               process_name_lower.contains(&ignored.to_lowercase())
                           });
                           
