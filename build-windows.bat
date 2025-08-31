@@ -47,7 +47,7 @@ echo env_logger = "0.10"
 echo clap = { version = "4.0", features = ["derive"] }
 echo.
 echo # Windows-specific tray support
-echo tray-item = "0.7"
+echo tray-item = "0.10.0"
 ) > Cargo.windows.tmp.toml
 
 REM Create a temporary lib.rs that excludes macOS/Linux-specific modules

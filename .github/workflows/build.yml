@@ -70,12 +70,96 @@ jobs:
 
       - name: Build Windows binary
         run: |
-          build-windows.bat
+          # Create Windows-specific Cargo.toml
+          @"
+          [package]
+          name = "port-kill"
+          version = "0.1.0"
+          edition = "2021"
+
+          [[bin]]
+          name = "port-kill"
+          path = "src/main_windows.rs"
+
+          [[bin]]
+          name = "port-kill-console"
+          path = "src/main_console.rs"
+
+          [dependencies]
+          # Core dependencies (platform-agnostic)
+          crossbeam-channel = "0.5"
+          tokio = { version = "1.0", features = ["full"] }
+          serde = { version = "1.0", features = ["derive"] }
+          serde_json = "1.0"
+          anyhow = "1.0"
+          thiserror = "1.0"
+          log = "0.4"
+          env_logger = "0.10"
+          clap = { version = "4.0", features = ["derive"] }
+
+          # Windows-specific tray support
+          tray-item = "0.10.0"
+          "@ | Out-File -FilePath "Cargo.windows.toml" -Encoding utf8
+
+          # Create Windows-specific lib.rs
+          @"
+          pub mod console_app;
+          pub mod process_monitor;
+          pub mod types;
+          pub mod cli;
+
+          // Exclude macOS/Linux-specific modules for Windows build
+          // pub mod app;
+          // pub mod tray_menu;
+          "@ | Out-File -FilePath "src/lib.windows.rs" -Encoding utf8
+
+          # Backup current files
+          if (Test-Path "Cargo.toml") { Copy-Item "Cargo.toml" "Cargo.macos.toml.backup" }
+          if (Test-Path "src/lib.rs") { Copy-Item "src/lib.rs" "src/lib.macos.rs.backup" }
+
+          # Switch to Windows configuration
+          Copy-Item "Cargo.windows.toml" "Cargo.toml"
+          Copy-Item "src/lib.windows.rs" "src/lib.rs"
+
+          # Build the Windows version
+          echo "Building Windows binaries..."
+          cargo build --release --verbose
+
+          # Clean up temporary files
+          Remove-Item "Cargo.windows.toml" -ErrorAction SilentlyContinue
+          Remove-Item "src/lib.windows.rs" -ErrorAction SilentlyContinue
+
+          # Restore macOS configuration
+          if (Test-Path "Cargo.macos.toml.backup") { Copy-Item "Cargo.macos.toml.backup" "Cargo.toml" }
+          if (Test-Path "src/lib.macos.rs.backup") { Copy-Item "src/lib.macos.rs.backup" "src/lib.rs" }
+        shell: pwsh
 
       - name: Test Windows binary
         run: |
+          # Check if binaries exist
+          if (Test-Path ".\target\release\port-kill.exe") { 
+            Write-Host "✅ port-kill.exe found" 
+          } else { 
+            Write-Host "❌ port-kill.exe NOT found"
+            Get-ChildItem ".\target\release\" -Name
+            exit 1
+          }
+          
+          if (Test-Path ".\target\release\port-kill-console.exe") { 
+            Write-Host "✅ port-kill-console.exe found" 
+          } else { 
+            Write-Host "❌ port-kill-console.exe NOT found"
+            Get-ChildItem ".\target\release\" -Name
+            exit 1
+          }
+          
+          # Test the binaries
+          Write-Host "Testing port-kill.exe --help..."
           .\target\release\port-kill.exe --help
+          
+          Write-Host "Testing port-kill-console.exe --help..."
           .\target\release\port-kill-console.exe --help
+        shell: pwsh
 
   test-console-mode:
     runs-on: ubuntu-latest
@@ -95,6 +179,15 @@ jobs:
 
       - name: Test console mode
         run: |
-          # Simple test that should work on all platforms
+          # Check if binary exists
+          ls -la ./target/release/port-kill-console
+          
+          # Test help command
+          echo "Testing --help command..."
           ./target/release/port-kill-console --help
+          
+          # Test version command  
+          echo "Testing --version command..."
           ./target/release/port-kill-console --version
+          
+          echo "Console mode test completed successfully!"
