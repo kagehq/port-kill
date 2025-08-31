@@ -79,12 +79,18 @@ impl PortKillApp {
             *tray_icon_guard = Some(tray_icon);
         }
         
-        // For now, let's manually check for processes every 5 seconds in the event loop
-        let tray_icon = self.tray_icon.clone();
-        let mut last_check = std::time::Instant::now();
-        let mut last_process_count = 0;
-        let mut last_menu_update = std::time::Instant::now();
-        let is_killing_processes = Arc::new(AtomicBool::new(false));
+                 // For now, let's manually check for processes every 5 seconds in the event loop
+         let tray_icon = self.tray_icon.clone();
+         let mut last_check = std::time::Instant::now();
+         let mut last_process_count = 0;
+         let mut last_menu_update = std::time::Instant::now();
+         let is_killing_processes = Arc::new(AtomicBool::new(false));
+         
+         // Initialize with current process count to avoid false "changes" on startup
+         let initial_processes = Self::get_processes_on_ports(&self.args.get_ports_to_monitor(), &self.args);
+         last_process_count = initial_processes.0;
+         info!("Initial process count: {} ({} processes detected on startup)", 
+               last_process_count, initial_processes.0);
 
         // Give the tray icon time to appear
         info!("Waiting for tray icon to appear...");
@@ -297,15 +303,16 @@ impl PortKillApp {
                             }
                         }
                         
-                        // Only update menu if process count changed significantly and we're not killing processes
-                        // Add extra delay after killing processes to prevent crashes
-                        let process_count_changed = process_count != last_process_count;
-                        let base_delay = if dramatic_change { 30 } else { 15 }; // Longer delay for dramatic changes
-                        let enough_time_passed = last_menu_update.elapsed() >= std::time::Duration::from_secs(base_delay);
-                        let not_killing = !is_killing_processes.load(Ordering::Relaxed);
-                        
-                        if not_killing && process_count_changed && enough_time_passed {
-                            info!("Process count changed from {} to {}, updating menu...", last_process_count, process_count);
+                                                 // Only update menu if process count changed significantly and we're not killing processes
+                         // Add extra delay after killing processes to prevent crashes
+                         let process_count_changed = process_count != last_process_count;
+                         let base_delay = if dramatic_change { 30 } else { 15 }; // Longer delay for dramatic changes
+                         let enough_time_passed = last_menu_update.elapsed() >= std::time::Duration::from_secs(base_delay);
+                         let not_killing = !is_killing_processes.load(Ordering::Relaxed);
+                         
+                         if not_killing && process_count_changed && enough_time_passed {
+                             info!("Process count changed from {} to {} (raw lsof count), updating menu...", 
+                                   last_process_count, process_count);
                             
                             // Use a try-catch approach to prevent crashes and add extra safety
                             match std::panic::catch_unwind(|| {
@@ -324,13 +331,19 @@ impl PortKillApp {
                                     TrayMenu::create_menu(&HashMap::new(), args.show_pid)
                                 }
                             }) {
-                                Ok(Ok(new_menu)) => {
-                                    // Set the new menu with error handling
-                                    icon.set_menu(Some(Box::new(new_menu)));
-                                    last_process_count = process_count;
-                                    last_menu_update = std::time::Instant::now();
-                                    info!("Menu updated successfully for {} processes", process_count);
-                                }
+                                                                 Ok(Ok(new_menu)) => {
+                                     // Set the new menu with error handling
+                                     icon.set_menu(Some(Box::new(new_menu)));
+                                     // Use the validated count from current_processes instead of raw process_count
+                                     if let Ok(current_processes_guard) = current_processes.lock() {
+                                         last_process_count = current_processes_guard.len();
+                                     } else {
+                                         last_process_count = process_count;
+                                     }
+                                     last_menu_update = std::time::Instant::now();
+                                     info!("Menu updated successfully for {} processes (validated: {})", 
+                                           process_count, last_process_count);
+                                 }
                                 Ok(Err(e)) => {
                                     error!("Failed to create menu: {}", e);
                                 }
