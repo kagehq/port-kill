@@ -183,16 +183,14 @@ fn get_processes_on_ports(ports: &[u16], args: &Args) -> (usize, HashMap<u16, Pr
         }
     };
         
-    match output {
-        Ok(output) => {
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            let mut processes = HashMap::new();
-            
-            // Get ignore sets for efficient lookup
-            let ignore_ports = args.get_ignore_ports_set();
-            let ignore_processes = args.get_ignore_processes_set();
-            
-            for line in stdout.lines() {
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut processes = HashMap::new();
+    
+    // Get ignore sets for efficient lookup
+    let ignore_ports = args.get_ignore_ports_set();
+    let ignore_processes = args.get_ignore_processes_set();
+    
+    for line in stdout.lines() {
                 // Parse netstat output format: Proto Local Address Foreign Address State PID
                 let parts: Vec<&str> = line.split_whitespace().collect();
                 if parts.len() >= 5 {
@@ -225,12 +223,9 @@ fn get_processes_on_ports(ports: &[u16], args: &Args) -> (usize, HashMap<u16, Pr
                         }
                     }
                 }
-            }
-            
-            (processes.len(), processes)
         }
-        Err(_) => (0, HashMap::new())
-    }
+        
+        (processes.len(), processes)
 }
 
 fn get_process_name_by_pid(pid: i32) -> Option<String> {

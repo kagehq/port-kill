@@ -4,7 +4,7 @@ setlocal enabledelayedexpansion
 REM Port Kill Release Installer for Windows
 REM Downloads and installs the latest release
 
-set REPO=your-username/port-kill
+set REPO=kagehq/port-kill
 set LATEST_RELEASE_URL=https://api.github.com/repos/%REPO%/releases/latest
 
 echo 🚀 Port Kill Release Installer for Windows

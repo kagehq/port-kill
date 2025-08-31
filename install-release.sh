@@ -5,7 +5,7 @@
 
 set -e
 
-REPO="your-username/port-kill"  # Update this with your actual GitHub username/repo
+REPO="kagehq/port-kill"
 LATEST_RELEASE_URL="https://api.github.com/repos/$REPO/releases/latest"
 
 echo "🚀 Port Kill Release Installer"

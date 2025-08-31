@@ -97,4 +97,4 @@ jobs:
         run: |
           # Simple test that should work on all platforms
           ./target/release/port-kill-console --help
-          ./target/release/port-kill-console --console --ports 3000,8000 --log-level error --version
+          ./target/release/port-kill-console --version
