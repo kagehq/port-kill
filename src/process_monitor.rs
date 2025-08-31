@@ -1,7 +1,7 @@
 use crate::types::{ProcessInfo, ProcessUpdate};
 use anyhow::{Context, Result};
 use crossbeam_channel::Sender;
-use log::{error, info, warn};
+use log::{error, info};
 #[cfg(not(target_os = "windows"))]
 use nix::sys::signal::{kill, Signal};
 #[cfg(not(target_os = "windows"))]
@@ -222,8 +222,8 @@ impl ProcessMonitor {
         Ok(ProcessInfo {
             pid,
             port,
-            command,
-            name: command.clone(),
+            command: command.clone(),
+            name: command,
             container_id,
             container_name,
         })

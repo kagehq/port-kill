@@ -85,8 +85,8 @@ impl TrayMenu {
                 )
             };
             
-            // Create unique menu ID for each process
-            let menu_id = format!("process_{}_{}", port, process_info.pid);
+            // Create unique menu ID for each process (unused for now)
+            let _menu_id = format!("process_{}_{}", port, process_info.pid);
             
             // For now, we'll use the menu text to identify processes since tray-icon doesn't support custom IDs
             // The menu event will contain the menu text which we can parse

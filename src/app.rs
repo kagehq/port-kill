@@ -414,6 +414,7 @@ impl PortKillApp {
         Ok(())
     }
 
+    #[cfg(not(target_os = "windows"))]
     fn kill_process(pid: i32) -> Result<()> {
         use nix::sys::signal::{kill, Signal};
         use nix::unistd::Pid;
@@ -451,6 +452,34 @@ impl PortKillApp {
             }
         } else {
             info!("Process {} terminated gracefully", pid);
+        }
+        
+        Ok(())
+    }
+
+    #[cfg(target_os = "windows")]
+    fn kill_process(pid: i32) -> Result<()> {
+        use std::process::Command;
+        
+        info!("Killing process PID: {} on Windows", pid);
+        
+        // Use taskkill to terminate the process
+        let output = Command::new("taskkill")
+            .args(&["/PID", &pid.to_string(), "/F"])
+            .output();
+            
+        match output {
+            Ok(output) => {
+                if output.status.success() {
+                    info!("Successfully killed process PID: {}", pid);
+                } else {
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    warn!("Failed to kill process PID {}: {}", pid, stderr);
+                }
+            }
+            Err(e) => {
+                warn!("Failed to execute taskkill for PID {}: {}", pid, e);
+            }
         }
         
         Ok(())
