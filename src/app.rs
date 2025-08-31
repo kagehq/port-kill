@@ -121,6 +121,11 @@ impl PortKillApp {
                         let result = if let Ok(current_processes_guard) = current_processes_clone.lock() {
                             let processes = &*current_processes_guard;
                             
+                            // Create a safe copy of processes to avoid borrowing issues during menu operations
+                            let processes_copy: HashMap<u16, crate::types::ProcessInfo> = processes.iter()
+                                .map(|(k, v)| (*k, v.clone()))
+                                .collect();
+                            
                             // Parse the menu event to determine action
                             let menu_id_str = event.id.0.clone();
                             info!("Menu ID: {}", menu_id_str);
@@ -141,7 +146,7 @@ impl PortKillApp {
                                 let kill_all_index = 0;
                                 let separator1_index = 1;
                                 let first_process_index = 2;
-                                let last_process_index = first_process_index + processes.len() - 1;
+                                let last_process_index = first_process_index + processes_copy.len() - 1;
                                 let separator2_index = last_process_index + 1;
                                 let quit_index = separator2_index + 1;
                                 
@@ -152,7 +157,7 @@ impl PortKillApp {
                                 if menu_index >= first_process_index && menu_index <= last_process_index {
                                     // Individual process clicked
                                     let process_index = menu_index - first_process_index;
-                                    let process_entries: Vec<_> = processes.iter().collect();
+                                    let process_entries: Vec<_> = processes_copy.iter().collect();
                                     if process_index < process_entries.len() {
                                         let (port, process_info) = process_entries[process_index];
                                         info!("Killing individual process on port {} with PID {}", port, process_info.pid);
@@ -169,7 +174,7 @@ impl PortKillApp {
                                 } else {
                                     // Invalid menu index
                                     error!("Invalid menu index: {} (processes: {}, valid range: {}-{})", 
-                                           menu_index, processes.len(), first_process_index, quit_index);
+                                           menu_index, processes_copy.len(), first_process_index, quit_index);
                                     Ok(())
                                 }
                             } else {
@@ -186,12 +191,15 @@ impl PortKillApp {
                         match result {
                             Ok(_) => {
                                 info!("Process killing completed successfully");
-                                // Reset the flag after a delay to allow menu updates again
-                                std::thread::sleep(std::time::Duration::from_secs(1));
+                                // Reset the flag after a longer delay to allow menu updates again
+                                // This prevents crashes when processes are being killed
+                                std::thread::sleep(std::time::Duration::from_secs(3));
                                 is_killing_clone.store(false, Ordering::Relaxed);
                             }
                             Err(e) => {
                                 error!("Failed to kill processes: {}", e);
+                                // Still reset the flag but with a shorter delay
+                                std::thread::sleep(std::time::Duration::from_secs(1));
                                 is_killing_clone.store(false, Ordering::Relaxed);
                             }
                         }
@@ -215,6 +223,19 @@ impl PortKillApp {
                         (0, HashMap::new())
                     }
                 };
+                
+                // Additional safety check: if process count changed dramatically, skip menu update
+                let process_count_delta = if process_count > last_process_count {
+                    process_count - last_process_count
+                } else {
+                    last_process_count - process_count
+                };
+                
+                // If there's a dramatic change in process count, wait longer before updating menu
+                let dramatic_change = process_count_delta > 5;
+                if dramatic_change {
+                    info!("Dramatic process count change detected (delta: {}), extending menu update delay", process_count_delta);
+                }
                 
                 let status_info = StatusBarInfo::from_process_count(process_count);
                 println!("🔄 Port Status: {} - {}", status_info.text, status_info.tooltip);
@@ -258,17 +279,23 @@ impl PortKillApp {
                         // Only update menu if process count changed significantly and we're not killing processes
                         // Add extra delay after killing processes to prevent crashes
                         let process_count_changed = process_count != last_process_count;
-                        let enough_time_passed = last_menu_update.elapsed() >= std::time::Duration::from_secs(10); // Increased delay
+                        let base_delay = if dramatic_change { 30 } else { 15 }; // Longer delay for dramatic changes
+                        let enough_time_passed = last_menu_update.elapsed() >= std::time::Duration::from_secs(base_delay);
                         let not_killing = !is_killing_processes.load(Ordering::Relaxed);
                         
                         if not_killing && process_count_changed && enough_time_passed {
                             info!("Process count changed from {} to {}, updating menu...", last_process_count, process_count);
                             
-                            // Use a try-catch approach to prevent crashes
+                            // Use a try-catch approach to prevent crashes and add extra safety
                             match std::panic::catch_unwind(|| {
-                                TrayMenu::create_menu(&processes, args.show_pid)
+                                // Create a copy of processes to avoid borrowing issues
+                                let processes_copy: HashMap<u16, crate::types::ProcessInfo> = processes.iter()
+                                    .map(|(k, v)| (*k, v.clone()))
+                                    .collect();
+                                TrayMenu::create_menu(&processes_copy, args.show_pid)
                             }) {
                                 Ok(Ok(new_menu)) => {
+                                    // Set the new menu with error handling
                                     icon.set_menu(Some(Box::new(new_menu)));
                                     last_process_count = process_count;
                                     last_menu_update = std::time::Instant::now();
