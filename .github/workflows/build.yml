@@ -191,13 +191,15 @@ jobs:
                   }
               }
 
-              fn filter_ignored_processes(&self, processes: &HashMap<i32, crate::types::ProcessInfo>) -> HashMap<i32, crate::types::ProcessInfo> {
+              fn filter_ignored_processes(&self, processes: &HashMap<u16, crate::types::ProcessInfo>) -> HashMap<u16, crate::types::ProcessInfo> {
                   let mut filtered = HashMap::new();
                   
                   for (port, process_info) in processes {
                       // Check if port is ignored
-                      if self.args.ignore_ports.contains(port) {
-                          continue;
+                      if let Some(ref ignore_ports) = self.args.ignore_ports {
+                          if ignore_ports.contains(port) {
+                              continue;
+                          }
                       }
                       
                       // Check if process name is ignored
