@@ -93,9 +93,9 @@ jobs:
           
           # Create standalone console_app.rs with direct imports
           @"
-          use process_monitor::ProcessMonitor;
-          use types::{ProcessUpdate, StatusBarInfo};
-          use cli::Args;
+          use crate::process_monitor::ProcessMonitor;
+          use crate::types::{ProcessUpdate, StatusBarInfo};
+          use crate::cli::Args;
           use anyhow::Result;
           use crossbeam_channel::{bounded, Receiver};
           use log::{error, info};
@@ -191,7 +191,7 @@ jobs:
                   }
               }
 
-              fn filter_ignored_processes(&self, processes: &HashMap<i32, types::ProcessInfo>) -> HashMap<i32, types::ProcessInfo> {
+              fn filter_ignored_processes(&self, processes: &HashMap<i32, crate::types::ProcessInfo>) -> HashMap<i32, crate::types::ProcessInfo> {
                   let mut filtered = HashMap::new();
                   
                   for (port, process_info) in processes {
@@ -220,7 +220,7 @@ jobs:
           
           # Create standalone process_monitor.rs with direct imports
           @"
-          use types::{ProcessInfo, ProcessUpdate};
+          use crate::types::{ProcessInfo, ProcessUpdate};
           use anyhow::{Context, Result};
           use crossbeam_channel::Sender;
           use log::{error, info};
