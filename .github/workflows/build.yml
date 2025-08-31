@@ -90,11 +90,184 @@ jobs:
           
           # Create a temporary directory for console build
           New-Item -ItemType Directory -Path "console-build" -Force | Out-Null
-          Copy-Item "src/main_console.rs" "console-build/main.rs"
-          Copy-Item "src/console_app.rs" "console-build/console_app.rs"
+          
+          # Create standalone console_app.rs with direct imports
+          @"
+          use process_monitor::ProcessMonitor;
+          use types::{ProcessUpdate, StatusBarInfo};
+          use cli::Args;
+          use anyhow::Result;
+          use crossbeam_channel::{bounded, Receiver};
+          use log::{error, info};
+          use std::sync::Arc;
+          use tokio::sync::Mutex;
+          use std::collections::HashMap;
+
+          pub struct ConsolePortKillApp {
+              process_monitor: Arc<Mutex<ProcessMonitor>>,
+              update_receiver: Receiver<ProcessUpdate>,
+              args: Args,
+          }
+
+          impl ConsolePortKillApp {
+              pub fn new(args: Args) -> Result<Self> {
+                  // Create channels for communication
+                  let (update_sender, update_receiver) = bounded(100);
+
+                  // Create process monitor with configurable ports
+                  let process_monitor = Arc::new(Mutex::new(ProcessMonitor::new(update_sender, args.get_ports_to_monitor(), args.docker)?));
+
+                  Ok(Self {
+                      process_monitor,
+                      update_receiver,
+                      args,
+                  })
+              }
+
+              pub async fn run(mut self) -> Result<()> {
+                  info!("Starting Console Port Kill application...");
+                  println!("🚀 Port Kill Console Monitor Started!");
+                  println!("📡 Monitoring {} every 2 seconds...", self.args.get_port_description());
+                  println!("💡 Press Ctrl+C to quit");
+                  println!("");
+
+                  // Start process monitoring in background
+                  let monitor = self.process_monitor.clone();
+                  tokio::spawn(async move {
+                      if let Err(e) = monitor.lock().await.start_monitoring().await {
+                          error!("Process monitoring failed: {}", e);
+                      }
+                  });
+
+                  // Handle updates in the main thread
+                  self.handle_console_updates().await;
+
+                  Ok(())
+              }
+
+              async fn handle_console_updates(&mut self) {
+                  info!("Starting console update handler...");
+
+                  loop {
+                      // Check for process updates
+                      if let Ok(update) = self.update_receiver.try_recv() {
+                          // Filter out ignored processes
+                          let filtered_processes = self.filter_ignored_processes(&update.processes);
+                          let filtered_count = filtered_processes.len();
+                          
+                          // Update status
+                          let status_info = StatusBarInfo::from_process_count(filtered_count);
+                          
+                          // Print status to console
+                          println!("🔄 Port Status: {} - {}", status_info.text, status_info.tooltip);
+                          
+                          if filtered_count > 0 {
+                              println!("📋 Detected Processes (after filtering ignored):");
+                              for (port, process_info) in &filtered_processes {
+                                  if let (Some(_container_id), Some(container_name)) = (&process_info.container_id, &process_info.container_name) {
+                                      println!("   • Port {}: {} - {} [Docker: {}]", 
+                                              port, process_info.name, process_info.command, container_name);
+                                  } else if self.args.show_pid {
+                                      println!("   • Port {}: {} (PID {}) - {}", 
+                                              port, process_info.name, process_info.pid, process_info.command);
+                                  } else {
+                                      println!("   • Port {}: {} - {}", 
+                                              port, process_info.name, process_info.command);
+                                  }
+                              }
+                          }
+                          
+                          // Show ignored processes if any
+                          let ignored_count = update.processes.len() - filtered_count;
+                          if ignored_count > 0 {
+                              println!("🚫 Ignored {} process(es) based on user configuration", ignored_count);
+                          }
+                          
+                          println!("");
+                      }
+
+                      // Sleep briefly to avoid busy waiting
+                      tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                  }
+              }
+
+              fn filter_ignored_processes(&self, processes: &HashMap<i32, types::ProcessInfo>) -> HashMap<i32, types::ProcessInfo> {
+                  let mut filtered = HashMap::new();
+                  
+                  for (port, process_info) in processes {
+                      // Check if port is ignored
+                      if self.args.ignore_ports.contains(port) {
+                          continue;
+                      }
+                      
+                      // Check if process name is ignored
+                      let process_name_lower = process_info.name.to_lowercase();
+                      let is_name_ignored = self.args.ignore_processes.iter().any(|ignored| {
+                          process_name_lower.contains(&ignored.to_lowercase())
+                      });
+                      
+                      if is_name_ignored {
+                          continue;
+                      }
+                      
+                      filtered.insert(*port, process_info.clone());
+                  }
+                  
+                  filtered
+              }
+          }
+          "@ | Out-File -FilePath "console-build/console_app.rs" -Encoding utf8
+          
+          # Copy other files (they should work as-is since they don't use crate:: imports)
           Copy-Item "src/process_monitor.rs" "console-build/process_monitor.rs"
           Copy-Item "src/types.rs" "console-build/types.rs"
           Copy-Item "src/cli.rs" "console-build/cli.rs"
+          
+          # Create standalone main.rs with direct imports
+          @"
+          use anyhow::Result;
+          use log::info;
+          use console_app::ConsolePortKillApp;
+          use cli::Args;
+          use clap::Parser;
+
+          mod console_app;
+          mod process_monitor;
+          mod types;
+          mod cli;
+
+          #[tokio::main]
+          async fn main() -> Result<()> {
+              // Parse command-line arguments
+              let args = Args::parse();
+              
+              // Validate arguments
+              if let Err(e) = args.validate() {
+                  eprintln!("Error: {}", e);
+                  std::process::exit(1);
+              }
+
+              // Set up logging level based on verbose flag
+              if args.verbose {
+                  std::env::set_var("RUST_LOG", "debug");
+              } else if std::env::var("RUST_LOG").is_err() {
+                  std::env::set_var("RUST_LOG", "info");
+              }
+
+              // Initialize logging
+              env_logger::init();
+              
+              info!("Starting Console Port Kill application...");
+              info!("Monitoring: {}", args.get_port_description());
+
+              // Create and run the console application
+              let app = ConsolePortKillApp::new(args)?;
+              app.run().await?;
+
+              info!("Console Port Kill application stopped");
+              Ok(())
+          }
+          "@ | Out-File -FilePath "console-build/main.rs" -Encoding utf8
           
           # Create standalone Cargo.toml for console
           @"
