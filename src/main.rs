@@ -1,8 +1,13 @@
+#[cfg(target_os = "macos")]
 use anyhow::Result;
+#[cfg(target_os = "macos")]
 use log::info;
+#[cfg(target_os = "macos")]
 use port_kill::{app::PortKillApp, cli::Args};
+#[cfg(target_os = "macos")]
 use clap::Parser;
 
+#[cfg(target_os = "macos")]
 fn main() -> Result<()> {
     // Parse command-line arguments
     let args = Args::parse();
@@ -34,4 +39,14 @@ fn main() -> Result<()> {
 
     info!("Port Kill application stopped");
     Ok(())
+}
+
+#[cfg(not(target_os = "macos"))]
+fn main() {
+    eprintln!("Error: This binary is only available on macOS.");
+    eprintln!("For other platforms, use the platform-specific binaries:");
+    eprintln!("  - Linux: ./run-linux.sh");
+    eprintln!("  - Windows: ./run-windows.bat");
+    eprintln!("  - Console mode (all platforms): ./run.sh --console");
+    std::process::exit(1);
 }

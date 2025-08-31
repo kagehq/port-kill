@@ -12,13 +12,16 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use std::sync::Mutex as StdMutex;
 use std::sync::atomic::{AtomicBool, Ordering};
+#[cfg(target_os = "macos")]
 use tray_icon::{
     menu::MenuEvent,
     TrayIcon, TrayIconBuilder,
 };
+#[cfg(target_os = "macos")]
 use winit::event_loop::EventLoop;
 
 
+#[cfg(target_os = "macos")]
 pub struct PortKillApp {
     tray_icon: Arc<StdMutex<Option<TrayIcon>>>,
     menu_event_receiver: Receiver<MenuEvent>,
@@ -29,6 +32,7 @@ pub struct PortKillApp {
     current_processes: Arc<StdMutex<HashMap<u16, crate::types::ProcessInfo>>>,
 }
 
+#[cfg(target_os = "macos")]
 impl PortKillApp {
     pub fn new(args: Args) -> Result<Self> {
         // Create channels for communication

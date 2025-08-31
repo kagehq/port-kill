@@ -3,11 +3,13 @@ use anyhow::Result;
 use crossbeam_channel::Sender;
 use log::debug;
 use std::collections::HashMap;
+#[cfg(target_os = "macos")]
 use tray_icon::{
     menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem},
     Icon,
 };
 
+#[cfg(target_os = "macos")]
 #[derive(Clone)]
 pub struct TrayMenu {
     pub menu: Menu,
@@ -15,6 +17,7 @@ pub struct TrayMenu {
     menu_sender: Sender<MenuEvent>,
 }
 
+#[cfg(target_os = "macos")]
 impl TrayMenu {
     pub fn new(menu_sender: Sender<MenuEvent>) -> Result<Self> {
         // Create a simple icon (we'll use a text-based approach for now)
