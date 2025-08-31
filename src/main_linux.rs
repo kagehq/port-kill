@@ -4,11 +4,12 @@
 use port_kill::{
     cli::Args,
     console_app::ConsolePortKillApp,
-    types::{ProcessInfo, StatusBarInfo},
-    process_monitor::{get_processes_on_ports, kill_all_processes, kill_single_process},
+    types::StatusBarInfo,
+    process_monitor::{get_processes_on_ports, kill_all_processes},
 };
 use tray_item::TrayItem;
 use anyhow::Result;
+use clap::Parser;
 use log::{error, info};
 use std::collections::HashMap;
 use std::env;
@@ -18,9 +19,9 @@ use std::time::Duration;
 
 // GTK imports for Linux tray icon
 use gtk::prelude::*;
-use gtk::{Application, ApplicationWindow, Button, Label, VBox};
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     // Parse command-line arguments
     let args = Args::parse();
     
@@ -49,12 +50,12 @@ fn main() -> Result<()> {
     if args.console {
         info!("Starting console mode...");
         let console_app = ConsolePortKillApp::new(args)?;
-        console_app.run()?;
+        console_app.run().await?;
         return Ok(());
     }
 
     // Try to start tray mode, fallback to console if it fails
-    match start_tray_mode(args.clone()) {
+    match start_tray_mode(args.clone()).await {
         Ok(_) => {
             info!("Tray mode completed successfully");
             Ok(())
@@ -69,13 +70,13 @@ fn main() -> Result<()> {
             info!("Starting console mode as fallback...");
             let console_args = args.clone();
             let console_app = ConsolePortKillApp::new(console_args)?;
-            console_app.run()?;
+            console_app.run().await?;
             Ok(())
         }
     }
 }
 
-fn start_tray_mode(args: Args) -> Result<()> {
+async fn start_tray_mode(args: Args) -> Result<()> {
     info!("Starting Linux tray mode...");
     
     // Initialize GTK
@@ -139,14 +140,15 @@ fn start_tray_mode(args: Args) -> Result<()> {
             println!("📋 No processes detected");
         }
         
-        // Update tray icon
-        if let Err(e) = tray.set_icon(tray_item::IconSource::Resource(&status_info.text)) {
-            error!("Failed to update tray icon: {}", e);
-        }
+        // Update tray icon (using string literal for now)
+        let icon_text = match process_count {
+            0 => "0",
+            1..=9 => "1-9",
+            _ => "10+",
+        };
         
-        // Update tooltip
-        if let Err(e) = tray.set_tooltip(&status_info.tooltip) {
-            error!("Failed to update tooltip: {}", e);
+        if let Err(e) = tray.set_icon(tray_item::IconSource::Resource(icon_text)) {
+            error!("Failed to update tray icon: {}", e);
         }
         
         // Update menu with current processes
@@ -155,7 +157,7 @@ fn start_tray_mode(args: Args) -> Result<()> {
             
             // Clear existing menu items (except Kill All and Quit)
             // Note: tray-item doesn't support dynamic menu updates easily
-            // For now, we'll just update the icon and tooltip
+            // For now, we'll just update the icon
         }
     }
 }
