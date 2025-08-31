@@ -52,7 +52,7 @@ fn run_windows_tray_mode(args: Args) -> Result<()> {
     info!("Starting Windows tray mode...");
     
     // Create the tray item
-    let mut tray = TrayItem::new("Port Kill", "Port Kill").map_err(|e| {
+    let mut tray = TrayItem::new("Port Kill", tray_item::IconSource::Resource("Port Kill")).map_err(|e| {
         anyhow::anyhow!("Failed to create Windows tray item: {}", e)
     })?;
     
@@ -349,7 +349,7 @@ fn kill_all_processes(ports: &[u16], args: &Args) -> Result<()> {
     Ok(())
 }
 
-fn kill_single_process(pid: i32, args: &Args) -> Result<()> {
+fn kill_single_process(pid: i32, _args: &Args) -> Result<()> {
     info!("Killing single process PID: {}", pid);
     
     // Use taskkill to terminate the process

@@ -1,7 +1,9 @@
 use crate::types::{ProcessInfo, ProcessUpdate};
 use anyhow::{Context, Result};
 use crossbeam_channel::Sender;
-use log::{error, info, warn};
+use log::{error, info};
+#[cfg(not(target_os = "windows"))]
+use log::warn;
 #[cfg(not(target_os = "windows"))]
 use nix::sys::signal::{kill, Signal};
 #[cfg(not(target_os = "windows"))]
@@ -133,6 +135,7 @@ impl ProcessMonitor {
         Err(anyhow::anyhow!("No process found on port {}", port))
     }
 
+    #[cfg(not(target_os = "windows"))]
     async fn get_process_details(&self, pid: i32, port: u16) -> Result<ProcessInfo> {
         // Get process command and name using ps
         let output = Command::new("ps")
@@ -229,6 +232,7 @@ impl ProcessMonitor {
         })
     }
 
+    #[cfg(not(target_os = "windows"))]
     async fn get_docker_container_info(&self, pid: i32) -> (Option<String>, Option<String>) {
         // Try to find the container ID for this PID
         let container_id = match self.find_container_id_for_pid(pid).await {
@@ -249,6 +253,7 @@ impl ProcessMonitor {
         (container_id, container_name)
     }
 
+    #[cfg(not(target_os = "windows"))]
     async fn find_container_id_for_pid(&self, pid: i32) -> Result<Option<String>> {
         // Use docker ps to get all running containers
         let output = Command::new("docker")
@@ -278,6 +283,7 @@ impl ProcessMonitor {
         Ok(None)
     }
 
+    #[cfg(not(target_os = "windows"))]
     async fn container_has_pid(&self, container_id: &str, pid: i32) -> Result<bool> {
         // Use docker top to get processes in the container
         let output = Command::new("docker")
@@ -306,6 +312,7 @@ impl ProcessMonitor {
         Ok(false)
     }
 
+    #[cfg(not(target_os = "windows"))]
     async fn get_container_name(&self, container_id: &str) -> Result<String> {
         // Get container name using docker inspect
         let output = Command::new("docker")
@@ -440,6 +447,7 @@ impl ProcessMonitor {
         Ok(())
     }
 
+    #[cfg(not(target_os = "windows"))]
     async fn is_process_running(&self, pid: i32) -> bool {
         let output = Command::new("ps")
             .args(&["-p", &pid.to_string()])
