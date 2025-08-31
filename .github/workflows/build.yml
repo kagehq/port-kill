@@ -85,16 +85,27 @@ jobs:
           # Try to build console binary first (should work on all platforms)
           Write-Host "=== Building console binary ==="
           
-          # Create a console-only Cargo.toml for this build
+          # Create a standalone console binary (no library dependencies)
+          Write-Host "=== Creating standalone console binary ==="
+          
+          # Create a temporary directory for console build
+          New-Item -ItemType Directory -Path "console-build" -Force | Out-Null
+          Copy-Item "src/main_console.rs" "console-build/main.rs"
+          Copy-Item "src/console_app.rs" "console-build/console_app.rs"
+          Copy-Item "src/process_monitor.rs" "console-build/process_monitor.rs"
+          Copy-Item "src/types.rs" "console-build/types.rs"
+          Copy-Item "src/cli.rs" "console-build/cli.rs"
+          
+          # Create standalone Cargo.toml for console
           @"
           [package]
-          name = "port-kill-console"
+          name = "port-kill-console-standalone"
           version = "0.1.0"
           edition = "2021"
 
           [[bin]]
           name = "port-kill-console"
-          path = "src/main_console.rs"
+          path = "main.rs"
 
           [dependencies]
           crossbeam-channel = "0.5"
@@ -106,34 +117,37 @@ jobs:
           log = "0.4"
           env_logger = "0.10"
           clap = { version = "4.0", features = ["derive"] }
-          "@ | Out-File -FilePath "Cargo.console.toml" -Encoding utf8
+          "@ | Out-File -FilePath "console-build/Cargo.toml" -Encoding utf8
 
-          # Create a console-only lib.rs
-          @"
-          pub mod console_app;
-          pub mod process_monitor;
-          pub mod types;
-          pub mod cli;
-          "@ | Out-File -FilePath "src/lib.console.rs" -Encoding utf8
-
-          # Backup and switch to console-only build
-          Copy-Item "Cargo.toml" "Cargo.backup" -ErrorAction SilentlyContinue
-          Copy-Item "src/lib.rs" "src/lib.backup" -ErrorAction SilentlyContinue
-          Copy-Item "Cargo.console.toml" "Cargo.toml"
-          Copy-Item "src/lib.console.rs" "src/lib.rs"
+          # Build in the temporary directory
+          Push-Location "console-build"
 
           # Build console binary
-          cargo build --release --bin port-kill-console --verbose
-
-          # Restore original files
-          Copy-Item "Cargo.backup" "Cargo.toml" -ErrorAction SilentlyContinue
-          Copy-Item "src/lib.backup" "src/lib.rs" -ErrorAction SilentlyContinue
+          Write-Host "=== Building standalone console binary ==="
+          $buildResult = cargo build --release --bin port-kill-console --verbose 2>&1
+          $buildExitCode = $LASTEXITCODE
           
-          # Clean up console files
-          Remove-Item "Cargo.console.toml" -ErrorAction SilentlyContinue
-          Remove-Item "src/lib.console.rs" -ErrorAction SilentlyContinue
-          Remove-Item "Cargo.backup" -ErrorAction SilentlyContinue
-          Remove-Item "src/lib.backup" -ErrorAction SilentlyContinue
+          Write-Host "Build output:"
+          Write-Host $buildResult
+          Write-Host "Build exit code: $buildExitCode"
+          
+          if ($buildExitCode -ne 0) {
+            Write-Host "❌ Console binary build failed with exit code $buildExitCode"
+            Write-Host "Current directory contents:"
+            Get-ChildItem | ForEach-Object { Write-Host "  $_" }
+            Write-Host "Target directory contents:"
+            Get-ChildItem ".\target\" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $_" }
+            exit 1
+          }
+
+          # Copy the built binary to the main target directory
+          Copy-Item ".\target\release\port-kill-console.exe" "..\target\release\port-kill-console.exe" -Force
+          
+          # Return to original directory
+          Pop-Location
+          
+          # Clean up temporary directory
+          Remove-Item "console-build" -Recurse -Force -ErrorAction SilentlyContinue
           
           # Check if console binary was created
           if (Test-Path ".\target\release\port-kill-console.exe") {
