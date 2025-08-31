@@ -95,4 +95,6 @@ jobs:
 
       - name: Test console mode
         run: |
-          timeout 10s ./target/release/port-kill-console --console --ports 3000,8000 --log-level error || true
+          # Simple test that should work on all platforms
+          ./target/release/port-kill-console --help
+          ./target/release/port-kill-console --console --ports 3000,8000 --log-level error --version

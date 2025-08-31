@@ -4,7 +4,7 @@ use port_kill::{
     types::{ProcessInfo, StatusBarInfo},
 };
 use tray_item::TrayItem;
-use anyhow::Result;
+use anyhow::{Result, Context};
 use clap::Parser;
 use log::{error, info};
 use std::collections::HashMap;
