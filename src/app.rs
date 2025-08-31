@@ -121,10 +121,6 @@ impl PortKillApp {
                             let menu_id_str = event.id.0.clone();
                             info!("Menu ID: {}", menu_id_str);
                             
-                            // For now, we'll use a simple approach: check if it's the first menu item (Kill All)
-                            // or if it's a process-specific item by checking the menu position
-                            // The tray-icon library doesn't provide easy access to menu text, so we'll use position
-                            
                             // Menu structure:
                             // 0: "Kill All Processes"
                             // 1: separator
@@ -137,9 +133,21 @@ impl PortKillApp {
                                 let ports_to_kill = args_clone.get_ports_to_monitor();
                                 Self::kill_all_processes(&ports_to_kill, &args_clone)
                             } else if let Ok(menu_index) = menu_id_str.parse::<usize>() {
-                                if menu_index > 1 && menu_index < processes.len() + 2 {
-                                    // Individual process clicked (accounting for "Kill All" and separator)
-                                    let process_index = menu_index - 2;
+                                // Calculate the actual menu structure
+                                let kill_all_index = 0;
+                                let separator1_index = 1;
+                                let first_process_index = 2;
+                                let last_process_index = first_process_index + processes.len() - 1;
+                                let separator2_index = last_process_index + 1;
+                                let quit_index = separator2_index + 1;
+                                
+                                info!("Menu structure: KillAll={}, Sep1={}, Processes={}-{}, Sep2={}, Quit={}", 
+                                      kill_all_index, separator1_index, first_process_index, last_process_index, 
+                                      separator2_index, quit_index);
+                                
+                                if menu_index >= first_process_index && menu_index <= last_process_index {
+                                    // Individual process clicked
+                                    let process_index = menu_index - first_process_index;
                                     let process_entries: Vec<_> = processes.iter().collect();
                                     if process_index < process_entries.len() {
                                         let (port, process_info) = process_entries[process_index];
@@ -149,14 +157,15 @@ impl PortKillApp {
                                         error!("Invalid process index: {} (max: {})", process_index, process_entries.len());
                                         Ok(())
                                     }
-                                } else if menu_index >= processes.len() + 2 {
+                                } else if menu_index == quit_index {
                                     // "Quit" clicked - just exit gracefully without killing processes
                                     info!("Quit clicked, exiting gracefully...");
                                     // Exit the application gracefully without killing processes
                                     std::process::exit(0);
                                 } else {
                                     // Invalid menu index
-                                    error!("Invalid menu index: {} (processes: {})", menu_index, processes.len());
+                                    error!("Invalid menu index: {} (processes: {}, valid range: {}-{})", 
+                                           menu_index, processes.len(), first_process_index, quit_index);
                                     Ok(())
                                 }
                             } else {
