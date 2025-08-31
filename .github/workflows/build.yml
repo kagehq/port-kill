@@ -70,9 +70,21 @@ jobs:
 
       - name: Build Windows binary
         run: |
+          # Enable detailed logging
+          $env:RUST_LOG = "debug"
+          $env:RUST_BACKTRACE = "1"
+          
+          # Show environment info
+          Write-Host "=== Environment Info ==="
+          Write-Host "Rust version: $(rustc --version)"
+          Write-Host "Cargo version: $(cargo --version)"
+          Write-Host "Current directory: $(Get-Location)"
+          Write-Host "Files in current directory:"
+          Get-ChildItem | ForEach-Object { Write-Host "  $_" }
+          
           # Try to build console binary first (should work on all platforms)
-          echo "Building console binary first..."
-          cargo build --release --bin port-kill-console
+          Write-Host "=== Building console binary ==="
+          cargo build --release --bin port-kill-console --verbose
           
           # Check if console binary was created
           if (Test-Path ".\target\release\port-kill-console.exe") {
@@ -84,7 +96,11 @@ jobs:
           }
           
           # Now try to build the Windows-specific binary
-          echo "Building Windows-specific binary..."
+          Write-Host "=== Building Windows-specific binary ==="
+          
+          # Show current Cargo.toml
+          Write-Host "Current Cargo.toml:"
+          Get-Content "Cargo.toml" | ForEach-Object { Write-Host "  $_" }
           
           # Create a simple Windows-specific Cargo.toml
           @"
@@ -179,20 +195,41 @@ jobs:
 
       - name: Build console binary
         run: |
-          echo "Building console binary..."
+          # Enable detailed logging
+          export RUST_LOG=debug
+          export RUST_BACKTRACE=1
+          
+          # Show environment info
+          echo "=== Environment Info ==="
+          echo "Rust version: $(rustc --version)"
+          echo "Cargo version: $(cargo --version)"
+          echo "Current directory: $(pwd)"
+          echo "Files in current directory:"
+          ls -la
+          
+          echo "=== Building console binary ==="
           cargo build --release --bin port-kill-console --verbose
           
-          echo "Build completed. Checking binary..."
+          echo "=== Build completed. Checking binary ==="
           ls -la ./target/release/port-kill-console
           
+          # Check binary details
+          echo "=== Binary details ==="
+          file ./target/release/port-kill-console
+          ldd ./target/release/port-kill-console 2>/dev/null || echo "ldd not available"
+          
           # Try a simple test first
-          echo "Testing basic execution..."
+          echo "=== Testing basic execution ==="
           timeout 5s ./target/release/port-kill-console --version || echo "Version test failed, continuing..."
 
       - name: Test console mode
         run: |
+          # Enable detailed logging
+          export RUST_LOG=debug
+          export RUST_BACKTRACE=1
+          
           # Check if binary exists and is executable
-          echo "Checking binary existence and permissions..."
+          echo "=== Checking binary existence and permissions ==="
           ls -la ./target/release/port-kill-console
           
           # Check binary type
