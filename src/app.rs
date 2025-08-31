@@ -240,21 +240,42 @@ impl PortKillApp {
                 let status_info = StatusBarInfo::from_process_count(process_count);
                 println!("🔄 Port Status: {} - {}", status_info.text, status_info.tooltip);
                 
-                // Update current processes
+                // Update current processes with validation
                 if let Ok(mut current_processes_guard) = current_processes.lock() {
-                    *current_processes_guard = processes.clone();
+                    // Filter out processes that are no longer running
+                    let validated_processes: HashMap<u16, crate::types::ProcessInfo> = processes.iter()
+                        .filter(|(_, process_info)| Self::is_process_still_running(process_info.pid))
+                        .map(|(k, v)| (*k, v.clone()))
+                        .collect();
+                    
+                    *current_processes_guard = validated_processes.clone();
+                    
+                    // Update process count to reflect validated processes
+                    let validated_count = validated_processes.len();
+                    if validated_count != process_count {
+                        info!("Process count adjusted from {} to {} after validation (some processes no longer running)", 
+                              process_count, validated_count);
+                    }
                 }
                 
-                // Print detected processes
+                // Print detected processes with additional safety checks
                 if process_count > 0 {
                     println!("📋 Detected Processes:");
-                    for (port, process_info) in &processes {
-                        if let (Some(_container_id), Some(container_name)) = (&process_info.container_id, &process_info.container_name) {
-                            println!("   • Port {}: {} [Docker: {}]", port, process_info.name, container_name);
-                        } else if args.show_pid {
-                            println!("   • Port {}: {} (PID {})", port, process_info.name, process_info.pid);
+                    // Create a safe copy of processes to avoid iteration issues
+                    let processes_copy: Vec<_> = processes.iter().collect();
+                    for (port, process_info) in processes_copy {
+                        // Validate process is still running before displaying
+                        if Self::is_process_still_running(process_info.pid) {
+                            if let (Some(_container_id), Some(container_name)) = (&process_info.container_id, &process_info.container_name) {
+                                println!("   • Port {}: {} [Docker: {}]", port, process_info.name, container_name);
+                            } else if args.show_pid {
+                                println!("   • Port {}: {} (PID {})", port, process_info.name, process_info.pid);
+                            } else {
+                                println!("   • Port {}: {}", port, process_info.name);
+                            }
                         } else {
-                            println!("   • Port {}: {}", port, process_info.name);
+                            info!("Process {} (PID {}) on port {} is no longer running, skipping display", 
+                                  process_info.name, process_info.pid, port);
                         }
                     }
                 } else {
@@ -289,10 +310,19 @@ impl PortKillApp {
                             // Use a try-catch approach to prevent crashes and add extra safety
                             match std::panic::catch_unwind(|| {
                                 // Create a copy of processes to avoid borrowing issues
+                                // Also filter out any processes that might have disappeared
                                 let processes_copy: HashMap<u16, crate::types::ProcessInfo> = processes.iter()
+                                    .filter(|(_, process_info)| Self::is_process_still_running(process_info.pid))
                                     .map(|(k, v)| (*k, v.clone()))
                                     .collect();
-                                TrayMenu::create_menu(&processes_copy, args.show_pid)
+                                
+                                // Only create menu if we have valid processes
+                                if !processes_copy.is_empty() {
+                                    TrayMenu::create_menu(&processes_copy, args.show_pid)
+                                } else {
+                                    // Create empty menu if no valid processes
+                                    TrayMenu::create_menu(&HashMap::new(), args.show_pid)
+                                }
                             }) {
                                 Ok(Ok(new_menu)) => {
                                     // Set the new menu with error handling
@@ -318,6 +348,17 @@ impl PortKillApp {
         })?;
 
         Ok(())
+    }
+
+    /// Check if a process is still running by PID
+    fn is_process_still_running(pid: i32) -> bool {
+        // Use a safe approach to check if process exists
+        match std::process::Command::new("ps")
+            .args(&["-p", &pid.to_string()])
+            .output() {
+            Ok(output) => output.status.success(),
+            Err(_) => false, // If we can't check, assume it's not running
+        }
     }
 
     pub fn get_processes_on_ports(ports: &[u16], args: &Args) -> (usize, HashMap<u16, crate::types::ProcessInfo>) {
