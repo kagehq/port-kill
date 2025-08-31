@@ -121,14 +121,25 @@ jobs:
 
           # Build in the temporary directory
           Push-Location "console-build"
+          
+          # Debug: Show what we copied
+          Write-Host "=== Debug: Files in console-build directory ==="
+          Get-ChildItem | ForEach-Object { Write-Host "  $_" }
+          
+          Write-Host "=== Debug: Cargo.toml content ==="
+          Get-Content "Cargo.toml"
+          
+          Write-Host "=== Debug: main.rs first few lines ==="
+          Get-Content "main.rs" | Select-Object -First 10
 
           # Build console binary
           Write-Host "=== Building standalone console binary ==="
-          $buildResult = cargo build --release --bin port-kill-console --verbose 2>&1
+          
+          # Run cargo build and capture output properly
+          Write-Host "Running: cargo build --release --bin port-kill-console"
+          & cargo build --release --bin port-kill-console
           $buildExitCode = $LASTEXITCODE
           
-          Write-Host "Build output:"
-          Write-Host $buildResult
           Write-Host "Build exit code: $buildExitCode"
           
           if ($buildExitCode -ne 0) {
