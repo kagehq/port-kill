@@ -1,7 +1,7 @@
 use crate::types::{ProcessInfo, ProcessUpdate};
 use anyhow::{Context, Result};
 use crossbeam_channel::Sender;
-use log::{error, info};
+use log::{error, info, warn};
 #[cfg(not(target_os = "windows"))]
 use nix::sys::signal::{kill, Signal};
 #[cfg(not(target_os = "windows"))]
