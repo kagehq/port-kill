@@ -218,8 +218,166 @@ jobs:
           }
           "@ | Out-File -FilePath "console-build/console_app.rs" -Encoding utf8
           
+          # Create standalone process_monitor.rs with direct imports
+          @"
+          use types::{ProcessInfo, ProcessUpdate};
+          use anyhow::{Context, Result};
+          use crossbeam_channel::Sender;
+          use log::{error, info};
+          use std::collections::HashMap;
+          use std::process::Command;
+          use std::time::Duration;
+          use tokio::time::sleep;
+
+          const MONITORING_INTERVAL: Duration = Duration::from_secs(2);
+
+          pub struct ProcessMonitor {
+              update_sender: Sender<ProcessUpdate>,
+              current_processes: HashMap<u16, ProcessInfo>,
+              ports_to_monitor: Vec<u16>,
+              docker_enabled: bool,
+          }
+
+          impl ProcessMonitor {
+              pub fn new(update_sender: Sender<ProcessUpdate>, ports_to_monitor: Vec<u16>, docker_enabled: bool) -> Result<Self> {
+                  Ok(Self {
+                      update_sender,
+                      current_processes: HashMap::new(),
+                      ports_to_monitor,
+                      docker_enabled,
+                  })
+              }
+
+              pub async fn start_monitoring(&mut self) -> Result<()> {
+                  let port_description = if self.ports_to_monitor.len() <= 10 {
+                      format!("ports: {}", self.ports_to_monitor.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(", "))
+                  } else {
+                      format!("{} ports: {} to {}", 
+                          self.ports_to_monitor.len(), 
+                          self.ports_to_monitor.first().unwrap_or(&0), 
+                          self.ports_to_monitor.last().unwrap_or(&0))
+                  };
+                  
+                  info!("Starting process monitoring on {}", port_description);
+
+                  loop {
+                      match self.scan_processes().await {
+                          Ok(processes) => {
+                              let update = ProcessUpdate::new(processes.clone());
+                              
+                              // Check if there are any changes
+                              if self.current_processes != processes {
+                                  info!("Process update: {} processes found", update.count);
+                                  self.current_processes = processes;
+                                  
+                                  if let Err(e) = self.update_sender.send(update) {
+                                      error!("Failed to send process update: {}", e);
+                                  }
+                              }
+                          }
+                          Err(e) => {
+                              error!("Failed to scan processes: {}", e);
+                          }
+                      }
+
+                      sleep(MONITORING_INTERVAL).await;
+                  }
+              }
+
+              async fn scan_processes(&self) -> Result<HashMap<u16, ProcessInfo>> {
+                  let mut processes = HashMap::new();
+
+                  for &port in &self.ports_to_monitor {
+                      if let Ok(process_info) = self.get_process_on_port(port).await {
+                          processes.insert(port, process_info);
+                      }
+                  }
+
+                  Ok(processes)
+              }
+
+              async fn get_process_on_port(&self, port: u16) -> Result<ProcessInfo> {
+                  // Windows: Use netstat to find processes listening on the port
+                  let output = Command::new("netstat")
+                      .args(&["-ano"])
+                      .output()
+                      .context("Failed to execute netstat command")?;
+
+                  if output.status.success() {
+                      let stdout = String::from_utf8_lossy(&output.stdout);
+                      for line in stdout.lines() {
+                          let parts: Vec<&str> = line.split_whitespace().collect();
+                          if parts.len() >= 5 {
+                              // Extract port from local address (e.g., "0.0.0.0:3000")
+                              if let Some(port_str) = parts[1].split(':').last() {
+                                  if let Ok(found_port) = port_str.parse::<u16>() {
+                                      if found_port == port {
+                                          // Extract PID from the last column
+                                          if let Ok(pid) = parts[4].parse::<i32>() {
+                                              return self.get_process_details(pid, port).await;
+                                          }
+                                      }
+                                  }
+                              }
+                          }
+                      }
+                  }
+
+                  Err(anyhow::anyhow!("No process found on port {}", port))
+              }
+
+              async fn get_process_details(&self, pid: i32, port: u16) -> Result<ProcessInfo> {
+                  // Get process name using tasklist
+                  let output = Command::new("tasklist")
+                      .args(&["/FI", &format!("PID eq {}", pid), "/FO", "CSV", "/NH"])
+                      .output()
+                      .context("Failed to execute tasklist command")?;
+
+                  let mut command = format!("PID {}", pid);
+                  let mut name = format!("Unknown-{}", pid);
+
+                  if output.status.success() {
+                      let stdout = String::from_utf8_lossy(&output.stdout);
+                      for line in stdout.lines() {
+                          if !line.trim().is_empty() {
+                              let parts: Vec<&str> = line.split(',').collect();
+                              if parts.len() >= 2 {
+                                  name = parts[0].trim_matches('"').to_string();
+                                  command = parts[0].trim_matches('"').to_string();
+                                  break;
+                              }
+                          }
+                      }
+                  }
+
+                  Ok(ProcessInfo {
+                      pid,
+                      port,
+                      command: command.clone(),
+                      name,
+                      container_id: None,
+                      container_name: None,
+                  })
+              }
+
+              async fn kill_process(&self, pid: i32) -> Result<()> {
+                  let output = Command::new("taskkill")
+                      .args(&["/PID", &pid.to_string(), "/F"])
+                      .output()
+                      .context("Failed to execute taskkill command")?;
+
+                  if output.status.success() {
+                      info!("Successfully killed process with PID {}", pid);
+                      Ok(())
+                  } else {
+                      let stderr = String::from_utf8_lossy(&output.stderr);
+                      Err(anyhow::anyhow!("Failed to kill process {}: {}", pid, stderr))
+                  }
+              }
+          }
+          "@ | Out-File -FilePath "console-build/process_monitor.rs" -Encoding utf8
+          
           # Copy other files (they should work as-is since they don't use crate:: imports)
-          Copy-Item "src/process_monitor.rs" "console-build/process_monitor.rs"
           Copy-Item "src/types.rs" "console-build/types.rs"
           Copy-Item "src/cli.rs" "console-build/cli.rs"
           
