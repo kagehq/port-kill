@@ -84,7 +84,56 @@ jobs:
           
           # Try to build console binary first (should work on all platforms)
           Write-Host "=== Building console binary ==="
+          
+          # Create a console-only Cargo.toml for this build
+          @"
+          [package]
+          name = "port-kill-console"
+          version = "0.1.0"
+          edition = "2021"
+
+          [[bin]]
+          name = "port-kill-console"
+          path = "src/main_console.rs"
+
+          [dependencies]
+          crossbeam-channel = "0.5"
+          tokio = { version = "1.0", features = ["full"] }
+          serde = { version = "1.0", features = ["derive"] }
+          serde_json = "1.0"
+          anyhow = "1.0"
+          thiserror = "1.0"
+          log = "0.4"
+          env_logger = "0.10"
+          clap = { version = "4.0", features = ["derive"] }
+          "@ | Out-File -FilePath "Cargo.console.toml" -Encoding utf8
+
+          # Create a console-only lib.rs
+          @"
+          pub mod console_app;
+          pub mod process_monitor;
+          pub mod types;
+          pub mod cli;
+          "@ | Out-File -FilePath "src/lib.console.rs" -Encoding utf8
+
+          # Backup and switch to console-only build
+          Copy-Item "Cargo.toml" "Cargo.backup" -ErrorAction SilentlyContinue
+          Copy-Item "src/lib.rs" "src/lib.backup" -ErrorAction SilentlyContinue
+          Copy-Item "Cargo.console.toml" "Cargo.toml"
+          Copy-Item "src/lib.console.rs" "src/lib.rs"
+
+          # Build console binary
           cargo build --release --bin port-kill-console --verbose
+
+          # Restore original files
+          Copy-Item "Cargo.backup" "Cargo.toml" -ErrorAction SilentlyContinue
+          Copy-Item "src/lib.backup" "src/lib.rs" -ErrorAction SilentlyContinue
+          
+          # Clean up console files
+          Remove-Item "Cargo.console.toml" -ErrorAction SilentlyContinue
+          Remove-Item "src/lib.console.rs" -ErrorAction SilentlyContinue
+          Remove-Item "Cargo.backup" -ErrorAction SilentlyContinue
+          Remove-Item "src/lib.backup" -ErrorAction SilentlyContinue
           
           # Check if console binary was created
           if (Test-Path ".\target\release\port-kill-console.exe") {
