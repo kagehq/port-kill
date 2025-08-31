@@ -204,9 +204,13 @@ jobs:
                       
                       // Check if process name is ignored
                       let process_name_lower = process_info.name.to_lowercase();
-                      let is_name_ignored = self.args.ignore_processes.iter().any(|ignored| {
-                          process_name_lower.contains(&ignored.to_lowercase())
-                      });
+                      let is_name_ignored = if let Some(ref ignore_processes) = self.args.ignore_processes {
+                          ignore_processes.iter().any(|ignored| {
+                              process_name_lower.contains(&ignored.to_lowercase())
+                          })
+                      } else {
+                          false
+                      };
                       
                       if is_name_ignored {
                           continue;
