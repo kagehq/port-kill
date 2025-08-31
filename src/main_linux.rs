@@ -17,9 +17,6 @@ use std::process;
 use std::thread;
 use std::time::Duration;
 
-// GTK imports for Linux tray icon
-use gtk::prelude::*;
-
 #[tokio::main]
 async fn main() -> Result<()> {
     // Parse command-line arguments
@@ -79,9 +76,6 @@ async fn main() -> Result<()> {
 async fn start_tray_mode(args: Args) -> Result<()> {
     info!("Starting Linux tray mode...");
     
-    // Initialize GTK
-    gtk::init()?;
-    
     // Create tray icon
     let mut tray = TrayItem::new("Port Kill", "Port Kill").map_err(|e| {
         anyhow::anyhow!("Failed to create tray item: {}", e)
@@ -140,24 +134,12 @@ async fn start_tray_mode(args: Args) -> Result<()> {
             println!("📋 No processes detected");
         }
         
-        // Update tray icon (using string literal for now)
-        let icon_text = match process_count {
-            0 => "0",
-            1..=9 => "1-9",
-            _ => "10+",
-        };
-        
-        if let Err(e) = tray.set_icon(tray_item::IconSource::Resource(icon_text)) {
-            error!("Failed to update tray icon: {}", e);
-        }
-        
         // Update menu with current processes
         if process_count != last_process_count {
             info!("Process count changed from {} to {}, updating menu...", last_process_count, process_count);
             
-            // Clear existing menu items (except Kill All and Quit)
             // Note: tray-item doesn't support dynamic menu updates easily
-            // For now, we'll just update the icon
+            // For now, we'll just monitor and display in console
         }
     }
 }
