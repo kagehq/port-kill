@@ -796,8 +796,6 @@ jobs:
               
               // Main monitoring loop
               let mut last_check = std::time::Instant::now();
-              let mut last_process_count = 0;
-              let mut last_processes = HashMap::new();
               
               loop {
                   // Check for menu events
@@ -830,13 +828,19 @@ jobs:
                               
                               // Update tray icon based on process count
                               let status_info = StatusBarInfo::from_process_count(process_count);
-                              if let Err(e) = tray.set_icon(tray_item::IconSource::Resource(&status_info.text)) {
+                              // Use a static string for the icon since IconSource::Resource requires 'static lifetime
+                              let icon_text = if process_count == 0 {
+                                  "0"
+                              } else if process_count <= 9 {
+                                  "1-9"
+                              } else {
+                                  "10+"
+                              };
+                              if let Err(e) = tray.set_icon(tray_item::IconSource::Resource(icon_text)) {
                                   error!("Failed to update tray icon: {}", e);
                               }
                               
-                              // Update last values
-                              last_process_count = process_count;
-                              last_processes = processes;
+                              // Update last check time
                               last_check = std::time::Instant::now();
                           }
                           Err(e) => {
