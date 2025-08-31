@@ -1,0 +1,98 @@
+name: Build and Test
+
+on:
+  pull_request:
+    branches: [ main, master ]
+  push:
+    branches: [ main, master ]
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Build macOS binary
+        run: |
+          chmod +x ./build-macos.sh
+          ./build-macos.sh
+
+      - name: Test macOS binary
+        run: |
+          ./target/release/port-kill --help
+          ./target/release/port-kill-console --help
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libatk1.0-dev libgdk-pixbuf2.0-dev libgtk-3-dev libxdo-dev pkg-config
+
+      - name: Build Linux binary
+        run: |
+          chmod +x ./build-linux.sh
+          ./build-linux.sh
+
+      - name: Test Linux binary
+        run: |
+          ./target/release/port-kill --help
+          ./target/release/port-kill-console --help
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Build Windows binary
+        run: |
+          build-windows.bat
+
+      - name: Test Windows binary
+        run: |
+          .\target\release\port-kill.exe --help
+          .\target\release\port-kill-console.exe --help
+
+  test-console-mode:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Build console binary
+        run: |
+          cargo build --release --bin port-kill-console
+
+      - name: Test console mode
+        run: |
+          timeout 10s ./target/release/port-kill-console --console --ports 3000,8000 --log-level error || true

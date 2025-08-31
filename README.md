@@ -96,7 +96,29 @@ Hover over the icon to see the exact process count in the tooltip.
 
 ## Installation
 
-### macOS Installation
+### Automated Releases
+
+The latest binaries for all platforms are automatically built and released on GitHub:
+
+#### Quick Install
+```bash
+# macOS/Linux: Download and run the installer
+curl -fsSL https://raw.githubusercontent.com/kagehq/port-kill/main/install-release.sh | bash
+
+# Windows: Download and run the installer
+# Download install-release.bat and run it, or use:
+# powershell -Command "Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/kagehq/port-kill/main/install-release.bat' -OutFile 'install-release.bat' && install-release.bat"
+```
+
+#### Manual Download
+1. **Download from Releases**: Go to [GitHub Releases](https://github.com/kagehq/port-kill/releases) and download the appropriate binary for your platform
+2. **Direct Downloads**:
+   - **macOS**: `port-kill-macos` (system tray) or `port-kill-console-macos` (console mode)
+   - **Linux**: `port-kill-linux` (system tray) or `port-kill-console-linux` (console mode)  
+   - **Windows**: `port-kill-windows.exe` (system tray) or `port-kill-console-windows.exe` (console mode)
+3. **Archive Downloads**: Compressed archives with both binaries for each platform
+
+### Manual Installation
 
 1. Clone the repository:
 ```bash
@@ -366,6 +388,35 @@ cargo build
 
 ```bash
 RUST_LOG=info cargo run
+```
+
+### GitHub Actions
+
+This project uses GitHub Actions for automated building and testing:
+
+- **Build and Test** (`.github/workflows/build.yml`): Runs on pull requests and pushes to main/master
+  - Builds binaries for all platforms (macOS, Linux, Windows)
+  - Tests that binaries can run and show help
+  - Tests console mode functionality
+
+- **Build and Release** (`.github/workflows/release.yml`): Runs when a new release is published
+  - Builds optimized binaries for all platforms
+  - Creates compressed archives and individual binary files
+  - Uploads all assets to the GitHub release
+
+### Local Development
+
+To test the build scripts locally:
+
+```bash
+# macOS
+./build-macos.sh
+
+# Linux  
+./build-linux.sh
+
+# Windows
+build-windows.bat
 ```
 
 ## Troubleshooting
