@@ -70,7 +70,23 @@ jobs:
 
       - name: Build Windows binary
         run: |
-          # Create Windows-specific Cargo.toml
+          # Try to build console binary first (should work on all platforms)
+          echo "Building console binary first..."
+          cargo build --release --bin port-kill-console
+          
+          # Check if console binary was created
+          if (Test-Path ".\target\release\port-kill-console.exe") {
+            Write-Host "✅ Console binary created successfully"
+          } else {
+            Write-Host "❌ Console binary not found"
+            Get-ChildItem ".\target\release\" -Name
+            exit 1
+          }
+          
+          # Now try to build the Windows-specific binary
+          echo "Building Windows-specific binary..."
+          
+          # Create a simple Windows-specific Cargo.toml
           @"
           [package]
           name = "port-kill"
@@ -81,12 +97,7 @@ jobs:
           name = "port-kill"
           path = "src/main_windows.rs"
 
-          [[bin]]
-          name = "port-kill-console"
-          path = "src/main_console.rs"
-
           [dependencies]
-          # Core dependencies (platform-agnostic)
           crossbeam-channel = "0.5"
           tokio = { version = "1.0", features = ["full"] }
           serde = { version = "1.0", features = ["derive"] }
@@ -96,42 +107,35 @@ jobs:
           log = "0.4"
           env_logger = "0.10"
           clap = { version = "4.0", features = ["derive"] }
-
-          # Windows-specific tray support
           tray-item = "0.10.0"
           "@ | Out-File -FilePath "Cargo.windows.toml" -Encoding utf8
 
-          # Create Windows-specific lib.rs
+          # Create a simple lib.rs
           @"
           pub mod console_app;
           pub mod process_monitor;
           pub mod types;
           pub mod cli;
-
-          // Exclude macOS/Linux-specific modules for Windows build
-          // pub mod app;
-          // pub mod tray_menu;
           "@ | Out-File -FilePath "src/lib.windows.rs" -Encoding utf8
 
-          # Backup current files
-          if (Test-Path "Cargo.toml") { Copy-Item "Cargo.toml" "Cargo.macos.toml.backup" }
-          if (Test-Path "src/lib.rs") { Copy-Item "src/lib.rs" "src/lib.macos.rs.backup" }
-
-          # Switch to Windows configuration
+          # Backup and switch
+          Copy-Item "Cargo.toml" "Cargo.backup" -ErrorAction SilentlyContinue
+          Copy-Item "src/lib.rs" "src/lib.backup" -ErrorAction SilentlyContinue
           Copy-Item "Cargo.windows.toml" "Cargo.toml"
           Copy-Item "src/lib.windows.rs" "src/lib.rs"
 
-          # Build the Windows version
-          echo "Building Windows binaries..."
-          cargo build --release --verbose
+          # Build Windows binary
+          cargo build --release --bin port-kill
 
-          # Clean up temporary files
+          # Restore
+          Copy-Item "Cargo.backup" "Cargo.toml" -ErrorAction SilentlyContinue
+          Copy-Item "src/lib.backup" "src/lib.rs" -ErrorAction SilentlyContinue
+          
+          # Clean up
           Remove-Item "Cargo.windows.toml" -ErrorAction SilentlyContinue
           Remove-Item "src/lib.windows.rs" -ErrorAction SilentlyContinue
-
-          # Restore macOS configuration
-          if (Test-Path "Cargo.macos.toml.backup") { Copy-Item "Cargo.macos.toml.backup" "Cargo.toml" }
-          if (Test-Path "src/lib.macos.rs.backup") { Copy-Item "src/lib.macos.rs.backup" "src/lib.rs" }
+          Remove-Item "Cargo.backup" -ErrorAction SilentlyContinue
+          Remove-Item "src/lib.backup" -ErrorAction SilentlyContinue
         shell: pwsh
 
       - name: Test Windows binary
@@ -180,6 +184,10 @@ jobs:
           
           echo "Build completed. Checking binary..."
           ls -la ./target/release/port-kill-console
+          
+          # Try a simple test first
+          echo "Testing basic execution..."
+          timeout 5s ./target/release/port-kill-console --version || echo "Version test failed, continuing..."
 
       - name: Test console mode
         run: |
@@ -191,21 +199,32 @@ jobs:
           echo "Checking binary type..."
           file ./target/release/port-kill-console
           
-          # Test help command with error handling
-          echo "Testing --help command..."
-          if ./target/release/port-kill-console --help; then
-            echo "✅ --help command succeeded"
+          # Simple test - just check if binary can be executed
+          echo "Testing basic execution..."
+          if ./target/release/port-kill-console --version > /dev/null 2>&1; then
+            echo "✅ Basic execution test passed"
           else
-            echo "❌ --help command failed with exit code $?"
+            echo "❌ Basic execution test failed"
+            echo "Trying to get more info..."
+            ./target/release/port-kill-console --version
             exit 1
           fi
           
-          # Test version command with error handling
+          # Test help command
+          echo "Testing --help command..."
+          if ./target/release/port-kill-console --help > /dev/null 2>&1; then
+            echo "✅ --help command succeeded"
+          else
+            echo "❌ --help command failed"
+            exit 1
+          fi
+          
+          # Test version command
           echo "Testing --version command..."
-          if ./target/release/port-kill-console --version; then
+          if ./target/release/port-kill-console --version > /dev/null 2>&1; then
             echo "✅ --version command succeeded"
           else
-            echo "❌ --version command failed with exit code $?"
+            echo "❌ --version command failed"
             exit 1
           fi
           
