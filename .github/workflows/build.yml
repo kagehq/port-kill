@@ -495,7 +495,14 @@ jobs:
           Get-ChildItem ".\target\release\" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $_" }
           
           if (Test-Path ".\target\release\port-kill-console.exe") {
-              Copy-Item ".\target\release\port-kill-console.exe" "..\target\release\port-kill-console.exe" -Force
+              # Create the destination directory if it doesn't exist
+              $destDir = "..\target\release"
+              if (-not (Test-Path $destDir)) {
+                  New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+                  Write-Host "✅ Created destination directory: $destDir"
+              }
+              
+              Copy-Item ".\target\release\port-kill-console.exe" "$destDir\port-kill-console.exe" -Force
               Write-Host "✅ Successfully copied port-kill-console.exe"
           } else {
               Write-Host "❌ port-kill-console.exe not found in target/release"
