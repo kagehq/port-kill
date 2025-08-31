@@ -81,14 +81,14 @@ async fn start_tray_mode(args: Args) -> Result<()> {
         anyhow::anyhow!("Failed to create tray item: {}", e)
     })?;
     
-    let mut last_process_count = 0;
-    let mut last_processes = HashMap::new();
+    // Clone args for the closure
+    let args_clone = args.clone();
     
     // Set up tray icon click handler
     tray.add_menu_item("Kill All Processes", move || {
         info!("Kill All Processes clicked");
-        let ports_to_kill = args.get_ports_to_monitor();
-        if let Err(e) = kill_all_processes(&ports_to_kill, &args) {
+        let ports_to_kill = args_clone.get_ports_to_monitor();
+        if let Err(e) = kill_all_processes(&ports_to_kill, &args_clone) {
             error!("Failed to kill all processes: {}", e);
         }
     })?;
@@ -114,14 +114,10 @@ async fn start_tray_mode(args: Args) -> Result<()> {
         let status_info = StatusBarInfo::from_process_count(process_count);
         println!("🔄 Port Status: {} - {}", status_info.text, status_info.tooltip);
         
-        // Update current processes
-        last_process_count = process_count;
-        last_processes = processes;
-        
         // Print detected processes
         if process_count > 0 {
             println!("📋 Detected Processes:");
-            for (port, process_info) in &last_processes {
+            for (port, process_info) in &processes {
                 if let (Some(_container_id), Some(container_name)) = (&process_info.container_id, &process_info.container_name) {
                     println!("   • Port {}: {} [Docker: {}]", port, process_info.name, container_name);
                 } else if args.show_pid {
@@ -134,13 +130,8 @@ async fn start_tray_mode(args: Args) -> Result<()> {
             println!("📋 No processes detected");
         }
         
-        // Update menu with current processes
-        if process_count != last_process_count {
-            info!("Process count changed from {} to {}, updating menu...", last_process_count, process_count);
-            
-            // Note: tray-item doesn't support dynamic menu updates easily
-            // For now, we'll just monitor and display in console
-        }
+        // Note: tray-item doesn't support dynamic menu updates easily
+        // For now, we'll just monitor and display in console
     }
 }
 
