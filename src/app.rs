@@ -265,23 +265,44 @@ impl PortKillApp {
                         if not_killing && process_count_changed && enough_time_passed {
                             info!("Process count changed from {} to {}, updating menu...", last_process_count, process_count);
 
-                            // Use a try-catch approach to prevent crashes
-                            match std::panic::catch_unwind(|| {
-                                TrayMenu::create_menu(&processes, args.show_pid)
-                            }) {
-                                Ok(Ok(new_menu)) => {
-                                    // Set the new menu on the tray icon
-                                    icon.set_menu(Some(Box::new(new_menu)));
-                                    last_process_count = process_count;
-                                    last_menu_update = std::time::Instant::now();
-                                    info!("Menu updated successfully for {} processes", process_count);
+                            // Additional validation: ensure all processes in the list are still running
+                            let valid_processes: HashMap<u16, crate::types::ProcessInfo> = processes
+                                .iter()
+                                .filter(|(_, process_info)| Self::is_process_still_running(process_info.pid))
+                                .map(|(port, process_info)| (*port, process_info.clone()))
+                                .collect();
+                            
+                            let valid_process_count = valid_processes.len();
+                            
+                            if valid_process_count != process_count {
+                                info!("Process count validation: {} processes reported, {} still running, updating with valid processes", 
+                                      process_count, valid_process_count);
+                            }
+                            
+                            // Only proceed if we have valid processes
+                            if !valid_processes.is_empty() {
+                                // Use a try-catch approach to prevent crashes
+                                match std::panic::catch_unwind(|| {
+                                    TrayMenu::create_menu(&valid_processes, args.show_pid)
+                                }) {
+                                    Ok(Ok(new_menu)) => {
+                                        // Set the new menu on the tray icon
+                                        icon.set_menu(Some(Box::new(new_menu)));
+                                        last_process_count = valid_process_count;
+                                        last_menu_update = std::time::Instant::now();
+                                        info!("Menu updated successfully for {} processes", valid_process_count);
+                                    }
+                                    Ok(Err(e)) => {
+                                        error!("Failed to create menu: {}", e);
+                                    }
+                                    Err(e) => {
+                                        error!("Menu creation panicked: {:?}, skipping menu update", e);
+                                    }
                                 }
-                                Ok(Err(e)) => {
-                                    error!("Failed to create menu: {}", e);
-                                }
-                                Err(e) => {
-                                    error!("Menu creation panicked: {:?}, skipping menu update", e);
-                                }
+                            } else {
+                                info!("No valid processes found, skipping menu update");
+                                last_process_count = 0;
+                                last_menu_update = std::time::Instant::now();
                             }
                         } else if process_count_changed {
                             info!("Process count changed from {} to {} but skipping menu update (killing: {}, time passed: {})",
@@ -535,5 +556,31 @@ impl PortKillApp {
         
         // Process is not ignored, proceed with killing
         Self::kill_process(pid)
+    }
+
+    /// Check if a process is still running by its PID
+    fn is_process_still_running(pid: i32) -> bool {
+        #[cfg(not(target_os = "windows"))]
+        {
+            // On Unix-like systems, use ps to check if process exists
+            std::process::Command::new("ps")
+                .args(&["-p", &pid.to_string()])
+                .output()
+                .map(|output| output.status.success())
+                .unwrap_or(false)
+        }
+        
+        #[cfg(target_os = "windows")]
+        {
+            // On Windows, use tasklist to check if process exists
+            std::process::Command::new("tasklist")
+                .args(&["/FI", &format!("PID eq {}", pid)])
+                .output()
+                .map(|output| {
+                    let stdout = String::from_utf8_lossy(&output.stdout);
+                    stdout.contains(&pid.to_string())
+                })
+                .unwrap_or(false)
+        }
     }
 }

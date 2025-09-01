@@ -127,11 +127,11 @@ curl -fsSL https://raw.githubusercontent.com/kagehq/port-kill/main/install-relea
 **Option 1: Automated Release (Recommended)**
 ```bash
 # Create a new release with automatic tag creation
-./release.sh 0.1.0
+./release.sh 0.x.x
 ```
 
 This will:
-1. Create a git tag `v0.1.0`
+1. Create a git tag `v0.x.x`
 2. Push the tag to GitHub
 3. Automatically trigger release creation
 4. Build and upload binaries for all platforms
@@ -140,7 +140,7 @@ This will:
 1. Go to the repository on GitHub
 2. Click "Releases" in the right sidebar
 3. Click "Create a new release"
-4. Set the tag version (e.g., `v0.1.0`)
+4. Set the tag version (e.g., `v0.x.x`)
 5. Add a title and release notes
 6. Click "Publish release"
 
