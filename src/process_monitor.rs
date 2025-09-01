@@ -156,7 +156,7 @@ impl ProcessMonitor {
             .unwrap_or("unknown")
             .to_string();
 
-        // Check if this process is running in a Docker container
+        // Check if this process is running in a Docker container (Unix-like systems only)
         let (container_id, container_name) = if self.docker_enabled {
             self.get_docker_container_info(pid).await
         } else {
@@ -332,11 +332,14 @@ impl ProcessMonitor {
     pub async fn kill_process(&self, pid: i32) -> Result<()> {
         info!("Attempting to kill process {}", pid);
 
-        // Check if this is a Docker container process
-        if self.docker_enabled {
-            if let Some(container_id) = self.find_container_id_for_pid(pid).await? {
-                info!("Process {} is in Docker container {}, stopping container", pid, container_id);
-                return self.stop_docker_container(&container_id).await;
+        #[cfg(not(target_os = "windows"))]
+        {
+            // Check if this is a Docker container process (Unix-like systems only)
+            if self.docker_enabled {
+                if let Some(container_id) = self.find_container_id_for_pid(pid).await? {
+                    info!("Process {} is in Docker container {}, stopping container", pid, container_id);
+                    return self.stop_docker_container(&container_id).await;
+                }
             }
         }
 
@@ -395,6 +398,7 @@ impl ProcessMonitor {
         Ok(())
     }
 
+    #[cfg(not(target_os = "windows"))]
     async fn stop_docker_container(&self, container_id: &str) -> Result<()> {
         info!("Stopping Docker container: {}", container_id);
 
