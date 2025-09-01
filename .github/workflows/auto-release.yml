@@ -11,6 +11,8 @@ permissions:
 jobs:
   create-release:
     runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.get_upload_url.outputs.upload_url }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -22,52 +24,52 @@ jobs:
             --title "Port Kill ${{ github.ref_name }} - Release" \
             --notes-file - << 'EOF'
           ## 🎉 Release ${{ github.ref_name }}
-
+          
           Port Kill is now available for all major platforms with full functionality! A lightweight cross-platform status bar app that monitors and manages development processes running on configurable ports.
-
+          
           ### ✨ Key Features
-
+          
           #### 🌍 Cross-Platform Support
           - **macOS**: Native system tray with dynamic context menu
           - **Linux**: Native system tray with GTK integration (auto-fallback to console)
           - **Windows**: Native system tray with full functionality
           - **Console Mode**: Works on all platforms without GUI dependencies
-
+          
           #### 🔍 Process Monitoring
           - **Real-time scanning**: Monitors configurable ports every 5 seconds
           - **Smart detection**: Identifies processes by name, PID, and Docker containers
           - **Visual feedback**: Status bar icons (Green: 0, Orange: 1-9, Red: 10+ processes)
           - **Configurable ranges**: Monitor specific ports or port ranges (default: 2000-6000)
-
+          
           #### 🛡️ Safe Process Management
           - **Individual killing**: Kill specific processes by clicking menu items
           - **Bulk operations**: Kill all detected processes with one click
           - **Safe termination**: SIGTERM → SIGKILL strategy with graceful fallback
           - **Ignore lists**: Exclude system processes (Chromecast, AirDrop, etc.)
-
+          
           #### 🐳 Docker Integration
           - **Container detection**: Shows Docker container names and IDs
           - **Container management**: Automatically stops containers when killing processes
           - **Graceful handling**: Uses `docker stop` with `docker rm -f` fallback
-
+          
           #### ⚙️ Advanced Features
           - **Log level control**: Configurable verbosity (info, warn, error, none)
           - **PID display**: Optional process ID display for better identification
           - **Full-screen support**: Console mode recommended for full-screen applications
           - **Error handling**: Graceful handling of permission errors and process failures
-
+          
           ### 🚀 Quick Installation
-
+          
           #### Automated Install (Recommended)
           ```bash
           # macOS/Linux
           curl -fsSL https://raw.githubusercontent.com/kagehq/port-kill/main/install-release.sh | bash
-
+          
           # Windows
           # Download install-release.bat and run it, or use:
           powershell -Command "Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/kagehq/port-kill/main/install-release.bat' -OutFile 'install-release.bat' && install-release.bat"
           ```
-
+          
           #### Manual Installation
           ```bash
           # Clone and build from source
@@ -75,103 +77,291 @@ jobs:
           cd port-kill
           ./install.sh
           ```
-
+          
           ### 📦 Included Binaries
-
+          
           #### System Tray Mode (GUI)
           - **macOS**: `port-kill-macos`
           - **Linux**: `port-kill-linux`
           - **Windows**: `port-kill-windows.exe`
-
+          
           #### Console Mode (No GUI Dependencies)
           - **macOS**: `port-kill-console-macos`
           - **Linux**: `port-kill-console-linux`
           - **Windows**: `port-kill-console-windows.exe`
-
+          
           ### 🎯 Usage Examples
-
+          
           #### Basic Usage
           ```bash
           # Default monitoring (ports 2000-6000)
           ./run.sh                    # macOS
           ./run-linux.sh              # Linux
           run-windows.bat             # Windows
-
+          
           # Monitor specific ports
           ./run.sh --ports 3000,8000,8080
-
+          
           # Console mode (recommended for full-screen)
           ./run.sh --console --ports 3000,8000
           ```
-
+          
           #### Advanced Usage
           ```bash
           # Docker integration
           ./run.sh --docker --ports 3000,3001,8000
-
+          # Docker integration
+          ./run.sh --docker --ports 3000,3001,8000
+          
           # Ignore system processes
           ./run.sh --ignore-ports 5353,5000,7000 --ignore-processes Chrome,ControlCe
-
+          
           # Custom log level
           ./run.sh --log-level warn --ports 3000,8000
           ```
-
+          
           ### 🔧 System Requirements
-
+          
           #### macOS
           - macOS 10.15 or later
           - Rust 1.70+ (for building from source)
           - `lsof` command (included)
-
+          
           #### Linux
           - GTK support (auto-fallback to console if missing)
           - Rust 1.70+ (for building from source)
           - `lsof` command
           - Required packages: `libatk1.0-dev libgdk-pixbuf2.0-dev libgtk-3-dev libxdo-dev`
-
+          
           #### Windows
           - Windows 10 or later
           - Rust 1.70+ (for building from source)
           - `netstat` and `tasklist` commands (included)
-
+          
           ### 🐛 Known Issues & Solutions
-
+          
           #### Full-Screen Mode
           - **Issue**: System tray menu not accessible in full-screen
           - **Solution**: Use console mode: `./run.sh --console --ports 3000,8000`
-
+          
           #### Linux GTK Issues
           - **Issue**: GTK initialization errors
           - **Solution**: Install GTK packages or use console mode
-
+          
           #### Docker Integration
           - **Issue**: Docker containers not detected
           - **Solution**: Ensure Docker Desktop is running and `docker` command is available
-
+          
           ### 📚 Documentation
-
+          
           - **Full Documentation**: [README.md](https://github.com/kagehq/port-kill#readme)
-          - **Troubleshooting**: [Troubleshooting Guide](https://github.com/kagehq/port-kill#troubleshooting)
+          - **Troubleshooting**: [Troubleshooting Guide](https://github.com/kagehq/port-kill#readme)
           - **Community**: [Discord Server](https://discord.gg/KqdBcqRk5E)
-
+          
           ### 🤝 Contributing
-
+          
           We welcome contributions! Please see our [Contributing Guide](https://github.com/kagehq/port-kill#readme) for details.
-
+          
           ### 📄 License
-
+          
           This project is licensed under the FSL-1.1-MIT License. See the [LICENSE](https://github.com/kagehq/port-kill/blob/main/LICENSE) file for details.
-
+          
           ---
-
+          
           **Happy coding! 🚀**
-
+          
           *Port Kill - Making development process management simple and cross-platform.*
           EOF
+
+      - name: Get Release Upload URL
+        id: get_upload_url
+        run: |
+          # Get the release info to extract upload URL
+          RELEASE_INFO=$(gh api repos/${{ github.repository }}/releases/latest)
+          UPLOAD_URL=$(echo "$RELEASE_INFO" | jq -r '.upload_url' | sed 's/{?name,label}//')
+          echo "upload_url=$UPLOAD_URL" >> $GITHUB_OUTPUT
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Trigger Build and Release Workflow
         run: |
           echo "Release created successfully!"
-          echo "The build and release workflow will now run automatically."
+          echo "Now building and uploading binaries..."
+
+  build-macos:
+    runs-on: macos-latest
+    needs: create-release
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Build macOS binary
+        run: |
+          chmod +x ./build-macos.sh
+          ./build-macos.sh
+
+      - name: Upload macOS binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: port-kill-macos
+          path: |
+            target/release/port-kill
+            target/release/port-kill-console
+          retention-days: 30
+
+  build-linux:
+    runs-on: ubuntu-latest
+    needs: create-release
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libatk1.0-dev libgdk-pixbuf2.0-dev libgtk-3-dev libxdo-dev pkg-config
+
+      - name: Build Linux binary
+        run: |
+          chmod +x ./build-linux.sh
+          ./build-linux.sh
+
+      - name: Upload Linux binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: port-kill-linux
+          path: |
+            target/release/port-kill
+            target/release/port-kill-console
+          retention-days: 30
+
+  build-windows:
+    runs-on: windows-latest
+    needs: create-release
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Build Windows binary
+        run: |
+          chmod +x ./build-windows.bat
+          ./build-windows.bat
+
+      - name: Upload Windows binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: port-kill-windows
+          path: |
+            target/release/port-kill.exe
+            target/release/port-kill-console.exe
+          retention-days: 30
+
+  upload-assets:
+    runs-on: ubuntu-latest
+    needs: [create-release, build-macos, build-linux, build-windows]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release-assets
+          
+          # macOS
+          cp artifacts/port-kill-macos/port-kill release-assets/port-kill-macos
+          cp artifacts/port-kill-macos/port-kill-console release-assets/port-kill-console-macos
+          chmod +x release-assets/port-kill-macos
+          chmod +x release-assets/port-kill-console-macos
+          
+          # Linux
+          cp artifacts/port-kill-linux/port-kill release-assets/port-kill-linux
+          cp artifacts/port-kill-linux/port-kill-console release-assets/port-kill-console-linux
+          chmod +x release-assets/port-kill-linux
+          chmod +x release-assets/port-kill-console-linux
+          
+          # Windows
+          cp artifacts/port-kill-windows/port-kill.exe release-assets/port-kill-windows.exe
+          cp artifacts/port-kill-windows/port-kill-console.exe release-assets/port-kill-console-windows.exe
+
+      - name: Upload macOS binary
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./release-assets/port-kill-macos
+          asset_name: port-kill-macos
+          asset_content_type: application/octet-stream
+
+      - name: Upload macOS console binary
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./release-assets/port-kill-console-macos
+          asset_name: port-kill-console-macos
+          asset_content_type: application/octet-stream
+
+      - name: Upload Linux binary
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./release-assets/port-kill-linux
+          asset_name: port-kill-linux
+          asset_content_type: application/octet-stream
+
+      - name: Upload Linux console binary
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./release-assets/port-kill-console-linux
+          asset_name: port-kill-console-linux
+          asset_content_type: application/octet-stream
+
+      - name: Upload Windows binary
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./release-assets/port-kill-windows.exe
+          asset_name: port-kill-windows.exe
+          asset_content_type: application/octet-stream
+
+      - name: Upload Windows console binary
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./release-assets/port-kill-console-windows.exe
+          asset_name: port-kill-console-windows.exe
+          asset_content_type: application/octet-stream
