@@ -58,8 +58,6 @@ echo pub mod console_app;
 echo pub mod process_monitor;
 echo pub mod types;
 echo pub mod cli;
-echo.
-echo # Windows build: Only console and core modules included
 ) > src/lib.windows.tmp.rs
 
 REM Backup current files
