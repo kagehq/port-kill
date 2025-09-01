@@ -35,7 +35,7 @@ echo name = "port-kill-console"
 echo path = "src/main_console.rs"
 echo.
 echo [dependencies]
-echo # Core dependencies ^(platform-agnostic^)
+echo // Core dependencies ^(platform-agnostic^)
 echo crossbeam-channel = "0.5"
 echo tokio = { version = "1.0", features = ["full"] }
 echo serde = { version = "1.0", features = ["derive"] }
@@ -59,9 +59,9 @@ echo pub mod process_monitor;
 echo pub mod types;
 echo pub mod cli;
 echo.
-echo # Exclude macOS/Linux-specific modules for Windows build
-echo # pub mod app;
-echo # pub mod tray_menu;
+echo // Exclude macOS/Linux-specific modules for Windows build
+echo // pub mod app;
+echo // pub mod tray_menu;
 ) > src/lib.windows.tmp.rs
 
 REM Backup current files
