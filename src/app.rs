@@ -66,9 +66,10 @@ impl PortKillApp {
         
         // Now create the tray icon after the event loop is created
         info!("Creating tray icon...");
+        let initial_menu = self.tray_menu.get_current_menu()?;
         let tray_icon = TrayIconBuilder::new()
             .with_tooltip("Port Kill - Development Port Monitor (Click or press Cmd+Shift+P)")
-            .with_menu(Box::new(self.tray_menu.menu.clone()))
+            .with_menu(Box::new(initial_menu))
             .with_icon(self.tray_menu.icon.clone())
             .build()?;
             
@@ -79,18 +80,12 @@ impl PortKillApp {
             *tray_icon_guard = Some(tray_icon);
         }
         
-                 // For now, let's manually check for processes every 5 seconds in the event loop
-         let tray_icon = self.tray_icon.clone();
-         let mut last_check = std::time::Instant::now();
-         let mut last_process_count = 0;
-         let mut last_menu_update = std::time::Instant::now();
-         let is_killing_processes = Arc::new(AtomicBool::new(false));
-         
-         // Initialize with current process count to avoid false "changes" on startup
-         let initial_processes = Self::get_processes_on_ports(&self.args.get_ports_to_monitor(), &self.args);
-         last_process_count = initial_processes.0;
-         info!("Initial process count: {} ({} processes detected on startup)", 
-               last_process_count, initial_processes.0);
+        // For now, let's manually check for processes every 5 seconds in the event loop
+        let tray_icon = self.tray_icon.clone();
+        let mut last_check = std::time::Instant::now();
+        let mut last_process_count = 0;
+        let mut last_menu_update = std::time::Instant::now();
+        let is_killing_processes = Arc::new(AtomicBool::new(false));
 
         // Give the tray icon time to appear
         info!("Waiting for tray icon to appear...");
@@ -127,11 +122,6 @@ impl PortKillApp {
                         let result = if let Ok(current_processes_guard) = current_processes_clone.lock() {
                             let processes = &*current_processes_guard;
                             
-                            // Create a safe copy of processes to avoid borrowing issues during menu operations
-                            let processes_copy: HashMap<u16, crate::types::ProcessInfo> = processes.iter()
-                                .map(|(k, v)| (*k, v.clone()))
-                                .collect();
-                            
                             // Parse the menu event to determine action
                             let menu_id_str = event.id.0.clone();
                             info!("Menu ID: {}", menu_id_str);
@@ -152,7 +142,7 @@ impl PortKillApp {
                                 let kill_all_index = 0;
                                 let separator1_index = 1;
                                 let first_process_index = 2;
-                                let last_process_index = first_process_index + processes_copy.len() - 1;
+                                let last_process_index = first_process_index + processes.len() - 1;
                                 let separator2_index = last_process_index + 1;
                                 let quit_index = separator2_index + 1;
                                 
@@ -163,7 +153,7 @@ impl PortKillApp {
                                 if menu_index >= first_process_index && menu_index <= last_process_index {
                                     // Individual process clicked
                                     let process_index = menu_index - first_process_index;
-                                    let process_entries: Vec<_> = processes_copy.iter().collect();
+                                    let process_entries: Vec<_> = processes.iter().collect();
                                     if process_index < process_entries.len() {
                                         let (port, process_info) = process_entries[process_index];
                                         info!("Killing individual process on port {} with PID {}", port, process_info.pid);
@@ -180,7 +170,7 @@ impl PortKillApp {
                                 } else {
                                     // Invalid menu index
                                     error!("Invalid menu index: {} (processes: {}, valid range: {}-{})", 
-                                           menu_index, processes_copy.len(), first_process_index, quit_index);
+                                           menu_index, processes.len(), first_process_index, quit_index);
                                     Ok(())
                                 }
                             } else {
@@ -197,15 +187,12 @@ impl PortKillApp {
                         match result {
                             Ok(_) => {
                                 info!("Process killing completed successfully");
-                                // Reset the flag after a longer delay to allow menu updates again
-                                // This prevents crashes when processes are being killed
-                                std::thread::sleep(std::time::Duration::from_secs(3));
+                                // Reset the flag after a delay to allow menu updates again
+                                std::thread::sleep(std::time::Duration::from_secs(1));
                                 is_killing_clone.store(false, Ordering::Relaxed);
                             }
                             Err(e) => {
                                 error!("Failed to kill processes: {}", e);
-                                // Still reset the flag but with a shorter delay
-                                std::thread::sleep(std::time::Duration::from_secs(1));
                                 is_killing_clone.store(false, Ordering::Relaxed);
                             }
                         }
@@ -230,58 +217,24 @@ impl PortKillApp {
                     }
                 };
                 
-                // Additional safety check: if process count changed dramatically, skip menu update
-                let process_count_delta = if process_count > last_process_count {
-                    process_count - last_process_count
-                } else {
-                    last_process_count - process_count
-                };
-                
-                // If there's a dramatic change in process count, wait longer before updating menu
-                let dramatic_change = process_count_delta > 5;
-                if dramatic_change {
-                    info!("Dramatic process count change detected (delta: {}), extending menu update delay", process_count_delta);
-                }
-                
                 let status_info = StatusBarInfo::from_process_count(process_count);
                 println!("🔄 Port Status: {} - {}", status_info.text, status_info.tooltip);
                 
-                // Update current processes with validation
+                // Update current processes
                 if let Ok(mut current_processes_guard) = current_processes.lock() {
-                    // Filter out processes that are no longer running
-                    let validated_processes: HashMap<u16, crate::types::ProcessInfo> = processes.iter()
-                        .filter(|(_, process_info)| Self::is_process_still_running(process_info.pid))
-                        .map(|(k, v)| (*k, v.clone()))
-                        .collect();
-                    
-                    *current_processes_guard = validated_processes.clone();
-                    
-                    // Update process count to reflect validated processes
-                    let validated_count = validated_processes.len();
-                    if validated_count != process_count {
-                        info!("Process count adjusted from {} to {} after validation (some processes no longer running)", 
-                              process_count, validated_count);
-                    }
+                    *current_processes_guard = processes.clone();
                 }
                 
-                // Print detected processes with additional safety checks
+                // Print detected processes
                 if process_count > 0 {
                     println!("📋 Detected Processes:");
-                    // Create a safe copy of processes to avoid iteration issues
-                    let processes_copy: Vec<_> = processes.iter().collect();
-                    for (port, process_info) in processes_copy {
-                        // Validate process is still running before displaying
-                        if Self::is_process_still_running(process_info.pid) {
-                            if let (Some(_container_id), Some(container_name)) = (&process_info.container_id, &process_info.container_name) {
-                                println!("   • Port {}: {} [Docker: {}]", port, process_info.name, container_name);
-                            } else if args.show_pid {
-                                println!("   • Port {}: {} (PID {})", port, process_info.name, process_info.pid);
-                            } else {
-                                println!("   • Port {}: {}", port, process_info.name);
-                            }
+                    for (port, process_info) in &processes {
+                        if let (Some(_container_id), Some(container_name)) = (&process_info.container_id, &process_info.container_name) {
+                            println!("   • Port {}: {} [Docker: {}]", port, process_info.name, container_name);
+                        } else if args.show_pid {
+                            println!("   • Port {}: {} (PID {})", port, process_info.name, process_info.pid);
                         } else {
-                            info!("Process {} (PID {}) on port {} is no longer running, skipping display", 
-                                  process_info.name, process_info.pid, port);
+                            println!("   • Port {}: {}", port, process_info.name);
                         }
                     }
                 } else {
@@ -303,47 +256,26 @@ impl PortKillApp {
                             }
                         }
                         
-                                                 // Only update menu if process count changed significantly and we're not killing processes
-                         // Add extra delay after killing processes to prevent crashes
-                         let process_count_changed = process_count != last_process_count;
-                         let base_delay = if dramatic_change { 30 } else { 15 }; // Longer delay for dramatic changes
-                         let enough_time_passed = last_menu_update.elapsed() >= std::time::Duration::from_secs(base_delay);
-                         let not_killing = !is_killing_processes.load(Ordering::Relaxed);
-                         
-                         if not_killing && process_count_changed && enough_time_passed {
-                             info!("Process count changed from {} to {} (raw lsof count), updating menu...", 
-                                   last_process_count, process_count);
-                            
-                            // Use a try-catch approach to prevent crashes and add extra safety
+                        // Only update menu if process count changed significantly and we're not killing processes
+                        // Add extra delay after killing processes to prevent crashes
+                        let process_count_changed = process_count != last_process_count;
+                        let enough_time_passed = last_menu_update.elapsed() >= std::time::Duration::from_secs(10); // Increased delay
+                        let not_killing = !is_killing_processes.load(Ordering::Relaxed);
+                        
+                        if not_killing && process_count_changed && enough_time_passed {
+                            info!("Process count changed from {} to {}, updating menu...", last_process_count, process_count);
+
+                            // Use a try-catch approach to prevent crashes
                             match std::panic::catch_unwind(|| {
-                                // Create a copy of processes to avoid borrowing issues
-                                // Also filter out any processes that might have disappeared
-                                let processes_copy: HashMap<u16, crate::types::ProcessInfo> = processes.iter()
-                                    .filter(|(_, process_info)| Self::is_process_still_running(process_info.pid))
-                                    .map(|(k, v)| (*k, v.clone()))
-                                    .collect();
-                                
-                                // Only create menu if we have valid processes
-                                if !processes_copy.is_empty() {
-                                    TrayMenu::create_menu(&processes_copy, args.show_pid)
-                                } else {
-                                    // Create empty menu if no valid processes
-                                    TrayMenu::create_menu(&HashMap::new(), args.show_pid)
-                                }
+                                TrayMenu::create_menu(&processes, args.show_pid)
                             }) {
-                                                                 Ok(Ok(new_menu)) => {
-                                     // Set the new menu with error handling
-                                     icon.set_menu(Some(Box::new(new_menu)));
-                                     // Use the validated count from current_processes instead of raw process_count
-                                     if let Ok(current_processes_guard) = current_processes.lock() {
-                                         last_process_count = current_processes_guard.len();
-                                     } else {
-                                         last_process_count = process_count;
-                                     }
-                                     last_menu_update = std::time::Instant::now();
-                                     info!("Menu updated successfully for {} processes (validated: {})", 
-                                           process_count, last_process_count);
-                                 }
+                                Ok(Ok(new_menu)) => {
+                                    // Set the new menu on the tray icon
+                                    icon.set_menu(Some(Box::new(new_menu)));
+                                    last_process_count = process_count;
+                                    last_menu_update = std::time::Instant::now();
+                                    info!("Menu updated successfully for {} processes", process_count);
+                                }
                                 Ok(Err(e)) => {
                                     error!("Failed to create menu: {}", e);
                                 }
@@ -352,7 +284,7 @@ impl PortKillApp {
                                 }
                             }
                         } else if process_count_changed {
-                            info!("Process count changed from {} to {} but skipping menu update (killing: {}, time passed: {})", 
+                            info!("Process count changed from {} to {} but skipping menu update (killing: {}, time passed: {})",
                                   last_process_count, process_count, !not_killing, enough_time_passed);
                         }
                     }
@@ -361,17 +293,6 @@ impl PortKillApp {
         })?;
 
         Ok(())
-    }
-
-    /// Check if a process is still running by PID
-    fn is_process_still_running(pid: i32) -> bool {
-        // Use a safe approach to check if process exists
-        match std::process::Command::new("ps")
-            .args(&["-p", &pid.to_string()])
-            .output() {
-            Ok(output) => output.status.success(),
-            Err(_) => false, // If we can't check, assume it's not running
-        }
     }
 
     pub fn get_processes_on_ports(ports: &[u16], args: &Args) -> (usize, HashMap<u16, crate::types::ProcessInfo>) {
