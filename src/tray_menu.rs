@@ -12,9 +12,10 @@ use tray_icon::{
 #[cfg(target_os = "macos")]
 #[derive(Clone)]
 pub struct TrayMenu {
-    pub menu: Menu,
     pub icon: Icon,
     menu_sender: Sender<MenuEvent>,
+    current_processes: HashMap<u16, ProcessInfo>,
+    show_pid: bool,
 }
 
 #[cfg(target_os = "macos")]
@@ -23,9 +24,6 @@ impl TrayMenu {
         // Create a simple icon (we'll use a text-based approach for now)
         let icon = Self::create_icon("0")?;
 
-        // Create initial menu
-        let menu = Self::create_menu(&HashMap::new(), false)?;
-
         // Set up menu event handling
         let sender_clone = menu_sender.clone();
         MenuEvent::set_event_handler(Some(move |event| {
@@ -33,20 +31,25 @@ impl TrayMenu {
         }));
 
         Ok(Self {
-            menu,
             icon,
             menu_sender,
+            current_processes: HashMap::new(),
+            show_pid: false,
         })
     }
 
-    pub fn update_menu(&mut self, processes: &HashMap<u16, ProcessInfo>) -> Result<()> {
+    pub fn update_menu(&mut self, processes: &HashMap<u16, ProcessInfo>, show_pid: bool) -> Result<()> {
         debug!("Updating menu with {} processes", processes.len());
-        
-        // Create new menu with current processes
-        let new_menu = Self::create_menu(processes, false)?;
-        self.menu = new_menu;
-        
+
+        // Update internal state
+        self.current_processes = processes.clone();
+        self.show_pid = show_pid;
+
         Ok(())
+    }
+
+    pub fn get_current_menu(&self) -> Result<Menu> {
+        Self::create_menu(&self.current_processes, self.show_pid)
     }
 
     pub fn update_status(&mut self, status_info: &StatusBarInfo) -> Result<()> {
