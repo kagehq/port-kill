@@ -96,6 +96,8 @@ Hover over the icon to see the exact process count in the tooltip.
 
 ## Installation
 
+**⚠️ Important**: The first release is currently being prepared. If you get a "Not Found" error when using the install scripts, it means the release binaries haven't been published yet. Use the manual installation method below until the first release is available.
+
 ### Automated Releases
 
 The latest binaries for all platforms are automatically built and released on GitHub when a release is published.
