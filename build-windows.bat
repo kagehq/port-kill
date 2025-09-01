@@ -59,9 +59,7 @@ echo pub mod process_monitor;
 echo pub mod types;
 echo pub mod cli;
 echo.
-echo # Exclude macOS/Linux-specific modules for Windows build
-echo # pub mod app;
-echo # pub mod tray_menu;
+echo # Windows build: Only console and core modules included
 ) > src/lib.windows.tmp.rs
 
 REM Backup current files
