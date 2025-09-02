@@ -17,6 +17,10 @@ use std::process;
 use std::thread;
 use std::time::Duration;
 
+// GTK initialization for tray support
+use gtk::prelude::*;
+use glib;
+
 #[tokio::main]
 async fn main() -> Result<()> {
     // Parse command-line arguments
@@ -76,6 +80,12 @@ async fn main() -> Result<()> {
 async fn start_tray_mode(args: Args) -> Result<()> {
     info!("Starting Linux tray mode...");
     
+    // Initialize GTK before creating tray items
+    if gtk::init().is_err() {
+        return Err(anyhow::anyhow!("Failed to initialize GTK"));
+    }
+    info!("GTK initialized successfully");
+    
     // Create tray icon
     let mut tray = TrayItem::new("Port Kill", "Port Kill").map_err(|e| {
         anyhow::anyhow!("Failed to create tray item: {}", e)
@@ -102,13 +112,12 @@ async fn start_tray_mode(args: Args) -> Result<()> {
     println!("🔍 Look for the Port Kill icon in your system tray!");
     println!("💡 When in full-screen mode, use console mode: ./run.sh --console --ports 3000,8000");
     
-    // Main monitoring loop
-    loop {
-        thread::sleep(Duration::from_secs(5));
-        
+    // Set up periodic status updates using GTK timeout
+    let args_clone = args.clone();
+    glib::timeout_add_local(Duration::from_secs(5), move || {
         // Get current processes
         let (process_count, processes) = 
-            get_processes_on_ports(&args.get_ports_to_monitor(), &args);
+            get_processes_on_ports(&args_clone.get_ports_to_monitor(), &args_clone);
         
         // Update status
         let status_info = StatusBarInfo::from_process_count(process_count);
@@ -120,7 +129,7 @@ async fn start_tray_mode(args: Args) -> Result<()> {
             for (port, process_info) in &processes {
                 if let (Some(_container_id), Some(container_name)) = (&process_info.container_id, &process_info.container_name) {
                     println!("   • Port {}: {} [Docker: {}]", port, process_info.name, container_name);
-                } else if args.show_pid {
+                } else if args_clone.show_pid {
                     println!("   • Port {}: {} (PID {})", port, process_info.name, process_info.pid);
                 } else {
                     println!("   • Port {}: {}", port, process_info.name);
@@ -130,9 +139,18 @@ async fn start_tray_mode(args: Args) -> Result<()> {
             println!("📋 No processes detected");
         }
         
-        // Note: tray-item doesn't support dynamic menu updates easily
-        // For now, we'll just monitor and display in console
-    }
+        // Continue the timeout
+        glib::Continue(true)
+    });
+    
+    info!("Tray mode started successfully!");
+    println!("🔍 Look for the Port Kill icon in your system tray!");
+    println!("💡 When in full-screen mode, use console mode: ./run.sh --console --ports 3000,8000");
+    
+    // Start GTK main loop
+    gtk::main();
+    
+    Ok(())
 }
 
 fn run_linux_diagnostics() {
