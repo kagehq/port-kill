@@ -1,12 +1,12 @@
 use port_kill::{
     cli::Args,
     console_app::ConsolePortKillApp,
-    types::{ProcessInfo, StatusBarInfo},
-    process_monitor::{get_processes_on_ports, kill_all_processes, kill_single_process},
+    types::StatusBarInfo,
+    process_monitor::{get_processes_on_ports, kill_all_processes},
 };
 use tray_item::TrayItem;
 use std::path::PathBuf;
-use anyhow::{Result, Context};
+use anyhow::Result;
 use clap::Parser;
 use log::{error, info};
 use std::collections::HashMap;
@@ -65,11 +65,6 @@ fn run_windows_tray_mode(args: Args) -> Result<()> {
         .or_else(|_| TrayItem::new("Port Kill", tray_item::IconSource::Resource("PORT_KILL")))
         .or_else(|_| TrayItem::new("Port Kill", tray_item::IconSource::Resource("MAINICON")))
         .or_else(|_| TrayItem::new("Port Kill", tray_item::IconSource::Resource("IDI_APPLICATION")))
-        .or_else(|_| {
-            // Try to load icon from file next to the executable
-            let file_icon = resolve_icon_file_path();
-            TrayItem::new("Port Kill", tray_item::IconSource::File(&file_icon))
-        })
         .map_err(|e| anyhow::anyhow!("Failed to create Windows tray item after fallbacks: {}", e))?;
     
     info!("Windows tray created successfully!");
