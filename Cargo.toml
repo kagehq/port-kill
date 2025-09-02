@@ -15,6 +15,9 @@ path = "src/main_console.rs"
 
 
 [dependencies]
+
+[target.'cfg(windows)'.build-dependencies]
+winres = "0.1"
 # Platform-agnostic dependencies (used by both GUI and console)
 crossbeam-channel = "0.5"
 tokio = { version = "1.0", features = ["full"] }
