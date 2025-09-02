@@ -5,6 +5,7 @@ use port_kill::{
     process_monitor::{get_processes_on_ports, kill_all_processes, kill_single_process},
 };
 use tray_item::TrayItem;
+use std::path::PathBuf;
 use anyhow::{Result, Context};
 use clap::Parser;
 use log::{error, info};
@@ -59,18 +60,17 @@ async fn main() -> Result<()> {
 fn run_windows_tray_mode(args: Args) -> Result<()> {
     info!("Starting Windows tray mode...");
     
-    // Create the tray item with embedded icon and multiple resource fallbacks
-    // When build.rs embeds assets/port-kill.ico, the default resource name is IDI_APPLICATION.
-    // Try a few common names to maximize compatibility.
+    // Create the tray item with robust icon fallbacks (Resource → File near EXE)
     let mut tray = TrayItem::new("Port Kill", tray_item::IconSource::Resource("APPICON"))
-        .or_else(|_| TrayItem::new("Port Kill", tray_item::IconSource::Resource("IDI_APPLICATION")))
         .or_else(|_| TrayItem::new("Port Kill", tray_item::IconSource::Resource("PORT_KILL")))
-        .or_else(|_| TrayItem::new("Port Kill", tray_item::IconSource::Resource("IDI_APPLICATION")))
-        .or_else(|_| TrayItem::new("Port Kill", tray_item::IconSource::Resource("APPLICATION")))
         .or_else(|_| TrayItem::new("Port Kill", tray_item::IconSource::Resource("MAINICON")))
-        .map_err(|e| {
-            anyhow::anyhow!("Failed to create Windows tray item after fallbacks: {}", e)
-        })?;
+        .or_else(|_| TrayItem::new("Port Kill", tray_item::IconSource::Resource("IDI_APPLICATION")))
+        .or_else(|_| {
+            // Try to load icon from file next to the executable
+            let file_icon = resolve_icon_file_path();
+            TrayItem::new("Port Kill", tray_item::IconSource::File(&file_icon))
+        })
+        .map_err(|e| anyhow::anyhow!("Failed to create Windows tray item after fallbacks: {}", e))?;
     
     info!("Windows tray created successfully!");
     println!("🔍 Look for the Port Kill icon in your system tray!");
@@ -173,6 +173,22 @@ fn run_windows_tray_mode(args: Args) -> Result<()> {
     
     info!("Port Kill application exiting...");
     Ok(())
+}
+
+fn resolve_icon_file_path() -> String {
+    // Prefer an ico alongside the exe, otherwise fallback to assets/port-kill.ico
+    let mut exe_dir: PathBuf = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("."));
+    exe_dir.pop();
+    let exe_icon = exe_dir.join("port-kill.ico");
+    if exe_icon.exists() {
+        return exe_icon.to_string_lossy().to_string();
+    }
+    let assets_icon = exe_dir.join("assets").join("port-kill.ico");
+    if assets_icon.exists() {
+        return assets_icon.to_string_lossy().to_string();
+    }
+    // Final fallback: no icon file; return a non-existing path (creation will still fail and fallback to console)
+    exe_icon.to_string_lossy().to_string()
 }
 
 
