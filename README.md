@@ -220,6 +220,24 @@ build-windows.bat
 run-windows.bat
 ```
 
+#### Windows Tray Icon (embedded)
+
+To embed a proper tray icon in the Windows executable:
+
+1) The source SVG lives at `assets/port-kill.svg`.
+
+2) Convert it to a multi-size `.ico` (requires ImageMagick):
+
+```bash
+convert -background none assets/port-kill.svg -define icon:auto-resize=16,24,32,48,64,128,256 assets/port-kill.ico
+```
+
+3) Build on Windows (or let CI build). The build script (`build.rs`) will detect `assets/port-kill.ico` and embed it.
+
+Notes:
+- If the icon is missing, the app tries common resource fallbacks. If tray creation still fails, it automatically falls back to console mode.
+- The code first attempts resource `APPICON`, then other common IDs.
+
 ### Console Mode (All Platforms)
 
 Console mode works on all platforms without GUI dependencies:
