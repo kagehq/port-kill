@@ -27,6 +27,10 @@ clap = { version = "4.0", features = ["derive"] }
 [build-dependencies]
 winres = "0.1"
 
+[features]
+default = []
+embed_icon = []
+
 # GUI-specific dependencies (only for macOS tray icon)
 [target.'cfg(target_os = "macos")'.dependencies]
 tray-icon = "0.10"
