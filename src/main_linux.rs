@@ -11,15 +11,12 @@ use tray_item::TrayItem;
 use anyhow::Result;
 use clap::Parser;
 use log::{error, info};
-use std::collections::HashMap;
 use std::env;
 use std::process;
-use std::thread;
 use std::time::Duration;
 
 // GTK initialization for tray support
 use gtk::prelude::*;
-use glib;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -114,7 +111,7 @@ async fn start_tray_mode(args: Args) -> Result<()> {
     
     // Set up periodic status updates using GTK timeout
     let args_clone = args.clone();
-    glib::timeout_add_local(Duration::from_secs(5), move || {
+    gtk::glib::timeout_add_local(Duration::from_secs(5), move || {
         // Get current processes
         let (process_count, processes) = 
             get_processes_on_ports(&args_clone.get_ports_to_monitor(), &args_clone);
@@ -140,7 +137,7 @@ async fn start_tray_mode(args: Args) -> Result<()> {
         }
         
         // Continue the timeout
-        glib::Continue(true)
+        gtk::glib::Continue(true)
     });
     
     info!("Tray mode started successfully!");
