@@ -44,18 +44,33 @@ async fn main() -> Result<()> {
         let console_app = ConsolePortKillApp::new(args)?;
         console_app.run().await
     } else {
-        // Use Windows tray mode
-        run_windows_tray_mode(args)
+        // Use Windows tray mode; on failure, fall back to console
+        match run_windows_tray_mode(args.clone()) {
+            Ok(()) => Ok(()),
+            Err(e) => {
+                log::warn!("Tray mode failed on Windows ({}). Falling back to console mode...", e);
+                let console_app = ConsolePortKillApp::new(args)?;
+                console_app.run().await
+            }
+        }
     }
 }
 
 fn run_windows_tray_mode(args: Args) -> Result<()> {
     info!("Starting Windows tray mode...");
     
-    // Create the tray item
-    let mut tray = TrayItem::new("Port Kill", tray_item::IconSource::Resource("Port Kill")).map_err(|e| {
-        anyhow::anyhow!("Failed to create Windows tray item: {}", e)
-    })?;
+    // Create the tray item with embedded icon and multiple resource fallbacks
+    // When build.rs embeds assets/port-kill.ico, the default resource name is IDI_APPLICATION.
+    // Try a few common names to maximize compatibility.
+    let mut tray = TrayItem::new("Port Kill", tray_item::IconSource::Resource("APPICON"))
+        .or_else(|_| TrayItem::new("Port Kill", tray_item::IconSource::Resource("IDI_APPLICATION")))
+        .or_else(|_| TrayItem::new("Port Kill", tray_item::IconSource::Resource("PORT_KILL")))
+        .or_else(|_| TrayItem::new("Port Kill", tray_item::IconSource::Resource("IDI_APPLICATION")))
+        .or_else(|_| TrayItem::new("Port Kill", tray_item::IconSource::Resource("APPLICATION")))
+        .or_else(|_| TrayItem::new("Port Kill", tray_item::IconSource::Resource("MAINICON")))
+        .map_err(|e| {
+            anyhow::anyhow!("Failed to create Windows tray item after fallbacks: {}", e)
+        })?;
     
     info!("Windows tray created successfully!");
     println!("🔍 Look for the Port Kill icon in your system tray!");
