@@ -15,6 +15,8 @@ use std::env;
 use std::process;
 use std::collections::HashMap;
 use std::time::Duration;
+use std::rc::Rc;
+use std::cell::RefCell;
 
 // GTK initialization for tray support
 use gtk::prelude::*;
@@ -86,15 +88,15 @@ async fn start_tray_mode(args: Args) -> Result<()> {
     info!("GTK initialized successfully");
     
     // Create the app indicator (tray icon)
-    let mut indicator = AppIndicator::new("port-kill", "port-kill");
-    indicator.set_status(AppIndicatorStatus::Active);
+    let indicator = Rc::new(RefCell::new(AppIndicator::new("port-kill", "port-kill")));
+    indicator.borrow_mut().set_status(AppIndicatorStatus::Active);
     
     // Set initial icon based on process count
     let (initial_count, _) = get_processes_on_ports(&args.get_ports_to_monitor(), &args);
-    update_tray_icon(&mut indicator, initial_count);
+    update_tray_icon(&mut indicator.borrow_mut(), initial_count);
     
     // Create the main menu
-    let menu = Menu::new();
+    let mut menu = Menu::new();
     
     // Add status header
     let status_item = MenuItem::with_label(&format!("Port Status: {} processes", initial_count));
@@ -105,9 +107,11 @@ async fn start_tray_mode(args: Args) -> Result<()> {
     let separator = SeparatorMenuItem::new();
     menu.append(&separator);
     
-    // Add process-specific menu items (will be updated dynamically)
+    // Add process-specific submenu (will be updated dynamically)
     let process_menu = create_process_menu(&args, &HashMap::new());
-    menu.append(&process_menu);
+    let process_root = MenuItem::with_label("Processes");
+    process_root.set_submenu(Some(&process_menu));
+    menu.append(&process_root);
     
     // Add another separator
     let separator2 = SeparatorMenuItem::new();
@@ -133,7 +137,7 @@ async fn start_tray_mode(args: Args) -> Result<()> {
     menu.append(&quit_item);
     
     // Set the menu on the indicator
-    indicator.set_menu(&menu);
+    indicator.borrow_mut().set_menu(&mut menu);
     
     info!("Enhanced tray icon created successfully!");
     println!("🔍 Look for the Port Kill icon in your system tray!");
@@ -148,7 +152,9 @@ async fn start_tray_mode(args: Args) -> Result<()> {
             get_processes_on_ports(&args_clone.get_ports_to_monitor(), &args_clone);
         
         // Update tray icon
-        update_tray_icon(&mut indicator_clone.clone(), process_count);
+        if let Ok(mut ind) = indicator_clone.try_borrow_mut() {
+            update_tray_icon(&mut ind, process_count);
+        }
         
         // Update status display
         let status_info = StatusBarInfo::from_process_count(process_count);
@@ -207,10 +213,11 @@ fn create_process_menu(args: &Args, processes: &HashMap<u16, ProcessInfo>) -> Me
         let menu_item = MenuItem::with_label(&label);
         let port_clone = *port;
         let args_clone = args.clone();
+        let pid_to_kill = process_info.pid;
         
         menu_item.connect_activate(move |_| {
-            info!("Killing process on port {} (PID: {})", port_clone, process_info.pid);
-            if let Err(e) = kill_single_process(process_info.pid, &args_clone) {
+            info!("Killing process on port {} (PID: {})", port_clone, pid_to_kill);
+            if let Err(e) = kill_single_process(pid_to_kill, &args_clone) {
                 error!("Failed to kill process on port {}: {}", port_clone, e);
             } else {
                 info!("Successfully killed process on port {}", port_clone);
@@ -235,8 +242,8 @@ fn update_tray_icon(indicator: &mut AppIndicator, process_count: usize) {
     
     // Update tooltip
     let tooltip = match process_count {
-        0 => "Port Kill - No processes detected",
-        1 => "Port Kill - 1 process running",
+        0 => "Port Kill - No processes detected".to_string(),
+        1 => "Port Kill - 1 process running".to_string(),
         _ => format!("Port Kill - {} processes running", process_count),
     };
     indicator.set_title(&tooltip);
