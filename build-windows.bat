@@ -25,6 +25,7 @@ echo [package]
 echo name = "port-kill"
 echo version = "0.1.0"
 echo edition = "2021"
+echo build = "build.rs"
 echo.
 echo [[bin]]
 echo name = "port-kill"
@@ -48,6 +49,9 @@ echo clap = { version = "4.0", features = ["derive"] }
 echo.
 echo # Windows-specific tray support
 echo tray-item = "0.10.0"
+echo.
+echo [build-dependencies]
+echo winres = "0.1"
 ) > Cargo.windows.tmp.toml
 
 REM Create a temporary lib.rs that excludes macOS/Linux-specific modules

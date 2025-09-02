@@ -1,16 +1,22 @@
-#[cfg(target_os = "windows")]
 fn main() {
-    // Embed an icon if available
-    let mut res = winres::WindowsResource::new();
-    // Prefer repo icon path
-    if std::path::Path::new("assets/port-kill.ico").exists() {
-        res.set_icon("assets/port-kill.ico");
+    #[cfg(target_os = "windows")]
+    {
+        // Only run winres when available (on Windows builds)
+        if std::path::Path::new("assets/port-kill.ico").exists() {
+            if let Ok(mut res) = try_winres() {
+                res.set_icon("assets/port-kill.ico");
+                let _ = res.compile();
+            }
+        }
     }
-    // Build the resources; ignore errors if the toolchain is missing
-    let _ = res.compile();
+}
+
+#[cfg(target_os = "windows")]
+fn try_winres() -> Result<winres::WindowsResource, ()> {
+    Ok(winres::WindowsResource::new())
 }
 
 #[cfg(not(target_os = "windows"))]
-fn main() {}
+fn try_winres() -> Result<(), ()> { Err(()) }
 
 
