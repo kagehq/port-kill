@@ -52,6 +52,10 @@ echo tray-item = "0.10.0"
 echo.
 echo [build-dependencies]
 echo winres = "0.1"
+echo.
+echo [features]
+echo default = []
+echo embed_icon = []
 ) > Cargo.windows.tmp.toml
 
 REM Create a temporary lib.rs that excludes macOS/Linux-specific modules
@@ -82,7 +86,7 @@ echo 📦 Using Windows configuration
 
 REM Build the Windows version
 echo 🔨 Building with cargo...
-cargo build --release
+cargo build --release --features embed_icon
 
 if errorlevel 1 (
     echo ❌ Build failed!

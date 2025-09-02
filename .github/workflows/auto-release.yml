@@ -249,7 +249,6 @@ jobs:
 
       - name: Build Windows binary
         run: |
-          chmod +x ./build-windows.bat
           ./build-windows.bat
 
       - name: Upload Windows binary
