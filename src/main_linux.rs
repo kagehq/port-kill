@@ -7,7 +7,7 @@ use port_kill::{
     types::{ProcessInfo, StatusBarInfo},
     process_monitor::{get_processes_on_ports, kill_all_processes, kill_single_process},
 };
-use ayatana_appindicator::{AppIndicator, AppIndicatorStatus};
+use libappindicator::{AppIndicator, AppIndicatorStatus};
 use anyhow::Result;
 use clap::Parser;
 use log::{error, info};

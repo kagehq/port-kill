@@ -41,7 +41,7 @@ env_logger = "0.10"
 clap = { version = "4.0", features = ["derive"] }
 
 # Linux-specific tray support
-ayatana-appindicator = "0.1"
+libappindicator = "0.7"
 gtk = "0.15"
 EOF
 
