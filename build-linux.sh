@@ -41,7 +41,7 @@ env_logger = "0.10"
 clap = { version = "4.0", features = ["derive"] }
 
 # Linux-specific tray support
-tray-item = "0.7"
+ayatana-appindicator = "0.1"
 gtk = "0.15"
 EOF
 
@@ -80,15 +80,15 @@ echo "🔍 Checking for required Linux packages..."
 if command -v apt-get &> /dev/null; then
     echo "📦 Detected Debian/Ubuntu system"
     echo "💡 To install required packages:"
-    echo "   sudo apt-get install libatk1.0-dev libgdk-pixbuf2.0-dev libgtk-3-dev libxdo-dev"
+    echo "   sudo apt-get install libatk1.0-dev libgdk-pixbuf2.0-dev libgtk-3-dev libayatana-appindicator3-dev"
 elif command -v dnf &> /dev/null; then
     echo "📦 Detected Fedora/RHEL system"
     echo "💡 To install required packages:"
-    echo "   sudo dnf install atk-devel gdk-pixbuf2-devel gtk3-devel libxdo-devel"
+    echo "   sudo dnf install atk-devel gdk-pixbuf2-devel gtk3-devel libayatana-appindicator3-devel"
 elif command -v pacman &> /dev/null; then
     echo "📦 Detected Arch Linux system"
     echo "💡 To install required packages:"
-    echo "   sudo pacman -S atk gdk-pixbuf2 gtk3 libxdo"
+    echo "   sudo pacman -S atk gdk-pixbuf2 gtk3 libayatana-appindicator3"
 else
     echo "⚠️  Unknown package manager, please install GTK development packages manually"
 fi
