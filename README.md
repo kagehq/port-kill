@@ -176,13 +176,13 @@ cd port-kill
 2. Install required packages:
 ```bash
 # Ubuntu/Debian
-sudo apt-get install libatk1.0-dev libgdk-pixbuf2.0-dev libgtk-3-dev libxdo-dev
+sudo apt-get install libatk1.0-dev libgdk-pixbuf2.0-dev libgtk-3-dev libappindicator3-dev
 
 # Fedora/RHEL
-sudo dnf install atk-devel gdk-pixbuf2-devel gtk3-devel libxdo-devel
+sudo dnf install atk-devel gdk-pixbuf2-devel gtk3-devel libappindicator-gtk3-devel
 
 # Arch Linux
-sudo pacman -S atk gdk-pixbuf2 gtk3 libxdo
+sudo pacman -S atk gdk-pixbuf2 gtk3 libappindicator-gtk3
 ```
 
 3. Install and build (recommended):
@@ -518,13 +518,13 @@ If the Linux system tray is not working or processes are not showing:
 2. **Install GTK packages** (required for system tray):
    ```bash
    # Ubuntu/Debian
-   sudo apt-get install libatk1.0-dev libgdk-pixbuf2.0-dev libgtk-3-dev libxdo-dev pkg-config
+   sudo apt-get install libatk1.0-dev libgdk-pixbuf2.0-dev libgtk-3-dev libappindicator3-dev pkg-config
    
    # Fedora/RHEL
-   sudo dnf install atk-devel gdk-pixbuf2-devel gtk3-devel libxdo-devel pkg-config
+   sudo dnf install atk-devel gdk-pixbuf2-devel gtk3-devel libappindicator-gtk3-devel pkg-config
    
    # Arch Linux
-   sudo pacman -S atk gdk-pixbuf2 gtk3 libxdo pkg-config
+   sudo pacman -S atk gdk-pixbuf2 gtk3 libappindicator-gtk3 pkg-config
    ```
 
 3. **Use console mode** (works without GUI dependencies):
