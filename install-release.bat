@@ -15,7 +15,7 @@ echo ✅ Detected platform: Windows
 
 REM Get latest release info
 echo 📡 Fetching latest release information...
-for /f "tokens=*" %%i in ('powershell -Command "(Invoke-WebRequest -Uri '%LATEST_RELEASE_URL%' -UseBasicParsing).Content | ConvertFrom-Json | Select-Object -ExpandProperty tag_name"') do set LATEST_TAG=%%i
+for /f "tokens=*" %%i in ('powershell -Command "try { (Invoke-WebRequest -Uri '%LATEST_RELEASE_URL%' -UseBasicParsing).Content | ConvertFrom-Json | Select-Object -ExpandProperty tag_name } catch { Write-Host 'ERROR: Failed to fetch release info'; exit 1 }"') do set LATEST_TAG=%%i
 
 if "%LATEST_TAG%"=="" (
     echo ❌ No releases found or failed to get latest release information
@@ -38,6 +38,15 @@ if "%LATEST_TAG%"=="" (
 )
 
 echo 📦 Latest release: %LATEST_TAG%
+
+REM Debug: Show what we got
+if "%LATEST_TAG%"=="" (
+    echo ❌ ERROR: LATEST_TAG is empty!
+    echo    This usually means the API call failed or returned unexpected data
+    echo    Please check your internet connection and try again
+    pause
+    exit /b 1
+)
 
 REM Create installation directory
 set INSTALL_DIR=%USERPROFILE%\AppData\Local\port-kill

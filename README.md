@@ -108,8 +108,12 @@ The latest binaries for all platforms are automatically built and released on Gi
 curl -fsSL https://raw.githubusercontent.com/kagehq/port-kill/main/install-release.sh | bash
 
 # Windows: Download and run the installer
-# Download install-release.bat and run it, or use:
-# powershell -Command "Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/kagehq/port-kill/main/install-release.bat' -OutFile 'install-release.bat' && install-release.bat"
+# Option 1: Download and run manually
+# Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/kagehq/port-kill/main/install-release.bat' -OutFile 'install-release.bat'
+# .\install-release.bat
+
+# Option 2: One-liner (PowerShell)
+# powershell -Command "Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/kagehq/port-kill/main/install-release.bat' -OutFile 'install-release.bat'; .\install-release.bat"
 ```
 
 **Note**: If no releases are available yet, the install scripts will guide you to build from source instead.
