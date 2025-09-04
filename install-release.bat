@@ -1,59 +1,52 @@
 @echo off
-setlocal enabledelayedexpansion
+setlocal enableextensions
 
-echo Port Kill Release Installer for Windows
-echo ==========================================
-echo.
+rem ---- Config
+set "REPO=kagehq/port-kill"
+set "API=https://api.github.com/repos/%REPO%/releases/latest"
+set "INSTALL_DIR=%USERPROFILE%\AppData\Local\port-kill"
 
-echo Detected platform: Windows
+echo(Port Kill Release Installer for Windows
+echo(==========================================
+echo(
+echo(Detected platform: Windows
+echo(
+echo(Fetching latest release information...
 
-REM Get latest release info
-echo Fetching latest release information...
-powershell -Command "(Invoke-WebRequest -Uri 'https://api.github.com/repos/kagehq/port-kill/releases/latest' -UseBasicParsing).Content | ConvertFrom-Json | Select-Object -ExpandProperty tag_name" > temp_tag.txt
-set /p LATEST_TAG=<temp_tag.txt
-del temp_tag.txt
+rem ---- Get latest tag via PowerShell and capture it into LATEST_TAG
+for /f "usebackq delims=" %%i in (`powershell -NoProfile -Command ^
+  "(Invoke-RestMethod '%API%').tag_name"`) do set "LATEST_TAG=%%i"
 
-if "%LATEST_TAG%"=="" (
-    echo ERROR: No releases found or failed to get latest release information
-    echo.
-    echo No releases are currently available. You have two options:
-    echo.
-    echo    1. Build from source (recommended):
-    echo       install.sh
-    echo.
-    echo    2. Wait for a release to be published:
-    echo       Visit: https://github.com/kagehq/port-kill/releases
-    echo.
-    pause
-    exit /b 1
+if not defined LATEST_TAG (
+  echo(ERROR: Failed to get latest release tag.
+  echo(Visit: https://github.com/%REPO%/releases
+  exit /b 1
 )
 
-echo Latest release: %LATEST_TAG%
+echo(Latest release: %LATEST_TAG%
+echo(
 
-REM Create installation directory
-set INSTALL_DIR=%USERPROFILE%\AppData\Local\port-kill
+rem ---- Ensure install dir
 if not exist "%INSTALL_DIR%" mkdir "%INSTALL_DIR%"
 
-echo Installing to: %INSTALL_DIR%
+echo(Installing to: %INSTALL_DIR%
+echo(Downloading port-kill-windows.exe...
+powershell -NoProfile -Command "Invoke-WebRequest 'https://github.com/%REPO%/releases/download/%LATEST_TAG%/port-kill-windows.exe' -OutFile '%INSTALL_DIR%\port-kill.exe'" || (
+  echo(Download failed (port-kill.exe)
+  exit /b 1
+)
 
-REM Download and install binary
-echo Downloading port-kill-windows.exe...
-powershell -Command "Invoke-WebRequest -Uri 'https://github.com/kagehq/port-kill/releases/download/%LATEST_TAG%/port-kill-windows.exe' -OutFile '%INSTALL_DIR%\port-kill.exe'"
+echo(Downloading port-kill-console-windows.exe...
+powershell -NoProfile -Command "Invoke-WebRequest 'https://github.com/%REPO%/releases/download/%LATEST_TAG%/port-kill-console-windows.exe' -OutFile '%INSTALL_DIR%\port-kill-console.exe'" || (
+  echo(Download failed (port-kill-console.exe)
+  exit /b 1
+)
 
-REM Download and install console binary
-echo Downloading port-kill-console-windows.exe...
-powershell -Command "Invoke-WebRequest -Uri 'https://github.com/kagehq/port-kill/releases/download/%LATEST_TAG%/port-kill-console-windows.exe' -OutFile '%INSTALL_DIR%\port-kill-console.exe'"
-
-echo.
-echo Installation complete!
-echo.
-echo Usage:
-echo    System tray mode: port-kill.exe --ports 3000,8000
-echo    Console mode:     port-kill-console.exe --console --ports 3000,8000
-echo.
-echo Add to PATH:
-echo    Add %INSTALL_DIR% to your system PATH environment variable
-echo.
-echo For more options: port-kill.exe --help
-echo.
-pause
+echo(
+echo(Installation complete!
+echo(
+echo(Usage:
+echo(  System tray:    port-kill --ports 3000,8000
+echo(  Console mode:   port-kill-console --console --ports 3000,8000
+echo(
+echo(Add to PATH (User): %INSTALL_DIR%
