@@ -51,7 +51,7 @@ echo # Windows-specific tray support
 echo tray-item = "0.10.0"
 echo.
 echo [build-dependencies]
-echo winres = "0.1"
+echo embed-resource = "1.8"
 echo.
 echo [features]
 echo default = []
