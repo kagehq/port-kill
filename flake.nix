@@ -14,7 +14,7 @@
         fenix.inputs.nixpkgs.follows = "nixpkgs";
     };
     outputs = { self, flake-utils, nixpkgs, fenix, xome, ... }:
-        flake-utils.lib.eachSystem (builtins.attrNames fenix.packages) (system:
+        flake-utils.lib.eachSystem [ "aarch64-darwin" "x86_64-darwin" ] (system:
             let
                 projectName = "port-kill";
                 pkgs = import nixpkgs {
