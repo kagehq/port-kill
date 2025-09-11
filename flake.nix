@@ -1,52 +1,164 @@
 {
-    description = "Rust 1.75 project using flake-utils (Darwin only)";
+    description = "port-kill";
 
     inputs = {
+        libSource.url = "github:divnix/nixpkgs.lib";
         flake-utils.url = "github:numtide/flake-utils";
-        nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
-        fenix.url = "github:nix-community/fenix";
-        # nixpkgs.url = "github:NixOS/nixpkgs/6f884c2#nodejs-slim";
+        nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
         home-manager.url = "github:nix-community/home-manager/release-25.05";
         home-manager.inputs.nixpkgs.follows = "nixpkgs";
         xome.url = "github:jeff-hykin/xome";
         xome.inputs.nixpkgs.follows = "nixpkgs";
         xome.inputs.home-manager.follows = "home-manager";
+        fenix.url = "github:nix-community/fenix";
+        fenix.inputs.nixpkgs.follows = "nixpkgs";
     };
-
-    outputs = { self, flake-utils, nixpkgs, fenix, home-manager, xome, ... }:
-        flake-utils.lib.eachSystem [ "x86_64-darwin" "aarch64-darwin" ] (system:
+    outputs = { self, flake-utils, nixpkgs, fenix, xome, ... }:
+        flake-utils.lib.eachSystem (builtins.attrNames fenix.packages) (system:
             let
-                pkgs = import nixpkgs { inherit system; };
-                # rustToolchain = fenix.packages.${system}.stable.toolchain;
-                rustToolchain = fenix.packages.${system}.toolchainOf {
-                    channel = "1.75.0";
-                    components = [ "rustc" "cargo" ];
+                projectName = "port-kill";
+                pkgs = import nixpkgs {
+                    inherit system;
+                    overlays = [
+                        fenix.overlays.default 
+                    ];
+                    config = {
+                        allowUnfree = true;
+                        allowInsecure = true;
+                        permittedInsecurePackages = [
+                        ];
+                    };
                 };
+                rustToolchain = pkgs.fenix.combine [
+                    pkgs.fenix.stable.rustc
+                    pkgs.fenix.stable.cargo
+                    pkgs.fenix.stable.clippy
+                    pkgs.fenix.stable.rustfmt
+                    pkgs.fenix.targets.wasm32-unknown-unknown.stable.rust-std
+                    # pkgs.fenix.targets.x86_64-unknown-linux-musl.stable.rust-std
+                ];
                 rustPlatform = pkgs.makeRustPlatform {
-                    cargo = rustToolchain;
                     rustc = rustToolchain;
+                    cargo = rustToolchain;
                 };
-            in {
-                packages.default = rustPlatform.buildRustPackage {
-                    pname = "your-project";
-                    version = "0.1.0";
-                    src = ./.;
+                nativeBuildInputs = [
+                    pkgs.clang
+                    pkgs.libiconv
+                    pkgs.trunk
+                    pkgs.wasm-bindgen-cli
+                    pkgs.wasm-pack
+                    pkgs.pkg-config
+                    pkgs.deno
+                ];
+                shellHook = ''
+                    export LIBRARY_PATH="$LIBRARY_PATH:${pkgs.libiconv}/lib"
+                '';
+            in
+                {
+                    packages.default = rustPlatform.buildRustPackage {
+                        pname = projectName;
+                        version = "0.1.0";
+                        src = ./.;
+                        
+                        nativeBuildInputs = nativeBuildInputs;
 
-                    cargoLock = {
-                        lockFile = ./Cargo.lock;
+                        cargoLock = {
+                            lockFile = ./Cargo.lock;
+                        };
+
+                        meta = {
+                            description = "port-kill";
+                        };
+                        
+                        buildPhase = ''
+                            ${shellHook}
+                            cargo build --release
+                        '';
+                        installPhase = ''
+                            mkdir -p "$out/bin/"
+                            cp ./target/release/port-kill "$out/bin/port-kill"
+                        '';
+                        XDG_CACHE_HOME = "/tmp/build/cache";
                     };
-
-                    meta = {
-                        description = "Your Rust project";
-                        platforms = pkgs.lib.platforms.darwin;
+                    
+                    devShells = xome.simpleMakeHomeFor {
+                        inherit pkgs;
+                        pure = true;
+                        homeModule = {
+                            # for home-manager examples, see: 
+                            # https://deepwiki.com/nix-community/home-manager/5-configuration-examples
+                            # all home-manager options: 
+                            # https://nix-community.github.io/home-manager/options.xhtml
+                            home.homeDirectory = "/tmp/virtual_homes/${projectName}";
+                            home.stateVersion = "25.05";
+                            home.packages = nativeBuildInputs ++ [
+                                # project stuff
+                                rustToolchain
+                                
+                                # vital stuff
+                                pkgs.coreutils-full
+                                pkgs.dash # for sh
+                                
+                                # optional stuff
+                                pkgs.gnugrep
+                                pkgs.findutils
+                                pkgs.wget
+                                pkgs.curl
+                                pkgs.unixtools.locale
+                                pkgs.unixtools.more
+                                pkgs.unixtools.ps
+                                pkgs.unixtools.getopt
+                                pkgs.unixtools.ifconfig
+                                pkgs.unixtools.hostname
+                                pkgs.unixtools.ping
+                                pkgs.unixtools.hexdump
+                                pkgs.unixtools.killall
+                                pkgs.unixtools.mount
+                                pkgs.unixtools.sysctl
+                                pkgs.unixtools.top
+                                pkgs.unixtools.umount
+                                pkgs.git
+                                pkgs.htop
+                                pkgs.ripgrep
+                            ];
+                            
+                            programs = {
+                                home-manager = {
+                                    enable = true;
+                                };
+                                zsh = {
+                                    enable = true;
+                                    enableCompletion = true;
+                                    autosuggestion.enable = true;
+                                    syntaxHighlighting.enable = true;
+                                    shellAliases.ll = "ls -la";
+                                    history.size = 100000;
+                                    # this is kinda like .zshrc
+                                    initContent = ''
+                                        # lots of things need "sh"
+                                        ln -s "$(which dash)" "$HOME/.local/bin/sh" 2>/dev/null
+                                        # this enables some impure stuff like sudo, comment it out to get FULL purity
+                                        ${shellHook}
+                                        # export PATH="$PATH:/usr/bin/"
+                                        __real_deno="$(which deno)"
+                                        # shim deno to default to the no-lock version so that home lock files don't get looked at
+                                        # not perfect but less annoying than nothing
+                                        deno() {
+                                            if [ "$#" = "0" ]; then
+                                                "$__real_deno" repl -A --no-lock
+                                            else
+                                                "$__real_deno" "$@"
+                                            fi
+                                        }
+                                    '';
+                                };
+                                starship = {
+                                    enable = true;
+                                    enableZshIntegration = true;
+                                };
+                            };
+                        }; 
                     };
-                };
-
-                devShells.default = pkgs.mkShell {
-                    buildInputs = [ pkgs.rust-bin ];
-                    shellHook = ''
-                        echo "Entering dev shell with Rust 1.75"
-                    '';
-                };
-            });
+                }
+    );
 }
