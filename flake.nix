@@ -14,7 +14,7 @@
         fenix.inputs.nixpkgs.follows = "nixpkgs";
     };
     outputs = { self, flake-utils, nixpkgs, fenix, xome, ... }:
-        flake-utils.lib.eachSystem [ "aarch64-darwin" "x86_64-darwin" ] (system:
+        flake-utils.lib.eachSystem (builtins.attrNames fenix.packages) (system:
             let
                 projectName = "port-kill";
                 pkgs = import nixpkgs {
@@ -48,7 +48,6 @@
                     pkgs.wasm-bindgen-cli
                     pkgs.wasm-pack
                     pkgs.pkg-config
-                    pkgs.deno
                 ];
                 shellHook = ''
                     export LIBRARY_PATH="$LIBRARY_PATH:${pkgs.libiconv}/lib"
@@ -137,19 +136,7 @@
                                     initContent = ''
                                         # lots of things need "sh"
                                         ln -s "$(which dash)" "$HOME/.local/bin/sh" 2>/dev/null
-                                        # this enables some impure stuff like sudo, comment it out to get FULL purity
                                         ${shellHook}
-                                        # export PATH="$PATH:/usr/bin/"
-                                        __real_deno="$(which deno)"
-                                        # shim deno to default to the no-lock version so that home lock files don't get looked at
-                                        # not perfect but less annoying than nothing
-                                        deno() {
-                                            if [ "$#" = "0" ]; then
-                                                "$__real_deno" repl -A --no-lock
-                                            else
-                                                "$__real_deno" "$@"
-                                            fi
-                                        }
                                     '';
                                 };
                                 starship = {
