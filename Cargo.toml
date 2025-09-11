@@ -2,6 +2,7 @@
 name = "port-kill"
 version = "0.1.0"
 edition = "2021"
+build = "build.rs"
 
 [[bin]]
 name = "port-kill"
@@ -11,12 +12,8 @@ path = "src/main.rs"
 name = "port-kill-console"
 path = "src/main_console.rs"
 
-
-
 [dependencies]
-tray-icon = "0.10"
-winit = "0.29"
-nix = { version = "0.27", features = ["signal", "process"] }
+# Platform-agnostic dependencies (used by both GUI and console)
 crossbeam-channel = "0.5"
 tokio = { version = "1.0", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
@@ -26,3 +23,19 @@ thiserror = "1.0"
 log = "0.4"
 env_logger = "0.10"
 clap = { version = "4.0", features = ["derive"] }
+
+[build-dependencies]
+embed-resource = "1.8"
+
+[features]
+default = []
+embed_icon = []
+
+# GUI-specific dependencies (only for macOS tray icon)
+[target.'cfg(target_os = "macos")'.dependencies]
+tray-icon = "0.10"
+winit = "0.29"
+
+# Unix-specific dependencies (for process management)
+[target.'cfg(not(target_os = "windows"))'.dependencies]
+nix = { version = "0.27", features = ["signal", "process"] }

@@ -1,0 +1,138 @@
+name: Debug Build Issues
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: 'Platform to debug'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+        - all
+        - windows
+        - linux
+        - console
+
+jobs:
+  debug-windows:
+    if: ${{ github.event.inputs.platform == 'all' || github.event.inputs.platform == 'windows' }}
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Debug Windows Environment
+        run: |
+          Write-Host "=== Windows Environment Debug ==="
+          Write-Host "OS: $env:OS"
+          Write-Host "Rust version: $(rustc --version)"
+          Write-Host "Cargo version: $(cargo --version)"
+          Write-Host "Current directory: $(Get-Location)"
+          Write-Host "Files in current directory:"
+          Get-ChildItem | ForEach-Object { Write-Host "  $_" }
+          
+          Write-Host "=== Cargo.toml content ==="
+          Get-Content "Cargo.toml"
+          
+          Write-Host "=== Source files ==="
+          Get-ChildItem "src" -Recurse | ForEach-Object { Write-Host "  $_" }
+        shell: pwsh
+
+      - name: Debug Windows Build
+        run: |
+          Write-Host "=== Testing Windows Build ==="
+          
+          # Test basic cargo check
+          Write-Host "Testing cargo check..."
+          cargo check --bin port-kill-console
+          
+          # Test basic build
+          Write-Host "Testing basic build..."
+          cargo build --bin port-kill-console
+          
+          # Check if binary was created
+          if (Test-Path ".\target\debug\port-kill-console.exe") {
+            Write-Host "✅ Console binary created"
+            Get-ChildItem ".\target\debug\port-kill-console.exe" | ForEach-Object { Write-Host "  $_" }
+          } else {
+            Write-Host "❌ Console binary not found"
+            Write-Host "Files in target/debug:"
+            Get-ChildItem ".\target\debug\" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $_" }
+          }
+        shell: pwsh
+
+  debug-console:
+    if: ${{ github.event.inputs.platform == 'all' || github.event.inputs.platform == 'console' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Debug Console Environment
+        run: |
+          echo "=== Console Environment Debug ==="
+          echo "OS: $OSTYPE"
+          echo "Rust version: $(rustc --version)"
+          echo "Cargo version: $(cargo --version)"
+          echo "Current directory: $(pwd)"
+          echo "Files in current directory:"
+          ls -la
+          
+          echo "=== Cargo.toml content ==="
+          cat Cargo.toml
+          
+          echo "=== Source files ==="
+          find src -type f | head -20
+        shell: bash
+
+      - name: Debug Console Build
+        run: |
+          echo "=== Testing Console Build ==="
+          
+          # Test basic cargo check
+          echo "Testing cargo check..."
+          cargo check --bin port-kill-console
+          
+          # Test basic build
+          echo "Testing basic build..."
+          cargo build --bin port-kill-console
+          
+          # Check if binary was created
+          if [ -f "./target/debug/port-kill-console" ]; then
+            echo "✅ Console binary created"
+            ls -la ./target/debug/port-kill-console
+            file ./target/debug/port-kill-console
+          else
+            echo "❌ Console binary not found"
+            echo "Files in target/debug:"
+            ls -la ./target/debug/ 2>/dev/null || echo "target/debug directory not found"
+          fi
+        shell: bash
+
+      - name: Debug Console Execution
+        run: |
+          echo "=== Testing Console Execution ==="
+          
+          if [ -f "./target/debug/port-kill-console" ]; then
+            echo "Testing --version..."
+            ./target/debug/port-kill-console --version || echo "Version test failed"
+            
+            echo "Testing --help..."
+            ./target/debug/port-kill-console --help || echo "Help test failed"
+          else
+            echo "No binary to test"
+          fi
+        shell: bash

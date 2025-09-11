@@ -1,0 +1,1150 @@
+name: Build and Test
+
+on:
+  pull_request:
+    branches: [ main, master ]
+  push:
+    branches: [ main, master ]
+
+permissions:
+  contents: write
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Build macOS binary
+        run: |
+          chmod +x ./build-macos.sh
+          ./build-macos.sh
+
+      - name: Test macOS binary
+        run: |
+          ./target/release/port-kill --help
+          ./target/release/port-kill-console --help
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libatk1.0-dev libgdk-pixbuf2.0-dev libgtk-3-dev libxdo-dev pkg-config
+
+      - name: Build Linux binary
+        run: |
+          chmod +x ./build-linux.sh
+          ./build-linux.sh
+
+      - name: Test Linux binary
+        run: |
+          ./target/release/port-kill --help
+          ./target/release/port-kill-console --help
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Build Windows binary
+        run: |
+          # Enable detailed logging
+          $env:RUST_LOG = "debug"
+          $env:RUST_BACKTRACE = "1"
+          
+          # Show environment info
+          Write-Host "=== Environment Info ==="
+          Write-Host "Rust version: $(rustc --version)"
+          Write-Host "Cargo version: $(cargo --version)"
+          Write-Host "Current directory: $(Get-Location)"
+          Write-Host "Files in current directory:"
+          Get-ChildItem | ForEach-Object { Write-Host "  $_" }
+          
+          # Try to build console binary first (should work on all platforms)
+          Write-Host "=== Building console binary ==="
+          
+          # Create a standalone console binary (no library dependencies)
+          Write-Host "=== Creating standalone console binary ==="
+          
+          # Create a temporary directory for console build
+          New-Item -ItemType Directory -Path "console-build" -Force | Out-Null
+          
+          # Create standalone console_app.rs with direct imports
+          @"
+          use crate::process_monitor::ProcessMonitor;
+          use crate::types::{ProcessUpdate, StatusBarInfo};
+          use crate::cli::Args;
+          use anyhow::Result;
+          use crossbeam_channel::{bounded, Receiver};
+          use log::{error, info};
+          use std::sync::Arc;
+          use tokio::sync::Mutex;
+          use std::collections::HashMap;
+
+          pub struct ConsolePortKillApp {
+              process_monitor: Arc<Mutex<ProcessMonitor>>,
+              update_receiver: Receiver<ProcessUpdate>,
+              args: Args,
+          }
+
+          impl ConsolePortKillApp {
+              pub fn new(args: Args) -> Result<Self> {
+                  // Create channels for communication
+                  let (update_sender, update_receiver) = bounded(100);
+
+                  // Create process monitor with configurable ports
+                  let process_monitor = Arc::new(Mutex::new(ProcessMonitor::new(update_sender, args.get_ports_to_monitor(), args.docker)?));
+
+                  Ok(Self {
+                      process_monitor,
+                      update_receiver,
+                      args,
+                  })
+              }
+
+              pub async fn run(mut self) -> Result<()> {
+                  info!("Starting Console Port Kill application...");
+                  println!("🚀 Port Kill Console Monitor Started!");
+                  println!("📡 Monitoring {} every 2 seconds...", self.args.get_port_description());
+                  println!("💡 Press Ctrl+C to quit");
+                  println!("");
+
+                  // Start process monitoring in background
+                  let monitor = self.process_monitor.clone();
+                  tokio::spawn(async move {
+                      if let Err(e) = monitor.lock().await.start_monitoring().await {
+                          error!("Process monitoring failed: {}", e);
+                      }
+                  });
+
+                  // Handle updates in the main thread
+                  self.handle_console_updates().await;
+
+                  Ok(())
+              }
+
+              async fn handle_console_updates(&mut self) {
+                  info!("Starting console update handler...");
+
+                  loop {
+                      // Check for process updates
+                      if let Ok(update) = self.update_receiver.try_recv() {
+                          // Filter out ignored processes
+                          let filtered_processes = self.filter_ignored_processes(&update.processes);
+                          let filtered_count = filtered_processes.len();
+                          
+                          // Update status
+                          let status_info = StatusBarInfo::from_process_count(filtered_count);
+                          
+                          // Print status to console
+                          println!("🔄 Port Status: {} - {}", status_info.text, status_info.tooltip);
+                          
+                          if filtered_count > 0 {
+                              println!("📋 Detected Processes (after filtering ignored):");
+                              for (port, process_info) in &filtered_processes {
+                                  if let (Some(_container_id), Some(container_name)) = (&process_info.container_id, &process_info.container_name) {
+                                      println!("   • Port {}: {} - {} [Docker: {}]", 
+                                              port, process_info.name, process_info.command, container_name);
+                                  } else if self.args.show_pid {
+                                      println!("   • Port {}: {} (PID {}) - {}", 
+                                              port, process_info.name, process_info.pid, process_info.command);
+                                  } else {
+                                      println!("   • Port {}: {} - {}", 
+                                              port, process_info.name, process_info.command);
+                                  }
+                              }
+                          }
+                          
+                          // Show ignored processes if any
+                          let ignored_count = update.processes.len() - filtered_count;
+                          if ignored_count > 0 {
+                              println!("🚫 Ignored {} process(es) based on user configuration", ignored_count);
+                          }
+                          
+                          println!("");
+                      }
+
+                      // Sleep briefly to avoid busy waiting
+                      tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                  }
+              }
+
+              fn filter_ignored_processes(&self, processes: &HashMap<u16, crate::types::ProcessInfo>) -> HashMap<u16, crate::types::ProcessInfo> {
+                  let mut filtered = HashMap::new();
+                  
+                  for (port, process_info) in processes {
+                      // Check if port is ignored
+                      if let Some(ref ignore_ports) = self.args.ignore_ports {
+                          if ignore_ports.contains(port) {
+                              continue;
+                          }
+                      }
+                      
+                      // Check if process name is ignored
+                      let process_name_lower = process_info.name.to_lowercase();
+                      let is_name_ignored = if let Some(ref ignore_processes) = self.args.ignore_processes {
+                          ignore_processes.iter().any(|ignored| {
+                              process_name_lower.contains(&ignored.to_lowercase())
+                          })
+                      } else {
+                          false
+                      };
+                      
+                      if is_name_ignored {
+                          continue;
+                      }
+                      
+                      filtered.insert(*port, process_info.clone());
+                  }
+                  
+                  filtered
+              }
+          }
+          "@ | Out-File -FilePath "console-build/console_app.rs" -Encoding utf8
+          
+          # Create standalone process_monitor.rs with direct imports
+          @"
+          use crate::types::{ProcessInfo, ProcessUpdate};
+          use anyhow::{Context, Result};
+          use crossbeam_channel::Sender;
+          use log::{error, info};
+          use std::collections::HashMap;
+          use std::process::Command;
+          use std::time::Duration;
+          use tokio::time::sleep;
+
+          const MONITORING_INTERVAL: Duration = Duration::from_secs(2);
+
+          pub struct ProcessMonitor {
+              update_sender: Sender<ProcessUpdate>,
+              current_processes: HashMap<u16, ProcessInfo>,
+              ports_to_monitor: Vec<u16>,
+              docker_enabled: bool,
+          }
+
+          impl ProcessMonitor {
+              pub fn new(update_sender: Sender<ProcessUpdate>, ports_to_monitor: Vec<u16>, docker_enabled: bool) -> Result<Self> {
+                  Ok(Self {
+                      update_sender,
+                      current_processes: HashMap::new(),
+                      ports_to_monitor,
+                      docker_enabled,
+                  })
+              }
+
+              pub async fn start_monitoring(&mut self) -> Result<()> {
+                  let port_description = if self.ports_to_monitor.len() <= 10 {
+                      format!("ports: {}", self.ports_to_monitor.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(", "))
+                  } else {
+                      format!("{} ports: {} to {}", 
+                          self.ports_to_monitor.len(), 
+                          self.ports_to_monitor.first().unwrap_or(&0), 
+                          self.ports_to_monitor.last().unwrap_or(&0))
+                  };
+                  
+                  info!("Starting process monitoring on {}", port_description);
+
+                  loop {
+                      match self.scan_processes().await {
+                          Ok(processes) => {
+                              let update = ProcessUpdate::new(processes.clone());
+                              
+                              // Check if there are any changes
+                              if self.current_processes != processes {
+                                  info!("Process update: {} processes found", update.count);
+                                  self.current_processes = processes;
+                                  
+                                  if let Err(e) = self.update_sender.send(update) {
+                                      error!("Failed to send process update: {}", e);
+                                  }
+                              }
+                          }
+                          Err(e) => {
+                              error!("Failed to scan processes: {}", e);
+                          }
+                      }
+
+                      sleep(MONITORING_INTERVAL).await;
+                  }
+              }
+
+              async fn scan_processes(&self) -> Result<HashMap<u16, ProcessInfo>> {
+                  let mut processes = HashMap::new();
+
+                  for &port in &self.ports_to_monitor {
+                      if let Ok(process_info) = self.get_process_on_port(port).await {
+                          processes.insert(port, process_info);
+                      }
+                  }
+
+                  Ok(processes)
+              }
+
+              async fn get_process_on_port(&self, port: u16) -> Result<ProcessInfo> {
+                  // Windows: Use netstat to find processes listening on the port
+                  let output = Command::new("netstat")
+                      .args(&["-ano"])
+                      .output()
+                      .context("Failed to execute netstat command")?;
+
+                  if output.status.success() {
+                      let stdout = String::from_utf8_lossy(&output.stdout);
+                      for line in stdout.lines() {
+                          let parts: Vec<&str> = line.split_whitespace().collect();
+                          if parts.len() >= 5 {
+                              // Extract port from local address (e.g., "0.0.0.0:3000")
+                              if let Some(port_str) = parts[1].split(':').last() {
+                                  if let Ok(found_port) = port_str.parse::<u16>() {
+                                      if found_port == port {
+                                          // Extract PID from the last column
+                                          if let Ok(pid) = parts[4].parse::<i32>() {
+                                              return self.get_process_details(pid, port).await;
+                                          }
+                                      }
+                                  }
+                              }
+                          }
+                      }
+                  }
+
+                  Err(anyhow::anyhow!("No process found on port {}", port))
+              }
+
+              async fn get_process_details(&self, pid: i32, port: u16) -> Result<ProcessInfo> {
+                  // Get process name using tasklist
+                  let output = Command::new("tasklist")
+                      .args(&["/FI", &format!("PID eq {}", pid), "/FO", "CSV", "/NH"])
+                      .output()
+                      .context("Failed to execute tasklist command")?;
+
+                  let mut command = format!("PID {}", pid);
+                  let mut name = format!("Unknown-{}", pid);
+
+                  if output.status.success() {
+                      let stdout = String::from_utf8_lossy(&output.stdout);
+                      for line in stdout.lines() {
+                          if !line.trim().is_empty() {
+                              let parts: Vec<&str> = line.split(',').collect();
+                              if parts.len() >= 2 {
+                                  name = parts[0].trim_matches('"').to_string();
+                                  command = parts[0].trim_matches('"').to_string();
+                                  break;
+                              }
+                          }
+                      }
+                  }
+
+                  Ok(ProcessInfo {
+                      pid,
+                      port,
+                      command: command.clone(),
+                      name,
+                      container_id: None,
+                      container_name: None,
+                  })
+              }
+
+              async fn kill_process(&self, pid: i32) -> Result<()> {
+                  let output = Command::new("taskkill")
+                      .args(&["/PID", &pid.to_string(), "/F"])
+                      .output()
+                      .context("Failed to execute taskkill command")?;
+
+                  if output.status.success() {
+                      info!("Successfully killed process with PID {}", pid);
+                      Ok(())
+                  } else {
+                      let stderr = String::from_utf8_lossy(&output.stderr);
+                      Err(anyhow::anyhow!("Failed to kill process {}: {}", pid, stderr))
+                  }
+              }
+          }
+          "@ | Out-File -FilePath "console-build/process_monitor.rs" -Encoding utf8
+          
+          # Copy other files (they should work as-is since they don't use crate:: imports)
+          Copy-Item "src/types.rs" "console-build/types.rs"
+          Copy-Item "src/cli.rs" "console-build/cli.rs"
+          
+          # Create standalone main.rs with direct imports
+          @"
+          use anyhow::Result;
+          use log::info;
+          use console_app::ConsolePortKillApp;
+          use cli::Args;
+          use clap::Parser;
+
+          mod console_app;
+          mod process_monitor;
+          mod types;
+          mod cli;
+
+          #[tokio::main]
+          async fn main() -> Result<()> {
+              // Parse command-line arguments
+              let args = Args::parse();
+              
+              // Validate arguments
+              if let Err(e) = args.validate() {
+                  eprintln!("Error: {}", e);
+                  std::process::exit(1);
+              }
+
+              // Set up logging level based on verbose flag
+              if args.verbose {
+                  std::env::set_var("RUST_LOG", "debug");
+              } else if std::env::var("RUST_LOG").is_err() {
+                  std::env::set_var("RUST_LOG", "info");
+              }
+
+              // Initialize logging
+              env_logger::init();
+              
+              info!("Starting Console Port Kill application...");
+              info!("Monitoring: {}", args.get_port_description());
+
+              // Create and run the console application
+              let app = ConsolePortKillApp::new(args)?;
+              app.run().await?;
+
+              info!("Console Port Kill application stopped");
+              Ok(())
+          }
+          "@ | Out-File -FilePath "console-build/main.rs" -Encoding utf8
+          
+          # Create standalone Cargo.toml for console
+          @"
+          [package]
+          name = "port-kill-console-standalone"
+          version = "0.1.0"
+          edition = "2021"
+
+          [[bin]]
+          name = "port-kill-console"
+          path = "main.rs"
+
+          [dependencies]
+          crossbeam-channel = "0.5"
+          tokio = { version = "1.0", features = ["full"] }
+          serde = { version = "1.0", features = ["derive"] }
+          serde_json = "1.0"
+          anyhow = "1.0"
+          thiserror = "1.0"
+          log = "0.4"
+          env_logger = "0.10"
+          clap = { version = "4.0", features = ["derive"] }
+          "@ | Out-File -FilePath "console-build/Cargo.toml" -Encoding utf8
+
+          # Build in the temporary directory
+          Push-Location "console-build"
+          
+          # Debug: Show what we copied
+          Write-Host "=== Debug: Files in console-build directory ==="
+          Get-ChildItem | ForEach-Object { Write-Host "  $_" }
+          
+          Write-Host "=== Debug: Cargo.toml content ==="
+          Get-Content "Cargo.toml"
+          
+          Write-Host "=== Debug: main.rs first few lines ==="
+          Get-Content "main.rs" | Select-Object -First 10
+
+          # Build console binary
+          Write-Host "=== Building standalone console binary ==="
+          
+          # Run cargo build and capture output properly
+          Write-Host "Running: cargo build --release --bin port-kill-console"
+          & cargo build --release --bin port-kill-console
+          $buildExitCode = $LASTEXITCODE
+          
+          Write-Host "Build exit code: $buildExitCode"
+          
+          if ($buildExitCode -ne 0) {
+            Write-Host "❌ Console binary build failed with exit code $buildExitCode"
+            Write-Host "Current directory contents:"
+            Get-ChildItem | ForEach-Object { Write-Host "  $_" }
+            Write-Host "Target directory contents:"
+            Get-ChildItem ".\target\" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $_" }
+            exit 1
+          }
+
+          # Copy the built binary to the main target directory
+          Write-Host "=== Copying built binary ==="
+          Write-Host "Current directory: $(Get-Location)"
+          Write-Host "Files in target/release:"
+          Get-ChildItem ".\target\release\" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $_" }
+          
+          if (Test-Path ".\target\release\port-kill-console.exe") {
+              # Create the destination directory if it doesn't exist
+              $destDir = "..\target\release"
+              if (-not (Test-Path $destDir)) {
+                  New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+                  Write-Host "✅ Created destination directory: $destDir"
+              }
+              
+              Copy-Item ".\target\release\port-kill-console.exe" "$destDir\port-kill-console.exe" -Force
+              Write-Host "✅ Successfully copied port-kill-console.exe"
+          } else {
+              Write-Host "❌ port-kill-console.exe not found in target/release"
+              Write-Host "Available files:"
+              Get-ChildItem ".\target\release\" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $_" }
+              exit 1
+          }
+          
+          # Return to original directory
+          Pop-Location
+          
+          # Clean up temporary directory
+          Remove-Item "console-build" -Recurse -Force -ErrorAction SilentlyContinue
+          
+          # Check if console binary was created
+          if (Test-Path ".\target\release\port-kill-console.exe") {
+            Write-Host "✅ Console binary created successfully"
+          } else {
+            Write-Host "❌ Console binary not found"
+            Get-ChildItem ".\target\release\" -Name
+            exit 1
+          }
+          
+          # Now try to build the Windows-specific binary
+          Write-Host "=== Building Windows-specific binary ==="
+          
+          # Show current Cargo.toml
+          Write-Host "Current Cargo.toml:"
+          Get-Content "Cargo.toml" | ForEach-Object { Write-Host "  $_" }
+          
+          # Create a simple Windows-specific Cargo.toml
+          @"
+          [package]
+          name = "port-kill"
+          version = "0.1.0"
+          edition = "2021"
+
+          [[bin]]
+          name = "port-kill"
+          path = "src/main.windows.rs"
+
+          [dependencies]
+          crossbeam-channel = "0.5"
+          tokio = { version = "1.0", features = ["full"] }
+          serde = { version = "1.0", features = ["derive"] }
+          serde_json = "1.0"
+          anyhow = "1.0"
+          thiserror = "1.0"
+          log = "0.4"
+          env_logger = "0.10"
+          clap = { version = "4.0", features = ["derive"] }
+          tray-item = "0.10.0"
+          "@ | Out-File -FilePath "Cargo.windows.toml" -Encoding utf8
+
+          # Create Windows-specific versions of the library files
+          Copy-Item "src/types.rs" "src/types.windows.rs"
+          Copy-Item "src/cli.rs" "src/cli.windows.rs"
+          
+          # Create Windows-specific process_monitor.rs (simplified, no Unix methods)
+          @"
+          use crate::types::{ProcessInfo, ProcessUpdate};
+          use anyhow::{Context, Result};
+          use crossbeam_channel::Sender;
+          use log::{error, info};
+          use std::collections::HashMap;
+          use std::process::Command;
+          use std::time::Duration;
+          use tokio::time::sleep;
+
+          const MONITORING_INTERVAL: Duration = Duration::from_secs(2);
+
+          pub struct ProcessMonitor {
+              update_sender: Sender<ProcessUpdate>,
+              current_processes: HashMap<u16, ProcessInfo>,
+              ports_to_monitor: Vec<u16>,
+              docker_enabled: bool,
+          }
+
+          impl ProcessMonitor {
+              pub fn new(update_sender: Sender<ProcessUpdate>, ports_to_monitor: Vec<u16>, docker_enabled: bool) -> Result<Self> {
+                  Ok(Self {
+                      update_sender,
+                      current_processes: HashMap::new(),
+                      ports_to_monitor,
+                      docker_enabled,
+                  })
+              }
+
+              pub async fn start_monitoring(&mut self) -> Result<()> {
+                  let port_description = if self.ports_to_monitor.len() <= 10 {
+                      format!("ports: {}", self.ports_to_monitor.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(", "))
+                  } else {
+                      format!("{} ports: {} to {}", 
+                          self.ports_to_monitor.len(), 
+                          self.ports_to_monitor.first().unwrap_or(&0), 
+                          self.ports_to_monitor.last().unwrap_or(&0))
+                  };
+                  
+                  info!("Starting process monitoring on {}", port_description);
+
+                  loop {
+                      match self.scan_processes().await {
+                          Ok(processes) => {
+                              let update = ProcessUpdate::new(processes.clone());
+                              
+                              // Check if there are any changes
+                              if self.current_processes != processes {
+                                  info!("Process update: {} processes found", update.count);
+                                  self.current_processes = processes;
+                                  
+                                  if let Err(e) = self.update_sender.send(update) {
+                                      error!("Failed to send process update: {}", e);
+                                  }
+                              }
+                          }
+                          Err(e) => {
+                              error!("Failed to scan processes: {}", e);
+                          }
+                      }
+
+                      sleep(MONITORING_INTERVAL).await;
+                  }
+              }
+
+              async fn scan_processes(&self) -> Result<HashMap<u16, ProcessInfo>> {
+                  let mut processes = HashMap::new();
+
+                  for &port in &self.ports_to_monitor {
+                      if let Ok(process_info) = self.get_process_on_port(port).await {
+                          processes.insert(port, process_info);
+                      }
+                  }
+
+                  Ok(processes)
+              }
+
+              async fn get_process_on_port(&self, port: u16) -> Result<ProcessInfo> {
+                  // Windows: Use netstat to find processes listening on the port
+                  let output = Command::new("netstat")
+                      .args(&["-ano"])
+                      .output()
+                      .context("Failed to execute netstat command")?;
+
+                  if output.status.success() {
+                      let stdout = String::from_utf8_lossy(&output.stdout);
+                      for line in stdout.lines() {
+                          let parts: Vec<&str> = line.split_whitespace().collect();
+                          if parts.len() >= 5 {
+                              // Extract port from local address (e.g., "0.0.0.0:3000")
+                              if let Some(port_str) = parts[1].split(':').last() {
+                                  if let Ok(found_port) = port_str.parse::<u16>() {
+                                      if found_port == port {
+                                          // Extract PID from the last column
+                                          if let Ok(pid) = parts[4].parse::<i32>() {
+                                              return self.get_process_details(pid, port).await;
+                                          }
+                                      }
+                                  }
+                              }
+                          }
+                      }
+                  }
+
+                  Err(anyhow::anyhow!("No process found on port {}", port))
+              }
+
+              async fn get_process_details(&self, pid: i32, port: u16) -> Result<ProcessInfo> {
+                  // Get process name using tasklist
+                  let output = Command::new("tasklist")
+                      .args(&["/FI", &format!("PID eq {}", pid), "/FO", "CSV", "/NH"])
+                      .output()
+                      .context("Failed to execute tasklist command")?;
+
+                  let mut command = format!("PID {}", pid);
+                  let mut name = format!("Unknown-{}", pid);
+
+                  if output.status.success() {
+                      let stdout = String::from_utf8_lossy(&output.stdout);
+                      for line in stdout.lines() {
+                          if !line.trim().is_empty() {
+                              let parts: Vec<&str> = line.split(',').collect();
+                              if parts.len() >= 2 {
+                                  name = parts[0].trim_matches('"').to_string();
+                                  command = parts[0].trim_matches('"').to_string();
+                                  break;
+                              }
+                          }
+                      }
+                  }
+
+                  Ok(ProcessInfo {
+                      pid,
+                      port,
+                      command: command.clone(),
+                      name,
+                      container_id: None,
+                      container_name: None,
+                  })
+              }
+
+              pub async fn kill_process(&self, pid: i32) -> Result<()> {
+                  let output = Command::new("taskkill")
+                      .args(&["/PID", &pid.to_string(), "/F"])
+                      .output()
+                      .context("Failed to execute taskkill command")?;
+
+                  if output.status.success() {
+                      info!("Successfully killed process with PID {}", pid);
+                      Ok(())
+                  } else {
+                      let stderr = String::from_utf8_lossy(&output.stderr);
+                      Err(anyhow::anyhow!("Failed to kill process {}: {}", pid, stderr))
+                  }
+              }
+          }
+          "@ | Out-File -FilePath "src/process_monitor.windows.rs" -Encoding utf8
+
+          # Create Windows-specific main.rs (tray mode only)
+          @"
+          use port_kill::{
+              cli::Args,
+              types::{ProcessInfo, StatusBarInfo},
+          };
+          use tray_item::TrayItem;
+          use anyhow::{Result, Context};
+          use clap::Parser;
+          use log::{error, info};
+          use std::collections::HashMap;
+          use std::thread;
+          use std::time::Duration;
+
+          #[tokio::main]
+          async fn main() -> Result<()> {
+              // Parse command line arguments
+              let args = Args::parse();
+              
+              // Validate arguments
+              if let Err(e) = args.validate() {
+                  eprintln!("Error: {}", e);
+                  std::process::exit(1);
+              }
+              
+              // Set up logging level based on log_level argument
+              let log_level = if args.verbose {
+                  // Verbose flag overrides log_level for backward compatibility
+                  "debug"
+              } else {
+                  args.log_level.to_rust_log()
+              };
+              std::env::set_var("RUST_LOG", log_level);
+              
+              // Initialize logging
+              env_logger::init();
+              
+              info!("Starting Port Kill application on Windows...");
+              info!("Monitoring: {}", args.get_port_description());
+              
+              // Use Windows tray mode
+              run_windows_tray_mode(args)
+          }
+
+          fn run_windows_tray_mode(args: Args) -> Result<()> {
+              info!("Starting Windows tray mode...");
+              
+              // Create the tray item
+              let mut tray = TrayItem::new("Port Kill", tray_item::IconSource::Resource("Port Kill")).map_err(|e| {
+                  anyhow::anyhow!("Failed to create Windows tray item: {}", e)
+              })?;
+              
+              info!("Windows tray created successfully!");
+              println!("🔍 Look for the Port Kill icon in your system tray!");
+              println!("   It should appear in your Windows notification area.");
+              
+              // Create channels for communication
+              let (menu_sender, menu_receiver) = std::sync::mpsc::channel();
+              
+              // Add menu items
+              let sender_clone = menu_sender.clone();
+              tray.add_menu_item("Kill All Processes", move || {
+                  if let Err(e) = sender_clone.send("kill_all") {
+                      error!("Failed to send kill_all event: {}", e);
+                  }
+              }).map_err(|e| anyhow::anyhow!("Failed to add Kill All menu item: {}", e))?;
+              
+              let sender_clone = menu_sender.clone();
+              tray.add_menu_item("Quit", move || {
+                  if let Err(e) = sender_clone.send("quit") {
+                      error!("Failed to send quit event: {}", e);
+                  }
+              }).map_err(|e| anyhow::anyhow!("Failed to add Quit menu item: {}", e))?;
+              
+              // Main monitoring loop
+              let mut last_check = std::time::Instant::now();
+              
+              loop {
+                  // Check for menu events
+                  if let Ok(event) = menu_receiver.try_recv() {
+                      match event {
+                          "kill_all" => {
+                              info!("Kill All Processes clicked");
+                              let ports_to_kill = args.get_ports_to_monitor();
+                              if let Err(e) = kill_all_processes(&ports_to_kill, &args) {
+                                  error!("Failed to kill all processes: {}", e);
+                              } else {
+                                  println!("✅ All processes killed successfully");
+                              }
+                          }
+                          "quit" => {
+                              info!("Quit clicked, exiting...");
+                              break;
+                          }
+                          _ => {
+                              error!("Unknown menu event: {}", event);
+                          }
+                      }
+                  }
+                  
+                  // Update tray icon every 2 seconds
+                  if last_check.elapsed() >= Duration::from_secs(2) {
+                      match scan_processes(&args) {
+                          Ok(processes) => {
+                              let process_count = processes.len();
+                              
+                              // Update tray icon based on process count
+                              let status_info = StatusBarInfo::from_process_count(process_count);
+                              // Use a static string for the icon since IconSource::Resource requires 'static lifetime
+                              let icon_text = if process_count == 0 {
+                                  "0"
+                              } else if process_count <= 9 {
+                                  "1-9"
+                              } else {
+                                  "10+"
+                              };
+                              if let Err(e) = tray.set_icon(tray_item::IconSource::Resource(icon_text)) {
+                                  error!("Failed to update tray icon: {}", e);
+                              }
+                              
+                              // Update last check time
+                              last_check = std::time::Instant::now();
+                          }
+                          Err(e) => {
+                              error!("Failed to scan processes: {}", e);
+                          }
+                      }
+                  }
+                  
+                  // Sleep briefly to avoid busy waiting
+                  thread::sleep(Duration::from_millis(100));
+              }
+              
+              Ok(())
+          }
+
+          fn scan_processes(args: &Args) -> Result<HashMap<u16, ProcessInfo>> {
+              let mut processes = HashMap::new();
+              let ports_to_monitor = args.get_ports_to_monitor();
+              
+              for &port in &ports_to_monitor {
+                  if let Ok(process_info) = get_process_on_port(port) {
+                      processes.insert(port, process_info);
+                  }
+              }
+              
+              Ok(processes)
+          }
+
+          fn get_process_on_port(port: u16) -> Result<ProcessInfo> {
+              // Windows: Use netstat to find processes listening on the port
+              let output = std::process::Command::new("netstat")
+                  .args(&["-ano"])
+                  .output()
+                  .context("Failed to execute netstat command")?;
+
+              if output.status.success() {
+                  let stdout = String::from_utf8_lossy(&output.stdout);
+                  for line in stdout.lines() {
+                      let parts: Vec<&str> = line.split_whitespace().collect();
+                      if parts.len() >= 5 {
+                          // Extract port from local address (e.g., "0.0.0.0:3000")
+                          if let Some(port_str) = parts[1].split(':').last() {
+                              if let Ok(found_port) = port_str.parse::<u16>() {
+                                  if found_port == port {
+                                      // Extract PID from the last column
+                                      if let Ok(pid) = parts[4].parse::<i32>() {
+                                          return get_process_details(pid, port);
+                                      }
+                                  }
+                              }
+                          }
+                      }
+                  }
+              }
+
+              Err(anyhow::anyhow!("No process found on port {}", port))
+          }
+
+          fn get_process_details(pid: i32, port: u16) -> Result<ProcessInfo> {
+              // Get process name using tasklist
+              let output = std::process::Command::new("tasklist")
+                  .args(&["/FI", &format!("PID eq {}", pid), "/FO", "CSV", "/NH"])
+                  .output()
+                  .context("Failed to execute tasklist command")?;
+
+              let mut command = format!("PID {}", pid);
+              let mut name = format!("Unknown-{}", pid);
+
+              if output.status.success() {
+                  let stdout = String::from_utf8_lossy(&output.stdout);
+                  for line in stdout.lines() {
+                      if !line.trim().is_empty() {
+                          let parts: Vec<&str> = line.split(',').collect();
+                          if parts.len() >= 2 {
+                              name = parts[0].trim_matches('"').to_string();
+                              command = parts[0].trim_matches('"').to_string();
+                              break;
+                          }
+                      }
+                  }
+              }
+
+              Ok(ProcessInfo {
+                  pid,
+                  port,
+                  command: command.clone(),
+                  name,
+                  container_id: None,
+                  container_name: None,
+              })
+          }
+
+          fn kill_all_processes(ports: &[u16], args: &Args) -> Result<()> {
+              info!("Killing all processes on monitored ports...");
+              
+              for &port in ports {
+                  if let Ok(process_info) = get_process_on_port(port) {
+                      // Check if process should be ignored
+                      if let Some(ref ignore_ports) = args.ignore_ports {
+                          if ignore_ports.contains(&port) {
+                              info!("Ignoring process on port {} (in ignore list)", port);
+                              continue;
+                          }
+                      }
+                      
+                      if let Some(ref ignore_processes) = args.ignore_processes {
+                          let process_name_lower = process_info.name.to_lowercase();
+                          let is_name_ignored = ignore_processes.iter().any(|ignored: &String| {
+                              process_name_lower.contains(&ignored.to_lowercase())
+                          });
+                          
+                          if is_name_ignored {
+                              info!("Ignoring process {} on port {} (in ignore list)", process_info.name, port);
+                              continue;
+                          }
+                      }
+                      
+                      if let Err(e) = kill_single_process(process_info.pid, args) {
+                          error!("Failed to kill process {} on port {}: {}", process_info.name, port, e);
+                      } else {
+                          info!("Successfully killed process {} (PID {}) on port {}", process_info.name, process_info.pid, port);
+                      }
+                  }
+              }
+              
+              Ok(())
+          }
+
+          fn kill_single_process(pid: i32, _args: &Args) -> Result<()> {
+              let output = std::process::Command::new("taskkill")
+                  .args(&["/PID", &pid.to_string(), "/F"])
+                  .output()
+                  .context("Failed to execute taskkill command")?;
+
+              if output.status.success() {
+                  info!("Successfully killed process with PID {}", pid);
+                  Ok(())
+              } else {
+                  let stderr = String::from_utf8_lossy(&output.stderr);
+                  Err(anyhow::anyhow!("Failed to kill process {}: {}", pid, stderr))
+              }
+          }
+          "@ | Out-File -FilePath "src/main.windows.rs" -Encoding utf8
+
+          # Create a simple lib.rs
+          @"
+          pub mod types;
+          pub mod cli;
+          pub mod process_monitor;
+          "@ | Out-File -FilePath "src/lib.windows.rs" -Encoding utf8
+
+          # Backup and switch
+          Copy-Item "Cargo.toml" "Cargo.backup" -ErrorAction SilentlyContinue
+          Copy-Item "src/lib.rs" "src/lib.backup" -ErrorAction SilentlyContinue
+          Copy-Item "src/process_monitor.rs" "src/process_monitor.backup" -ErrorAction SilentlyContinue
+          Copy-Item "src/types.rs" "src/types.backup" -ErrorAction SilentlyContinue
+          Copy-Item "src/cli.rs" "src/cli.backup" -ErrorAction SilentlyContinue
+          Copy-Item "src/main_windows.rs" "src/main_windows.backup" -ErrorAction SilentlyContinue
+          
+          Copy-Item "Cargo.windows.toml" "Cargo.toml"
+          Copy-Item "src/lib.windows.rs" "src/lib.rs"
+          Copy-Item "src/process_monitor.windows.rs" "src/process_monitor.rs"
+          Copy-Item "src/types.windows.rs" "src/types.rs"
+          Copy-Item "src/cli.windows.rs" "src/cli.rs"
+          Copy-Item "src/main.windows.rs" "src/main_windows.rs"
+
+          # Build Windows binary
+          cargo build --release --bin port-kill
+
+          # Restore
+          Copy-Item "Cargo.backup" "Cargo.toml" -ErrorAction SilentlyContinue
+          Copy-Item "src/lib.backup" "src/lib.rs" -ErrorAction SilentlyContinue
+          Copy-Item "src/process_monitor.backup" "src/process_monitor.rs" -ErrorAction SilentlyContinue
+          Copy-Item "src/types.backup" "src/types.rs" -ErrorAction SilentlyContinue
+          Copy-Item "src/cli.backup" "src/cli.rs" -ErrorAction SilentlyContinue
+          Copy-Item "src/main_windows.backup" "src/main_windows.rs" -ErrorAction SilentlyContinue
+          
+          # Clean up
+          Remove-Item "Cargo.windows.toml" -ErrorAction SilentlyContinue
+          Remove-Item "src/lib.windows.rs" -ErrorAction SilentlyContinue
+          Remove-Item "src/process_monitor.windows.rs" -ErrorAction SilentlyContinue
+          Remove-Item "src/types.windows.rs" -ErrorAction SilentlyContinue
+          Remove-Item "src/cli.windows.rs" -ErrorAction SilentlyContinue
+          Remove-Item "src/main.windows.rs" -ErrorAction SilentlyContinue
+          Remove-Item "Cargo.backup" -ErrorAction SilentlyContinue
+          Remove-Item "src/lib.backup" -ErrorAction SilentlyContinue
+          Remove-Item "src/process_monitor.backup" -ErrorAction SilentlyContinue
+          Remove-Item "src/types.backup" -ErrorAction SilentlyContinue
+          Remove-Item "src/cli.backup" -ErrorAction SilentlyContinue
+          Remove-Item "src/main_windows.backup" -ErrorAction SilentlyContinue
+        shell: pwsh
+
+      - name: Test Windows binary
+        run: |
+          # Check if binaries exist
+          if (Test-Path ".\target\release\port-kill.exe") { 
+            Write-Host "✅ port-kill.exe found" 
+          } else { 
+            Write-Host "❌ port-kill.exe NOT found"
+            Get-ChildItem ".\target\release\" -Name
+            exit 1
+          }
+          
+          if (Test-Path ".\target\release\port-kill-console.exe") { 
+            Write-Host "✅ port-kill-console.exe found" 
+          } else { 
+            Write-Host "❌ port-kill-console.exe NOT found"
+            Get-ChildItem ".\target\release\" -Name
+            exit 1
+          }
+          
+          # Test the binaries
+          Write-Host "Testing port-kill.exe --help..."
+          .\target\release\port-kill.exe --help
+          
+          Write-Host "Testing port-kill-console.exe --help..."
+          .\target\release\port-kill-console.exe --help
+        shell: pwsh
+
+  test-console-mode:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Build console binary
+        run: |
+          # Enable detailed logging
+          export RUST_LOG=debug
+          export RUST_BACKTRACE=1
+          
+          # Show environment info
+          echo "=== Environment Info ==="
+          echo "Rust version: $(rustc --version)"
+          echo "Cargo version: $(cargo --version)"
+          echo "Current directory: $(pwd)"
+          echo "Files in current directory:"
+          ls -la
+          
+          echo "=== Building console binary ==="
+          cargo build --release --bin port-kill-console --verbose
+          
+          echo "=== Build completed. Checking binary ==="
+          ls -la ./target/release/port-kill-console
+          
+          # Check binary details
+          echo "=== Binary details ==="
+          file ./target/release/port-kill-console
+          ldd ./target/release/port-kill-console 2>/dev/null || echo "ldd not available"
+          
+          # Try a simple test first
+          echo "=== Testing basic execution ==="
+          timeout 5s ./target/release/port-kill-console --version || echo "Version test failed, continuing..."
+
+      - name: Test console mode
+        run: |
+          # Enable detailed logging
+          export RUST_LOG=debug
+          export RUST_BACKTRACE=1
+          
+          # Check if binary exists and is executable
+          echo "=== Checking binary existence and permissions ==="
+          ls -la ./target/release/port-kill-console
+          
+          # Check binary type
+          echo "Checking binary type..."
+          file ./target/release/port-kill-console
+          
+          # Simple test - just check if binary can be executed
+          echo "Testing basic execution..."
+          if ./target/release/port-kill-console --version > /dev/null 2>&1; then
+            echo "✅ Basic execution test passed"
+          else
+            echo "❌ Basic execution test failed"
+            echo "Trying to get more info..."
+            ./target/release/port-kill-console --version
+            exit 1
+          fi
+          
+          # Test help command
+          echo "Testing --help command..."
+          if ./target/release/port-kill-console --help > /dev/null 2>&1; then
+            echo "✅ --help command succeeded"
+          else
+            echo "❌ --help command failed"
+            exit 1
+          fi
+          
+          # Test version command
+          echo "Testing --version command..."
+          if ./target/release/port-kill-console --version > /dev/null 2>&1; then
+            echo "✅ --version command succeeded"
+          else
+            echo "❌ --version command failed"
+            exit 1
+          fi
+          
+          echo "Console mode test completed successfully!"

@@ -1,12 +1,14 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ProcessInfo {
     pub pid: i32,
     pub port: u16,
     pub command: String,
     pub name: String,
+    pub container_id: Option<String>,
+    pub container_name: Option<String>,
 }
 
 #[derive(Debug, Clone)]

@@ -1,0 +1,286 @@
+name: Build and Release
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Build macOS binary
+        run: |
+          chmod +x ./build-macos.sh
+          ./build-macos.sh
+
+      - name: Upload macOS binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: port-kill-macos
+          path: |
+            target/release/port-kill
+            target/release/port-kill-console
+          retention-days: 30
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libatk1.0-dev libgdk-pixbuf2.0-dev libgtk-3-dev libxdo-dev pkg-config
+
+      - name: Build Linux binary
+        run: |
+          chmod +x ./build-linux.sh
+          ./build-linux.sh
+
+      - name: Upload Linux binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: port-kill-linux
+          path: |
+            target/release/port-kill
+            target/release/port-kill-console
+          retention-days: 30
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Build Windows binary
+        run: |
+          # Create Windows-specific Cargo.toml
+          @"
+          [package]
+          name = "port-kill"
+          version = "0.1.0"
+          edition = "2021"
+
+          [[bin]]
+          name = "port-kill"
+          path = "src/main_windows.rs"
+
+          [[bin]]
+          name = "port-kill-console"
+          path = "src/main_console.rs"
+
+          [dependencies]
+          # Core dependencies (platform-agnostic)
+          crossbeam-channel = "0.5"
+          tokio = { version = "1.0", features = ["full"] }
+          serde = { version = "1.0", features = ["derive"] }
+          serde_json = "1.0"
+          anyhow = "1.0"
+          thiserror = "1.0"
+          log = "0.4"
+          env_logger = "0.10"
+          clap = { version = "4.0", features = ["derive"] }
+
+          # Windows-specific tray support
+          tray-item = "0.10.0"
+          "@ | Out-File -FilePath "Cargo.windows.toml" -Encoding utf8
+
+          # Create Windows-specific lib.rs
+          @"
+          pub mod console_app;
+          pub mod process_monitor;
+          pub mod types;
+          pub mod cli;
+
+          // Exclude macOS/Linux-specific modules for Windows build
+          // pub mod app;
+          // pub mod tray_menu;
+          "@ | Out-File -FilePath "src/lib.windows.rs" -Encoding utf8
+
+          # Backup current files
+          if (Test-Path "Cargo.toml") { Copy-Item "Cargo.toml" "Cargo.macos.toml.backup" }
+          if (Test-Path "src/lib.rs") { Copy-Item "src/lib.rs" "src/lib.macos.rs.backup" }
+
+          # Switch to Windows configuration
+          Copy-Item "Cargo.windows.toml" "Cargo.toml"
+          Copy-Item "src/lib.windows.rs" "src/lib.rs"
+
+          # Build the Windows version
+          echo "Building Windows binaries..."
+          cargo build --release --verbose
+
+          # Clean up temporary files
+          Remove-Item "Cargo.windows.toml" -ErrorAction SilentlyContinue
+          Remove-Item "src/lib.windows.rs" -ErrorAction SilentlyContinue
+
+          # Restore macOS configuration
+          if (Test-Path "Cargo.macos.toml.backup") { Copy-Item "Cargo.macos.toml.backup" "Cargo.toml" }
+          if (Test-Path "src/lib.macos.rs.backup") { Copy-Item "src/lib.macos.rs.backup" "src/lib.rs" }
+        shell: pwsh
+
+      - name: Upload Windows binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: port-kill-windows
+          path: |
+            target/release/port-kill.exe
+            target/release/port-kill-console.exe
+          retention-days: 30
+
+  create-release:
+    needs: [build-macos, build-linux, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create release assets
+        run: |
+          # Create directories for each platform
+          mkdir -p release-assets
+          
+          # macOS assets
+          cd artifacts/port-kill-macos
+          tar -czf ../../release-assets/port-kill-macos.tar.gz port-kill port-kill-console
+          cd ../..
+          
+          # Linux assets
+          cd artifacts/port-kill-linux
+          tar -czf ../../release-assets/port-kill-linux.tar.gz port-kill port-kill-console
+          cd ../..
+          
+          # Windows assets
+          cd artifacts/port-kill-windows
+          zip -r ../../release-assets/port-kill-windows.zip port-kill.exe port-kill-console.exe
+          cd ../..
+          
+          # Create individual binary files for direct download
+          cp artifacts/port-kill-macos/port-kill release-assets/port-kill-macos
+          cp artifacts/port-kill-macos/port-kill-console release-assets/port-kill-console-macos
+          cp artifacts/port-kill-linux/port-kill release-assets/port-kill-linux
+          cp artifacts/port-kill-linux/port-kill-console release-assets/port-kill-console-linux
+          cp artifacts/port-kill-windows/port-kill.exe release-assets/port-kill-windows.exe
+          cp artifacts/port-kill-windows/port-kill-console.exe release-assets/port-kill-console-windows.exe
+          
+          # Make binaries executable
+          chmod +x release-assets/port-kill-macos
+          chmod +x release-assets/port-kill-console-macos
+          chmod +x release-assets/port-kill-linux
+          chmod +x release-assets/port-kill-console-linux
+
+      - name: Upload release assets
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./release-assets/port-kill-macos.tar.gz
+          asset_name: port-kill-macos.tar.gz
+          asset_content_type: application/gzip
+
+      - name: Upload macOS console binary
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./release-assets/port-kill-console-macos
+          asset_name: port-kill-console-macos
+          asset_content_type: application/octet-stream
+
+      - name: Upload Linux binary
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./release-assets/port-kill-linux.tar.gz
+          asset_name: port-kill-linux.tar.gz
+          asset_content_type: application/gzip
+
+      - name: Upload Linux console binary
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./release-assets/port-kill-console-linux
+          asset_name: port-kill-console-linux
+          asset_content_type: application/octet-stream
+
+      - name: Upload Windows binary
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./release-assets/port-kill-windows.zip
+          asset_name: port-kill-windows.zip
+          asset_content_type: application/zip
+
+      - name: Upload Windows console binary
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./release-assets/port-kill-console-windows.exe
+          asset_name: port-kill-console-windows.exe
+          asset_content_type: application/octet-stream
+
+      - name: Upload macOS binary (direct)
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./release-assets/port-kill-macos
+          asset_name: port-kill-macos
+          asset_content_type: application/octet-stream
+
+      - name: Upload Linux binary (direct)
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./release-assets/port-kill-linux
+          asset_name: port-kill-linux
+          asset_content_type: application/octet-stream
+
+      - name: Upload Windows binary (direct)
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./release-assets/port-kill-windows.exe
+          asset_name: port-kill-windows.exe
+          asset_content_type: application/octet-stream
