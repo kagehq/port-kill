@@ -34,8 +34,6 @@
                     pkgs.fenix.stable.cargo
                     pkgs.fenix.stable.clippy
                     pkgs.fenix.stable.rustfmt
-                    pkgs.fenix.targets.wasm32-unknown-unknown.stable.rust-std
-                    # pkgs.fenix.targets.x86_64-unknown-linux-musl.stable.rust-std
                 ];
                 rustPlatform = pkgs.makeRustPlatform {
                     rustc = rustToolchain;
@@ -44,9 +42,6 @@
                 nativeBuildInputs = [
                     pkgs.clang
                     pkgs.libiconv
-                    pkgs.trunk
-                    pkgs.wasm-bindgen-cli
-                    pkgs.wasm-pack
                     pkgs.pkg-config
                 ];
                 shellHook = ''
