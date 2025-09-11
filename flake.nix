@@ -24,7 +24,7 @@
                     ];
                     config = {
                         allowUnfree = true;
-                        allowInsecure = true;
+                        allowInsecure = false;
                         permittedInsecurePackages = [
                         ];
                     };
