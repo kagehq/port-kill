@@ -40,6 +40,7 @@ Join our Discord community for discussions, support, and updates:
 - **Bulk Process Killing**: Kill all detected processes with one click
 - **Ignore Configuration**: Exclude system processes (Chromecast, AirDrop, etc.)
 - **Docker Integration**: Display container names and IDs for Docker processes
+- **Verbose Mode**: Detailed process information including command line, working directory, and PID for better process identification
 
 ## Status Bar Icon
 
@@ -334,6 +335,35 @@ run-windows.bat -p 3000,3001,8000,8080              # Windows
 ./run.sh --verbose --ports 3000,8000
 ```
 
+#### Verbose Mode
+
+The `--verbose` flag provides detailed process information to help you identify the right processes to kill:
+
+**What you get in verbose mode:**
+- **Command Line**: Full command with arguments (e.g., `Python -m http.server 8000`)
+- **Working Directory**: Process working directory (e.g., `- dantelex/my-project`)
+- **Process ID**: Always shown for better identification
+- **Debug Logging**: Detailed internal logging for troubleshooting
+
+**Example output:**
+```bash
+# Basic mode
+Port 3000: node server.js (PID 1234)
+
+# Verbose mode
+Port 3000: node server.js (PID 1234) - dantelex/my-project
+Port 8000: Python -m http.server 8000 (PID 5678) - dantelex/port-kill
+```
+
+**Usage:**
+```bash
+# Console mode with verbose output
+./run.sh --console --ports 3000,8000 --verbose
+
+# Tray mode with verbose menu items
+./run.sh --ports 3000,8000 --verbose
+```
+
 #### Docker Integration
 ```bash
 # Monitor ports including Docker containers
@@ -382,7 +412,7 @@ run-windows.bat -p 3000,3001,8000,8080              # Windows
 - `--ignore-ports`: Ports to ignore (comma-separated, e.g., 5353,5000,7000 for Chromecast/AirDrop)
 - `--ignore-processes`: Process names to ignore (comma-separated, e.g., Chrome,ControlCe)
 - `--console, -c`: Run in console mode instead of status bar mode
-- `--verbose, -v`: Enable verbose logging (overrides --log-level)
+- `--verbose, -v`: Enable verbose mode with detailed process information (command line, working directory, PID) and debug logging
 - `--log-level`: Control logging verbosity (info, warn, error, none) (default: info)
 - `--docker, -d`: Enable Docker container monitoring (includes containers in process detection)
 - `--show-pid, -P`: Show process IDs (PIDs) in the display output
