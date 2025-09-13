@@ -341,7 +341,7 @@ The `--verbose` flag provides detailed process information to help you identify 
 
 **What you get in verbose mode:**
 - **Command Line**: Full command with arguments (e.g., `Python -m http.server 8000`)
-- **Working Directory**: Process working directory (e.g., `- dantelex/my-project`)
+- **Working Directory**: Process working directory (e.g., `- ~/my-project`)
 - **Process ID**: Always shown for better identification
 - **Debug Logging**: Detailed internal logging for troubleshooting
 
@@ -351,8 +351,8 @@ The `--verbose` flag provides detailed process information to help you identify 
 Port 3000: node server.js (PID 1234)
 
 # Verbose mode
-Port 3000: node server.js (PID 1234) - dantelex/my-project
-Port 8000: Python -m http.server 8000 (PID 5678) - dantelex/port-kill
+Port 3000: node server.js (PID 1234) - ~/port-kill
+Port 8000: Python -m http.server 8000 (PID 5678) - ~/port-kill
 ```
 
 **Usage:**
