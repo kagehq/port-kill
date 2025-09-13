@@ -180,8 +180,8 @@ impl ProcessMonitor {
             name,
             container_id,
             container_name,
-            command_line,
-            working_directory,
+            command_line: command_line,
+            working_directory: working_directory,
         })
     }
 
@@ -215,8 +215,8 @@ impl ProcessMonitor {
                             name: name_without_ext.to_string(),
                             container_id: None,
                             container_name: None,
-                            command_line,
-                            working_directory,
+                            command_line: command_line,
+                            working_directory: working_directory,
                         });
                     }
                     // Get verbose information only if verbose mode is enabled
@@ -233,8 +233,8 @@ impl ProcessMonitor {
                         name: name.to_string(),
                         container_id: None,
                         container_name: None,
-                        command_line,
-                        working_directory,
+                        command_line: command_line,
+                        working_directory: working_directory,
                     });
                 }
             }
@@ -260,10 +260,10 @@ impl ProcessMonitor {
             port,
             command: command.clone(),
             name: command,
-            container_id,
-            container_name,
-            command_line,
-            working_directory,
+            container_id: container_id,
+            container_name: container_name,
+            command_line: command_line,
+            working_directory: working_directory,
         })
     }
 
