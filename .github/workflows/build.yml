@@ -366,6 +366,8 @@ jobs:
                       name,
                       container_id: None,
                       container_name: None,
+                      command_line: None,
+                      working_directory: None,
                   })
               }
 
@@ -703,6 +705,8 @@ jobs:
                       name,
                       container_id: None,
                       container_name: None,
+                      command_line: None,
+                      working_directory: None,
                   })
               }
 
@@ -933,6 +937,8 @@ jobs:
                   name,
                   container_id: None,
                   container_name: None,
+                  command_line: None,
+                  working_directory: None,
               })
           }
 
