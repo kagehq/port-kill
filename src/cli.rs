@@ -204,6 +204,7 @@ mod tests {
             verbose: false,
             docker: false,
             show_pid: false,
+            log_level: LogLevel::Info,
         };
         
         let ports = args.get_ports_to_monitor();
@@ -222,6 +223,7 @@ mod tests {
             verbose: false,
             docker: false,
             show_pid: false,
+            log_level: LogLevel::Info,
         };
         
         let ports = args.get_ports_to_monitor();
@@ -240,6 +242,7 @@ mod tests {
             verbose: false,
             docker: false,
             show_pid: false,
+            log_level: LogLevel::Info,
         };
         
         let ignore_ports = args.get_ignore_ports_set();
@@ -258,6 +261,7 @@ mod tests {
             verbose: false,
             docker: false,
             show_pid: false,
+            log_level: LogLevel::Info,
         };
         
         let ignore_processes = args.get_ignore_processes_set();
@@ -276,6 +280,7 @@ mod tests {
             verbose: false,
             docker: false,
             show_pid: false,
+            log_level: LogLevel::Info,
         };
         
         assert_eq!(args.get_port_description(), "port range: 2000-6000 (ignoring ports: 5353, 5000, ignoring processes: Chrome, ControlCe)");
@@ -293,6 +298,7 @@ mod tests {
             verbose: false,
             docker: false,
             show_pid: false,
+            log_level: LogLevel::Info,
         };
         
         assert_eq!(args.get_port_description(), "port range: 3000-3010");
@@ -310,6 +316,7 @@ mod tests {
             verbose: false,
             docker: false,
             show_pid: false,
+            log_level: LogLevel::Info,
         };
         
         assert_eq!(args.get_port_description(), "specific ports: 3000, 8000, 8080");
@@ -327,6 +334,7 @@ mod tests {
             verbose: false,
             docker: false,
             show_pid: false,
+            log_level: LogLevel::Info,
         };
         
         assert!(args.validate().is_ok());
@@ -344,6 +352,7 @@ mod tests {
             verbose: false,
             docker: false,
             show_pid: false,
+            log_level: LogLevel::Info,
         };
         
         assert!(args.validate().is_err());
@@ -361,6 +370,7 @@ mod tests {
             verbose: false,
             docker: false,
             show_pid: false,
+            log_level: LogLevel::Info,
         };
         
         assert!(args.validate().is_err());
@@ -378,6 +388,7 @@ mod tests {
             verbose: false,
             docker: false,
             show_pid: false,
+            log_level: LogLevel::Info,
         };
         
         assert!(args.validate().is_err());
@@ -395,6 +406,7 @@ mod tests {
             verbose: false,
             docker: false,
             show_pid: false,
+            log_level: LogLevel::Info,
         };
         
         assert!(args.validate().is_err());
