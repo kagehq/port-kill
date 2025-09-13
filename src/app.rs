@@ -374,6 +374,7 @@ impl PortKillApp {
                             let should_ignore = ignore_ports.contains(&port) || ignore_processes.contains(&name);
                             
                             if !should_ignore {
+                        log::debug!("Creating ProcessInfo (app.rs) for PID {} on port {} with command_line: None, working_directory: None", pid, port);
                         processes.insert(port, crate::types::ProcessInfo {
                             pid,
                             port,

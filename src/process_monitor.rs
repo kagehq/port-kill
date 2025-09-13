@@ -1,6 +1,9 @@
 use crate::types::{ProcessInfo, ProcessUpdate};
 use anyhow::{Context, Result};
 use crossbeam_channel::Sender;
+
+// Debug: Track which version of process_monitor.rs is being used
+log::debug!("process_monitor.rs loaded - all ProcessInfo initializations should include command_line and working_directory fields");
 use log::{error, info};
 #[cfg(not(target_os = "windows"))]
 use log::warn;
@@ -173,6 +176,7 @@ impl ProcessMonitor {
             (None, None)
         };
 
+        log::debug!("Creating ProcessInfo for PID {} on port {} with command_line: {:?}, working_directory: {:?}", pid, port, command_line, working_directory);
         Ok(ProcessInfo {
             pid,
             port,
@@ -208,6 +212,7 @@ impl ProcessMonitor {
                             (None, None)
                         };
                         
+                        log::debug!("Creating ProcessInfo (Windows) for PID {} on port {} with command_line: {:?}, working_directory: {:?}", pid, port, command_line, working_directory);
                         return Ok(ProcessInfo {
                             pid,
                             port,
@@ -226,6 +231,7 @@ impl ProcessMonitor {
                         (None, None)
                     };
                     
+                    log::debug!("Creating ProcessInfo (Windows fallback) for PID {} on port {} with command_line: {:?}, working_directory: {:?}", pid, port, command_line, working_directory);
                     return Ok(ProcessInfo {
                         pid,
                         port,
@@ -255,6 +261,7 @@ impl ProcessMonitor {
         // Get verbose information
         let (command_line, working_directory) = self.get_process_verbose_info_windows(pid).await;
 
+        log::debug!("Creating ProcessInfo (Windows final) for PID {} on port {} with command_line: {:?}, working_directory: {:?}", pid, port, command_line, working_directory);
         Ok(ProcessInfo {
             pid,
             port,
@@ -707,6 +714,7 @@ pub fn get_processes_on_ports(ports: &[u16], args: &crate::cli::Args) -> (usize,
                         let should_ignore = ignore_ports.contains(&port) || ignore_processes.contains(&name);
                         
                         if !should_ignore {
+                            log::debug!("Creating ProcessInfo (lsof fallback) for PID {} on port {} with command_line: None, working_directory: None", pid, port);
                             processes.insert(port, crate::types::ProcessInfo {
                                 pid,
                                 port,
