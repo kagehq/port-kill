@@ -653,7 +653,8 @@ impl ProcessMonitor {
     }
 }
 
-// Platform-agnostic process management functions
+    // Platform-agnostic process management functions
+    // Note: All ProcessInfo initializations include command_line and working_directory fields
 pub fn get_processes_on_ports(ports: &[u16], args: &crate::cli::Args) -> (usize, std::collections::HashMap<u16, crate::types::ProcessInfo>) {
     // If verbose mode is enabled, use ProcessMonitor to get detailed information
     if args.verbose {
