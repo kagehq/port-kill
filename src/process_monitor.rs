@@ -1,9 +1,6 @@
 use crate::types::{ProcessInfo, ProcessUpdate};
 use anyhow::{Context, Result};
 use crossbeam_channel::Sender;
-
-// Debug: Track which version of process_monitor.rs is being used
-log::debug!("process_monitor.rs loaded - all ProcessInfo initializations should include command_line and working_directory fields");
 use log::{error, info};
 #[cfg(not(target_os = "windows"))]
 use log::warn;
