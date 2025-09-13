@@ -13,26 +13,24 @@ use tray_icon::{
 #[derive(Clone)]
 pub struct TrayMenu {
     pub icon: Icon,
-    menu_sender: Sender<MenuEvent>,
     current_processes: HashMap<u16, ProcessInfo>,
     show_pid: bool,
 }
 
 #[cfg(target_os = "macos")]
 impl TrayMenu {
-    pub fn new(menu_sender: Sender<MenuEvent>) -> Result<Self> {
+    pub fn new(_menu_sender: Sender<MenuEvent>) -> Result<Self> {
         // Create a simple icon (we'll use a text-based approach for now)
         let icon = Self::create_icon("0")?;
 
         // Set up menu event handling
-        let sender_clone = menu_sender.clone();
+        let sender_clone = _menu_sender.clone();
         MenuEvent::set_event_handler(Some(move |event| {
             let _ = sender_clone.send(event);
         }));
 
         Ok(Self {
             icon,
-            menu_sender,
             current_processes: HashMap::new(),
             show_pid: false,
         })

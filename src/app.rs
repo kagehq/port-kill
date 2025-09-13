@@ -1,7 +1,6 @@
 use crate::{
-    process_monitor::ProcessMonitor,
     tray_menu::TrayMenu,
-    types::{ProcessUpdate, StatusBarInfo},
+    types::StatusBarInfo,
     cli::Args,
 };
 use std::collections::HashMap;
@@ -9,7 +8,6 @@ use anyhow::Result;
 use crossbeam_channel::{bounded, Receiver};
 use log::{error, info, warn};
 use std::sync::Arc;
-use tokio::sync::Mutex;
 use std::sync::Mutex as StdMutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 #[cfg(target_os = "macos")]
@@ -25,8 +23,6 @@ use winit::event_loop::EventLoop;
 pub struct PortKillApp {
     tray_icon: Arc<StdMutex<Option<TrayIcon>>>,
     menu_event_receiver: Receiver<MenuEvent>,
-    process_monitor: Arc<Mutex<ProcessMonitor>>,
-    update_receiver: Receiver<ProcessUpdate>,
     tray_menu: TrayMenu,
     args: Args,
     current_processes: Arc<StdMutex<HashMap<u16, crate::types::ProcessInfo>>>,
@@ -36,11 +32,7 @@ pub struct PortKillApp {
 impl PortKillApp {
     pub fn new(args: Args) -> Result<Self> {
         // Create channels for communication
-        let (update_sender, update_receiver) = bounded(100);
         let (menu_sender, menu_event_receiver) = bounded(100);
-
-        // Create process monitor with configurable ports
-        let process_monitor = Arc::new(Mutex::new(ProcessMonitor::new(update_sender, args.get_ports_to_monitor(), args.docker, args.verbose)?));
 
         // Create tray menu
         let tray_menu = TrayMenu::new(menu_sender)?;
@@ -48,8 +40,6 @@ impl PortKillApp {
         Ok(Self {
             tray_icon: Arc::new(StdMutex::new(None)),
             menu_event_receiver,
-            process_monitor,
-            update_receiver,
             tray_menu,
             args,
             current_processes: Arc::new(StdMutex::new(HashMap::new())),
