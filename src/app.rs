@@ -40,7 +40,7 @@ impl PortKillApp {
         let (menu_sender, menu_event_receiver) = bounded(100);
 
         // Create process monitor with configurable ports
-        let process_monitor = Arc::new(Mutex::new(ProcessMonitor::new(update_sender, args.get_ports_to_monitor(), args.docker)?));
+        let process_monitor = Arc::new(Mutex::new(ProcessMonitor::new(update_sender, args.get_ports_to_monitor(), args.docker, args.verbose)?));
 
         // Create tray menu
         let tray_menu = TrayMenu::new(menu_sender)?;
@@ -207,13 +207,27 @@ impl PortKillApp {
                 last_check = std::time::Instant::now();
                 
                 // Get detailed process information with crash-safe approach
-                let (process_count, processes) = match std::panic::catch_unwind(|| {
-                    Self::get_processes_on_ports(&args.get_ports_to_monitor(), &args)
-                }) {
-                    Ok(result) => result,
-                    Err(e) => {
-                        error!("Panic caught while getting processes: {:?}", e);
-                        (0, HashMap::new())
+                let (process_count, processes) = if args.verbose {
+                    // Use ProcessMonitor for verbose information
+                    match std::panic::catch_unwind(|| {
+                        Self::get_processes_on_ports_verbose(&args.get_ports_to_monitor(), &args)
+                    }) {
+                        Ok(result) => result,
+                        Err(e) => {
+                            error!("Panic caught while getting verbose processes: {:?}", e);
+                            (0, HashMap::new())
+                        }
+                    }
+                } else {
+                    // Use simple process detection for non-verbose mode
+                    match std::panic::catch_unwind(|| {
+                        Self::get_processes_on_ports(&args.get_ports_to_monitor(), &args)
+                    }) {
+                        Ok(result) => result,
+                        Err(e) => {
+                            error!("Panic caught while getting processes: {:?}", e);
+                            (0, HashMap::new())
+                        }
                     }
                 };
                 
@@ -283,7 +297,7 @@ impl PortKillApp {
                             if !valid_processes.is_empty() {
                                 // Use a try-catch approach to prevent crashes
                                 match std::panic::catch_unwind(|| {
-                                    TrayMenu::create_menu(&valid_processes, args.show_pid)
+                                    TrayMenu::create_menu_with_verbose(&valid_processes, args.show_pid, args.verbose)
                                 }) {
                                     Ok(Ok(new_menu)) => {
                                         // Set the new menu on the tray icon
@@ -314,6 +328,25 @@ impl PortKillApp {
         })?;
 
         Ok(())
+    }
+
+    pub fn get_processes_on_ports_verbose(ports: &[u16], args: &Args) -> (usize, HashMap<u16, crate::types::ProcessInfo>) {
+        use crate::process_monitor::ProcessMonitor;
+        use crossbeam_channel::bounded;
+        use std::collections::HashMap;
+        
+        // Create a temporary ProcessMonitor to get verbose information
+        let (update_sender, _update_receiver) = bounded(100);
+        if let Ok(process_monitor) = ProcessMonitor::new(update_sender, ports.to_vec(), args.docker, args.verbose) {
+            // Use tokio runtime to run the async scan_processes method
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            match rt.block_on(process_monitor.scan_processes()) {
+                Ok(processes) => (processes.len(), processes),
+                Err(_) => (0, HashMap::new())
+            }
+        } else {
+            (0, HashMap::new())
+        }
     }
 
     pub fn get_processes_on_ports(ports: &[u16], args: &Args) -> (usize, HashMap<u16, crate::types::ProcessInfo>) {
@@ -351,14 +384,16 @@ impl PortKillApp {
                             let should_ignore = ignore_ports.contains(&port) || ignore_processes.contains(&name);
                             
                             if !should_ignore {
-                                processes.insert(port, crate::types::ProcessInfo {
-                                    pid,
-                                    port,
-                                    command,
-                                    name,
-                                    container_id: None,
-                                    container_name: None,
-                                });
+                        processes.insert(port, crate::types::ProcessInfo {
+                            pid,
+                            port,
+                            command,
+                            name,
+                            container_id: None,
+                            container_name: None,
+                            command_line: None,
+                            working_directory: None,
+                        });
                             } else {
                                 info!("Ignoring process {} (PID {}) on port {} (ignored by user configuration)", name, pid, port);
                             }

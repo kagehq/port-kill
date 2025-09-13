@@ -22,7 +22,8 @@ impl ConsolePortKillApp {
         let (update_sender, update_receiver) = bounded(100);
 
         // Create process monitor with configurable ports
-        let process_monitor = Arc::new(Mutex::new(ProcessMonitor::new(update_sender, args.get_ports_to_monitor(), args.docker)?));
+        println!("DEBUG: Creating ProcessMonitor with verbose={}", args.verbose);
+        let process_monitor = Arc::new(Mutex::new(ProcessMonitor::new(update_sender, args.get_ports_to_monitor(), args.docker, args.verbose)?));
 
         Ok(Self {
             process_monitor,
@@ -71,7 +72,28 @@ impl ConsolePortKillApp {
                 if filtered_count > 0 {
                     println!("📋 Detected Processes (after filtering ignored):");
                     for (port, process_info) in &filtered_processes {
-                        if let (Some(_container_id), Some(container_name)) = (&process_info.container_id, &process_info.container_name) {
+                        if self.args.verbose {
+                            // Verbose mode: show command line and working directory
+                            let mut parts = vec![format!("   • Port {}: {}", port, process_info.name)];
+                            
+                            if let Some(ref cmd_line) = process_info.command_line {
+                                parts.push(format!("({})", cmd_line));
+                            }
+                            
+                            if self.args.show_pid {
+                                parts.push(format!("(PID {})", process_info.pid));
+                            }
+                            
+                             if let Some(ref work_dir) = process_info.working_directory {
+                                 parts.push(format!("- {}", work_dir));
+                             }
+                            
+                            if let (Some(_container_id), Some(container_name)) = (&process_info.container_id, &process_info.container_name) {
+                                parts.push(format!("[Docker: {}]", container_name));
+                            }
+                            
+                            println!("{}", parts.join(" "));
+                        } else if let (Some(_container_id), Some(container_name)) = (&process_info.container_id, &process_info.container_name) {
                             println!("   • Port {}: {} - {} [Docker: {}]", 
                                     port, process_info.name, process_info.command, container_name);
                         } else if self.args.show_pid {

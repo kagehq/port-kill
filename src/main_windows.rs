@@ -140,7 +140,28 @@ fn run_windows_tray_mode(args: Args) -> Result<()> {
                 if process_count > 0 {
                     println!("📋 Detected Processes:");
                     for (port, process_info) in &processes {
-                        if let (Some(_container_id), Some(container_name)) = (&process_info.container_id, &process_info.container_name) {
+                        if args.verbose {
+                            // Verbose mode: show command line and working directory
+                            let mut parts = vec![format!("   • Port {}: {}", port, process_info.name)];
+                            
+                            if let Some(ref cmd_line) = process_info.command_line {
+                                parts.push(format!("({})", cmd_line));
+                            }
+                            
+                            if args.show_pid {
+                                parts.push(format!("(PID {})", process_info.pid));
+                            }
+                            
+                            if let Some(ref work_dir) = process_info.working_directory {
+                                parts.push(format!("- {}", work_dir));
+                            }
+                            
+                            if let (Some(_container_id), Some(container_name)) = (&process_info.container_id, &process_info.container_name) {
+                                parts.push(format!("[Docker: {}]", container_name));
+                            }
+                            
+                            println!("{}", parts.join(" "));
+                        } else if let (Some(_container_id), Some(container_name)) = (&process_info.container_id, &process_info.container_name) {
                             println!("   • Port {}: {} [Docker: {}]", port, process_info.name, container_name);
                         } else if args.show_pid {
                             println!("   • Port {}: {} (PID {})", port, process_info.name, process_info.pid);

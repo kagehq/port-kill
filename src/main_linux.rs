@@ -108,7 +108,7 @@ async fn start_tray_mode(args: Args) -> Result<()> {
     menu.append(&separator);
     
     // Add process-specific submenu (will be updated dynamically)
-    let process_menu = create_process_menu(&args, &HashMap::new());
+        let process_menu = create_process_menu_with_verbose(&args, &HashMap::new(), args.verbose);
     let process_root = MenuItem::with_label("Processes");
     process_root.set_submenu(Some(&process_menu));
     menu.append(&process_root);
@@ -164,7 +164,28 @@ async fn start_tray_mode(args: Args) -> Result<()> {
         if process_count > 0 {
             println!("📋 Detected Processes:");
             for (port, process_info) in &processes {
-                if let (Some(_container_id), Some(container_name)) = (&process_info.container_id, &process_info.container_name) {
+                if args_clone.verbose {
+                    // Verbose mode: show command line and working directory
+                    let mut parts = vec![format!("   • Port {}: {}", port, process_info.name)];
+                    
+                    if let Some(ref cmd_line) = process_info.command_line {
+                        parts.push(format!("({})", cmd_line));
+                    }
+                    
+                    if args_clone.show_pid {
+                        parts.push(format!("(PID {})", process_info.pid));
+                    }
+                    
+                    if let Some(ref work_dir) = process_info.working_directory {
+                        parts.push(format!("- {}", work_dir));
+                    }
+                    
+                    if let (Some(_container_id), Some(container_name)) = (&process_info.container_id, &process_info.container_name) {
+                        parts.push(format!("[Docker: {}]", container_name));
+                    }
+                    
+                    println!("{}", parts.join(" "));
+                } else if let (Some(_container_id), Some(container_name)) = (&process_info.container_id, &process_info.container_name) {
                     println!("   • Port {}: {} [Docker: {}]", port, process_info.name, container_name);
                 } else if args_clone.show_pid {
                     println!("   • Port {}: {} (PID {})", port, process_info.name, process_info.pid);
@@ -190,6 +211,11 @@ async fn start_tray_mode(args: Args) -> Result<()> {
 
 /// Create a dynamic menu for processes
 fn create_process_menu(args: &Args, processes: &HashMap<u16, ProcessInfo>) -> Menu {
+    create_process_menu_with_verbose(args, processes, false)
+}
+
+/// Create a dynamic menu for processes with verbose information
+fn create_process_menu_with_verbose(args: &Args, processes: &HashMap<u16, ProcessInfo>, verbose: bool) -> Menu {
     let menu = Menu::new();
     
     if processes.is_empty() {
@@ -204,7 +230,24 @@ fn create_process_menu(args: &Args, processes: &HashMap<u16, ProcessInfo>) -> Me
     sorted_processes.sort_by_key(|(port, _)| *port);
     
     for (port, process_info) in sorted_processes {
-        let label = if args.show_pid {
+        let label = if verbose {
+            // Verbose mode: show command line and working directory
+            let mut parts = vec![format!("Port {}: {}", port, process_info.name)];
+            
+            if let Some(ref cmd_line) = process_info.command_line {
+                parts.push(format!("({})", cmd_line));
+            }
+            
+            if args.show_pid {
+                parts.push(format!("(PID {})", process_info.pid));
+            }
+            
+            if let Some(ref work_dir) = process_info.working_directory {
+                parts.push(format!("- {}", work_dir));
+            }
+            
+            parts.join(" ")
+        } else if args.show_pid {
             format!("Port {}: {} (PID {})", port, process_info.name, process_info.pid)
         } else {
             format!("Port {}: {}", port, process_info.name)

@@ -20,15 +20,17 @@ pub struct ProcessMonitor {
     current_processes: HashMap<u16, ProcessInfo>,
     ports_to_monitor: Vec<u16>,
     docker_enabled: bool,
+    verbose: bool,
 }
 
 impl ProcessMonitor {
-    pub fn new(update_sender: Sender<ProcessUpdate>, ports_to_monitor: Vec<u16>, docker_enabled: bool) -> Result<Self> {
+    pub fn new(update_sender: Sender<ProcessUpdate>, ports_to_monitor: Vec<u16>, docker_enabled: bool, verbose: bool) -> Result<Self> {
         Ok(Self {
             update_sender,
             current_processes: HashMap::new(),
             ports_to_monitor,
             docker_enabled,
+            verbose,
         })
     }
 
@@ -68,7 +70,7 @@ impl ProcessMonitor {
         }
     }
 
-    async fn scan_processes(&self) -> Result<HashMap<u16, ProcessInfo>> {
+    pub async fn scan_processes(&self) -> Result<HashMap<u16, ProcessInfo>> {
         let mut processes = HashMap::new();
 
         for &port in &self.ports_to_monitor {
@@ -156,6 +158,14 @@ impl ProcessMonitor {
             .unwrap_or("unknown")
             .to_string();
 
+        // Get full command line and working directory only if verbose mode is enabled
+        let (command_line, working_directory) = if self.verbose {
+            log::debug!("ProcessMonitor: Gathering verbose info for PID {} (verbose={})", pid, self.verbose);
+            self.get_process_verbose_info(pid).await
+        } else {
+            (None, None)
+        };
+
         // Check if this process is running in a Docker container (Unix-like systems only)
         let (container_id, container_name) = if self.docker_enabled {
             self.get_docker_container_info(pid).await
@@ -170,6 +180,8 @@ impl ProcessMonitor {
             name,
             container_id,
             container_name,
+            command_line,
+            working_directory,
         })
     }
 
@@ -189,6 +201,13 @@ impl ProcessMonitor {
                     // Remove quotes and .exe extension
                     let name = name_part.trim_matches('"');
                     if let Some(name_without_ext) = name.strip_suffix(".exe") {
+                        // Get verbose information only if verbose mode is enabled
+                        let (command_line, working_directory) = if self.verbose {
+                            self.get_process_verbose_info_windows(pid).await
+                        } else {
+                            (None, None)
+                        };
+                        
                         return Ok(ProcessInfo {
                             pid,
                             port,
@@ -196,8 +215,17 @@ impl ProcessMonitor {
                             name: name_without_ext.to_string(),
                             container_id: None,
                             container_name: None,
+                            command_line,
+                            working_directory,
                         });
                     }
+                    // Get verbose information only if verbose mode is enabled
+                    let (command_line, working_directory) = if self.verbose {
+                        self.get_process_verbose_info_windows(pid).await
+                    } else {
+                        (None, None)
+                    };
+                    
                     return Ok(ProcessInfo {
                         pid,
                         port,
@@ -205,6 +233,8 @@ impl ProcessMonitor {
                         name: name.to_string(),
                         container_id: None,
                         container_name: None,
+                        command_line,
+                        working_directory,
                     });
                 }
             }
@@ -222,6 +252,9 @@ impl ProcessMonitor {
             (None, None)
         };
 
+        // Get verbose information
+        let (command_line, working_directory) = self.get_process_verbose_info_windows(pid).await;
+
         Ok(ProcessInfo {
             pid,
             port,
@@ -229,7 +262,163 @@ impl ProcessMonitor {
             name: command,
             container_id,
             container_name,
+            command_line,
+            working_directory,
         })
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    async fn get_process_verbose_info(&self, pid: i32) -> (Option<String>, Option<String>) {
+        let mut command_line = None;
+        let mut working_directory = None;
+
+                // Get full command line using ps
+                if let Ok(output) = Command::new("ps")
+                    .args(&["-p", &pid.to_string(), "-o", "args="])
+                    .output()
+                {
+                    if output.status.success() {
+                        let cmd = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                        if !cmd.is_empty() && cmd != "COMMAND" {
+                            // Truncate the command to show only the important parts
+                            let truncated_cmd = Self::truncate_command_line(&cmd);
+                            log::debug!("Verbose info for PID {}: command_line = {}", pid, truncated_cmd);
+                            command_line = Some(truncated_cmd);
+                        }
+                    }
+                }
+
+        // Get working directory using lsof
+        if let Ok(output) = Command::new("lsof")
+            .args(&["-p", &pid.to_string(), "-d", "cwd", "-F", "n"])
+            .output()
+        {
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                let mut found_pid = false;
+                let mut found_cwd = false;
+                for line in stdout.lines() {
+                    if line.starts_with('p') && line[1..] == pid.to_string() {
+                        found_pid = true;
+                        log::debug!("Found PID {} in lsof output", pid);
+                    } else if found_pid && line == "fcwd" {
+                        found_cwd = true;
+                        log::debug!("Found fcwd for PID {}", pid);
+                    } else if found_pid && found_cwd && line.starts_with('n') {
+                        let dir = &line[1..]; // Remove the 'n' prefix
+                        log::debug!("Found directory line for PID {}: '{}'", pid, dir);
+                        if !dir.is_empty() && dir != "/" {
+                            // Truncate the directory path to show only the last part
+                            let truncated_dir = Self::truncate_directory_path(dir);
+                            working_directory = Some(truncated_dir);
+                            log::debug!("Verbose info for PID {}: working_directory = {}", pid, dir);
+                        } else {
+                            log::debug!("Directory '{}' is empty or root, skipping", dir);
+                        }
+                        break;
+                    } else if found_pid && line.starts_with('p') && line[1..] != pid.to_string() {
+                        // We've moved to a different PID, reset
+                        found_pid = false;
+                        found_cwd = false;
+                    }
+                }
+            } else {
+                log::debug!("lsof failed for PID {}: {}", pid, String::from_utf8_lossy(&output.stderr));
+            }
+        } else {
+            log::debug!("Failed to run lsof for PID {}", pid);
+        }
+
+        (command_line, working_directory)
+    }
+
+    fn truncate_command_line(cmd: &str) -> String {
+        // Split the command into parts
+        let parts: Vec<&str> = cmd.split_whitespace().collect();
+        if parts.is_empty() {
+            return cmd.to_string();
+        }
+
+        // Get the executable name (last part of the path)
+        let executable = parts[0].split('/').last().unwrap_or(parts[0]);
+        
+        // If there are arguments, include them
+        if parts.len() > 1 {
+            let args = &parts[1..];
+            format!("{} {}", executable, args.join(" "))
+        } else {
+            executable.to_string()
+        }
+    }
+
+    fn truncate_directory_path(dir: &str) -> String {
+        // Split the path and get the last two parts (username/project)
+        let parts: Vec<&str> = dir.split('/').collect();
+        if parts.len() >= 2 {
+            // Get the last two parts: username/project
+            let last_two = &parts[parts.len()-2..];
+            last_two.join("/")
+        } else if parts.len() == 1 && !parts[0].is_empty() {
+            // Just one part, use it as is
+            parts[0].to_string()
+        } else {
+            // Fallback to original path
+            dir.to_string()
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    async fn get_process_verbose_info_windows(&self, pid: i32) -> (Option<String>, Option<String>) {
+        let mut command_line = None;
+        let mut working_directory = None;
+
+        // Get command line using wmic
+        if let Ok(output) = Command::new("wmic")
+            .args(&["process", "where", &format!("ProcessId={}", pid), "get", "CommandLine", "/format:list"])
+            .output()
+        {
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                for line in stdout.lines() {
+                    if line.starts_with("CommandLine=") {
+                        let cmd = &line[12..]; // Remove "CommandLine=" prefix
+                        if !cmd.is_empty() && cmd != "CommandLine" {
+                            // Truncate the command to show only the important parts
+                            let truncated_cmd = Self::truncate_command_line(cmd);
+                            command_line = Some(truncated_cmd);
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Get working directory using wmic
+        if let Ok(output) = Command::new("wmic")
+            .args(&["process", "where", &format!("ProcessId={}", pid), "get", "ExecutablePath", "/format:list"])
+            .output()
+        {
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                for line in stdout.lines() {
+                    if line.starts_with("ExecutablePath=") {
+                        let path = &line[15..]; // Remove "ExecutablePath=" prefix
+                        if !path.is_empty() && path != "ExecutablePath" {
+                            // Extract directory from full path
+                            if let Some(last_slash) = path.rfind('\\') {
+                                let dir = &path[..last_slash];
+                                if !dir.is_empty() {
+                                    working_directory = Some(dir.to_string());
+                                }
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+
+        (command_line, working_directory)
     }
 
     #[cfg(not(target_os = "windows"))]
@@ -466,6 +655,24 @@ impl ProcessMonitor {
 
 // Platform-agnostic process management functions
 pub fn get_processes_on_ports(ports: &[u16], args: &crate::cli::Args) -> (usize, std::collections::HashMap<u16, crate::types::ProcessInfo>) {
+    // If verbose mode is enabled, use ProcessMonitor to get detailed information
+    if args.verbose {
+        use crossbeam_channel::bounded;
+        
+        let (update_sender, _update_receiver) = bounded(100);
+        if let Ok(process_monitor) = ProcessMonitor::new(update_sender, ports.to_vec(), args.docker, args.verbose) {
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            match rt.block_on(process_monitor.scan_processes()) {
+                Ok(processes) => return (processes.len(), processes),
+                Err(e) => {
+                    log::warn!("Failed to get verbose process info: {}, falling back to basic mode", e);
+                }
+            }
+        } else {
+            log::warn!("Failed to create ProcessMonitor for verbose mode, falling back to basic mode");
+        }
+    }
+    
     // Build port range string for lsof
     let port_range = if ports.len() <= 10 {
         // For small number of ports, list them individually
@@ -507,6 +714,8 @@ pub fn get_processes_on_ports(ports: &[u16], args: &crate::cli::Args) -> (usize,
                                 name,
                                 container_id: None,
                                 container_name: None,
+                                command_line: None,
+                                working_directory: None,
                             });
                         } else {
                             log::info!("Ignoring process {} (PID {}) on port {} (ignored by user configuration)", name, pid, port);

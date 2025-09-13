@@ -62,6 +62,10 @@ impl TrayMenu {
     }
 
     pub fn create_menu(processes: &HashMap<u16, ProcessInfo>, show_pid: bool) -> Result<Menu> {
+        Self::create_menu_with_verbose(processes, show_pid, false)
+    }
+
+    pub fn create_menu_with_verbose(processes: &HashMap<u16, ProcessInfo>, show_pid: bool, verbose: bool) -> Result<Menu> {
         let menu = Menu::new();
 
         // Add "Kill All Processes" item with proper ID
@@ -74,7 +78,28 @@ impl TrayMenu {
 
         // Add individual process items with proper IDs
         for (port, process_info) in processes {
-            let menu_text = if let (Some(_container_id), Some(container_name)) = (&process_info.container_id, &process_info.container_name) {
+            let menu_text = if verbose {
+                // Verbose mode: show command line and working directory
+                let mut parts = vec![format!("Kill: Port {}: {}", port, process_info.name)];
+                
+                if let Some(ref cmd_line) = process_info.command_line {
+                    parts.push(format!("({})", cmd_line));
+                }
+                
+                if show_pid {
+                    parts.push(format!("(PID {})", process_info.pid));
+                }
+                
+                if let Some(ref work_dir) = process_info.working_directory {
+                    parts.push(format!("- {}", work_dir));
+                }
+                
+                if let (Some(_container_id), Some(container_name)) = (&process_info.container_id, &process_info.container_name) {
+                    parts.push(format!("[Docker: {}]", container_name));
+                }
+                
+                parts.join(" ")
+            } else if let (Some(_container_id), Some(container_name)) = (&process_info.container_id, &process_info.container_name) {
                 format!(
                     "Kill: Port {}: {} [Docker: {}]",
                     port, process_info.name, container_name
