@@ -368,6 +368,11 @@ jobs:
                       container_name: None,
                       command_line: None,
                       working_directory: None,
+                      process_group: None,
+                      project_name: None,
+                      cpu_usage: None,
+                      memory_usage: None,
+                      memory_percentage: None,
                   })
               }
 
@@ -712,6 +717,11 @@ jobs:
                       container_name: None,
                       command_line: None,
                       working_directory: None,
+                      process_group: None,
+                      project_name: None,
+                      cpu_usage: None,
+                      memory_usage: None,
+                      memory_percentage: None,
                   })
               }
 
