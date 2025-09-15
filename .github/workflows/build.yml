@@ -391,6 +391,8 @@ jobs:
           # Copy other files (they should work as-is since they don't use crate:: imports)
           Copy-Item "src/types.rs" "console-build/types.rs"
           Copy-Item "src/cli.rs" "console-build/cli.rs"
+          Copy-Item "src/smart_filter.rs" "console-build/smart_filter.rs"
+          Copy-Item "src/system_monitor.rs" "console-build/system_monitor.rs"
           
           # Create standalone main.rs with direct imports
           @"
@@ -459,6 +461,9 @@ jobs:
           log = "0.4"
           env_logger = "0.10"
           clap = { version = "4.0", features = ["derive"] }
+          chrono = { version = "0.4", features = ["serde"] }
+          regex = "1.0"
+          sysinfo = "0.30"
           "@ | Out-File -FilePath "console-build/Cargo.toml" -Encoding utf8
 
           # Build in the temporary directory
@@ -939,6 +944,11 @@ jobs:
                   container_name: None,
                   command_line: None,
                   working_directory: None,
+                  process_group: None,
+                  project_name: None,
+                  cpu_usage: None,
+                  memory_usage: None,
+                  memory_percentage: None,
               })
           }
 
