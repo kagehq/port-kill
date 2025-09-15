@@ -1,5 +1,15 @@
 <template>
-  <div class="overflow-x-auto border-t border-gray-500/10">
+  <div>
+    <!-- Confirmation Modal -->
+    <KillConfirmModal
+      :is-open="showKillModal"
+      :process="selectedProcess"
+      @close="closeKillModal"
+      @confirm="handleKillConfirm"
+    />
+    
+    <!-- Process Table -->
+    <div class="overflow-x-auto border-t border-gray-500/10">
     <table class="process-table">
       <thead class="bg-transparent border-b border-gray-500/10">
         <tr>
@@ -131,7 +141,7 @@
           <td class="px-6 py-4 text-right">
             <div class="flex items-center justify-end space-x-2">
               <button
-                @click="$emit('kill-process', process.pid)"
+                @click="openKillModal(process)"
                 class="text-gray-500 hover:text-red-500 transition-colors duration-200"
                 :title="`Kill process ${process.pid}`"
               >
@@ -142,12 +152,13 @@
         </tr>
       </tbody>
     </table>
+    </div>
   </div>
 </template>
 
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { 
   ServerIcon, 
   CubeIcon,
@@ -155,6 +166,7 @@ import {
   ArchiveBoxXMarkIcon,
   ArrowPathIcon
 } from '@heroicons/vue/24/solid'
+import KillConfirmModal from './KillConfirmModal.vue'
 
 const props = defineProps({
   processes: {
@@ -171,10 +183,30 @@ const props = defineProps({
   }
 })
 
-defineEmits(['kill-process'])
+const emit = defineEmits(['kill-process'])
+
+// Modal state
+const showKillModal = ref(false)
+const selectedProcess = ref({})
 
 // Use the conflict detection function passed from parent
 const hasPortConflict = props.hasPortConflict
+
+// Modal methods
+const openKillModal = (process) => {
+  selectedProcess.value = process
+  showKillModal.value = true
+}
+
+const closeKillModal = () => {
+  showKillModal.value = false
+  selectedProcess.value = {}
+}
+
+const handleKillConfirm = async (process) => {
+  emit('kill-process', process)
+  closeKillModal()
+}
 
 // Function to get a shortened version of the command for display
 const getShortCommand = (process) => {

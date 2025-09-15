@@ -577,6 +577,10 @@ const killProcess = async (pid) => {
     }
   } catch (error) {
     console.error('Failed to kill process:', error)
+    
+    // Show user-friendly error message
+    const errorMessage = error.data?.statusMessage || error.message || 'Failed to kill process'
+    alert(`Error: ${errorMessage}`)
   }
 }
 

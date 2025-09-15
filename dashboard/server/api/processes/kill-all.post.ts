@@ -4,9 +4,9 @@ export default defineEventHandler(async (event) => {
   try {
     // Get query parameters to determine which processes to kill
     const query = getQuery(event)
-    const ports = query.ports || '3000-4000'
-    const ignorePorts = query.ignorePorts || '5353,5000,7000'
-    const ignoreProcesses = query.ignoreProcesses || 'Chrome,ControlCe,rapportd'
+    const ports = String(query.ports || '3000-4000')
+    const ignorePorts = String(query.ignorePorts || '5353,5000,7000')
+    const ignoreProcesses = String(query.ignoreProcesses || 'Chrome,ControlCe,rapportd')
     
     // First, get all processes on the specified ports
     const processes = await getProcessesOnPorts(ports, ignorePorts, ignoreProcesses)
@@ -20,9 +20,9 @@ export default defineEventHandler(async (event) => {
       }
     }
     
-    // Kill all processes
+    // Kill all processes (excluding Docker daemon processes)
     const results = await Promise.allSettled(
-      processes.map(process => killProcess(process.pid))
+      processes.map(process => killProcessSafely(process))
     )
     
     const successful = results.filter(result => result.status === 'fulfilled').length
@@ -36,7 +36,7 @@ export default defineEventHandler(async (event) => {
       timestamp: new Date().toISOString()
     }
     
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error killing all processes:', error)
     
     throw createError({
@@ -82,15 +82,15 @@ async function getProcessesOnPorts(
     let stdout = ''
     let stderr = ''
     
-    lsof.stdout.on('data', (data) => {
+    lsof.stdout.on('data', (data: any) => {
       stdout += data.toString()
     })
     
-    lsof.stderr.on('data', (data) => {
+    lsof.stderr.on('data', (data: any) => {
       stderr += data.toString()
     })
     
-    lsof.on('close', (code) => {
+    lsof.on('close', (code: number) => {
       if (code !== 0) {
         reject(new Error(`lsof failed with code ${code}: ${stderr}`))
         return
@@ -104,7 +104,7 @@ async function getProcessesOnPorts(
       }
     })
     
-    lsof.on('error', (error) => {
+    lsof.on('error', (error: Error) => {
       reject(error)
     })
   })
@@ -151,6 +151,16 @@ function parseLsofOutput(output: string, ignorePorts: string, ignoreProcesses: s
   return processes
 }
 
+async function killProcessSafely(process: any): Promise<void> {
+  // Handle Docker containers (but not daemon processes)
+  if (process.container_id && process.container_id !== 'host-process' && process.container_id !== 'docker-daemon') {
+    return killDockerContainer(process.container_id)
+  }
+  
+  // Handle host processes and Docker daemon processes
+  return killProcess(process.pid)
+}
+
 async function killProcess(pid: number): Promise<void> {
   return new Promise((resolve, reject) => {
     // First try SIGTERM (graceful termination)
@@ -158,7 +168,7 @@ async function killProcess(pid: number): Promise<void> {
       stdio: ['pipe', 'pipe', 'pipe']
     })
     
-    kill.on('close', (code) => {
+    kill.on('close', (code: number) => {
       // Wait a bit for graceful termination
       setTimeout(() => {
         // Check if process is still running
@@ -169,7 +179,7 @@ async function killProcess(pid: number): Promise<void> {
               stdio: ['pipe', 'pipe', 'pipe']
             })
             
-            forceKill.on('close', (forceCode) => {
+            forceKill.on('close', (forceCode: number) => {
               // Check again if process still exists after SIGKILL
               checkProcessExists(pid).then(stillExists => {
                 if (!stillExists) {
@@ -180,7 +190,7 @@ async function killProcess(pid: number): Promise<void> {
               }).catch(reject)
             })
             
-            forceKill.on('error', (error) => {
+            forceKill.on('error', (error: Error) => {
               reject(error)
             })
           } else {
@@ -190,7 +200,43 @@ async function killProcess(pid: number): Promise<void> {
       }, 500)
     })
     
-    kill.on('error', (error) => {
+    kill.on('error', (error: Error) => {
+      reject(error)
+    })
+  })
+}
+
+async function killDockerContainer(containerId: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    // First try docker stop (graceful)
+    const stop = spawn('docker', ['stop', containerId], {
+      stdio: ['pipe', 'pipe', 'pipe']
+    })
+    
+    stop.on('close', (code: number) => {
+      if (code === 0) {
+        resolve()
+      } else {
+        // If stop failed, try docker kill (force)
+        const kill = spawn('docker', ['kill', containerId], {
+          stdio: ['pipe', 'pipe', 'pipe']
+        })
+        
+        kill.on('close', (killCode: number) => {
+          if (killCode === 0) {
+            resolve()
+          } else {
+            reject(new Error(`Failed to stop Docker container ${containerId}`))
+          }
+        })
+        
+        kill.on('error', (error: Error) => {
+          reject(error)
+        })
+      }
+    })
+    
+    stop.on('error', (error: Error) => {
       reject(error)
     })
   })
@@ -202,7 +248,7 @@ async function checkProcessExists(pid: number): Promise<boolean> {
       stdio: ['pipe', 'pipe', 'pipe']
     })
     
-    ps.on('close', (code) => {
+    ps.on('close', (code: number) => {
       resolve(code === 0)
     })
     
