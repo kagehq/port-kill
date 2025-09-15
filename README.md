@@ -46,6 +46,8 @@ Join our Discord community for discussions, support, and updates:
 
 A web dashboard is available in the `dashboard/` directory, providing a rich graphical interface for monitoring and managing processes. The dashboard runs independently as a Nuxt.js application and communicates with the Port Kill binary via HTTP API.
 
+![Port Kill Dashboard](dashboard/assets/img/portkill-dashboard.png)
+
 **Dashboard Features:**
 - Real-time process monitoring with auto-refresh
 - Visual process table with filtering and search
