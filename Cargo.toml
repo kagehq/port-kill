@@ -23,6 +23,9 @@ thiserror = "1.0"
 log = "0.4"
 env_logger = "0.10"
 clap = { version = "4.0", features = ["derive"] }
+regex = "1.0"
+sysinfo = "0.30"
+chrono = { version = "0.4", features = ["serde"] }
 
 [build-dependencies]
 embed-resource = "1.8"

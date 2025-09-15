@@ -41,6 +41,22 @@ pub struct Args {
     #[arg(long, value_delimiter = ',')]
     pub ignore_processes: Option<Vec<String>>,
 
+    /// Process name patterns to ignore (supports wildcards: *, ?)
+    #[arg(long, value_delimiter = ',')]
+    pub ignore_patterns: Option<Vec<String>>,
+
+    /// Process groups to ignore (e.g., Database,Web Server)
+    #[arg(long, value_delimiter = ',')]
+    pub ignore_groups: Option<Vec<String>>,
+
+    /// Enable smart filtering (auto-detect and ignore system processes)
+    #[arg(long)]
+    pub smart_filter: bool,
+
+    /// Only show processes from specific groups (e.g., Node.js,Python)
+    #[arg(long, value_delimiter = ',')]
+    pub only_groups: Option<Vec<String>>,
+
     /// Run in console mode instead of status bar mode
     #[arg(short, long)]
     pub console: bool,
@@ -60,6 +76,50 @@ pub struct Args {
     /// Log level (info, warn, error, none)
     #[arg(long, default_value = "info", value_enum)]
     pub log_level: LogLevel,
+
+    /// Show process kill history
+    #[arg(long)]
+    pub show_history: bool,
+
+    /// Clear process kill history
+    #[arg(long)]
+    pub clear_history: bool,
+
+    /// Show filter configuration
+    #[arg(long)]
+    pub show_filters: bool,
+
+    /// Enable performance metrics (CPU and memory usage)
+    #[arg(long)]
+    pub performance: bool,
+
+    /// Show project context for each process
+    #[arg(long)]
+    pub show_context: bool,
+
+    /// Kill all processes on the specified ports
+    #[arg(long)]
+    pub kill_all: bool,
+
+    /// Kill processes by group (e.g., Node.js, Python)
+    #[arg(long, value_delimiter = ',')]
+    pub kill_group: Option<Vec<String>>,
+
+    /// Kill processes by project name
+    #[arg(long, value_delimiter = ',')]
+    pub kill_project: Option<Vec<String>>,
+
+    /// Restart processes (kill and wait for them to restart)
+    #[arg(long)]
+    pub restart: bool,
+
+    /// Show process tree (parent-child relationships)
+    #[arg(long)]
+    pub show_tree: bool,
+
+    /// Output processes in JSON format (for API integration)
+    #[arg(long)]
+    pub json: bool,
 }
 
 impl Args {
@@ -87,6 +147,64 @@ impl Args {
     /// Get a HashSet of process names to ignore for efficient lookup
     pub fn get_ignore_processes_set(&self) -> HashSet<String> {
         self.ignore_processes.clone().unwrap_or_default().into_iter().collect()
+    }
+
+    /// Get a HashSet of process groups to ignore for efficient lookup
+    pub fn get_ignore_groups_set(&self) -> HashSet<String> {
+        self.ignore_groups.clone().unwrap_or_default().into_iter().collect()
+    }
+
+    /// Get a HashSet of process groups to show (if only_groups is specified)
+    pub fn get_only_groups_set(&self) -> Option<HashSet<String>> {
+        self.only_groups.as_ref().map(|groups| groups.iter().cloned().collect())
+    }
+
+    /// Get smart filter defaults
+    pub fn get_smart_filter_defaults(&self) -> (HashSet<u16>, HashSet<String>, HashSet<String>) {
+        if !self.smart_filter {
+            return (HashSet::new(), HashSet::new(), HashSet::new());
+        }
+
+        // Smart port ignores (common system ports)
+        let smart_ignore_ports: HashSet<u16> = [
+            22,    // SSH
+            25,    // SMTP
+            53,    // DNS
+            80,    // HTTP (system)
+            443,   // HTTPS (system)
+            993,   // IMAPS
+            995,   // POP3S
+            1433,  // SQL Server
+            3306,  // MySQL
+            5432,  // PostgreSQL
+            6379,  // Redis
+            27017, // MongoDB
+            5353,  // mDNS/Bonjour
+            5000,  // AirDrop
+            7000,  // AirDrop
+            8080,  // Common proxy
+            8443,  // HTTPS Alt
+        ].iter().cloned().collect();
+
+        // Smart process ignores (common system processes)
+        let smart_ignore_processes: HashSet<String> = [
+            "Chrome", "Safari", "Firefox", "Edge", // Browsers
+            "ControlCe", "rapportd", "AirPlayXP", // macOS system
+            "systemd", "init", "kthreadd", // Linux system
+            "svchost", "explorer", "winlogon", // Windows system
+            "docker", "dockerd", "containerd", // Docker system
+            "nginx", "apache2", "httpd", // Web servers (system)
+            "mysqld", "postgres", "redis-server", // Database servers
+            "ssh", "sshd", // SSH servers
+        ].iter().map(|s| s.to_string()).collect();
+
+        // Smart group ignores (system service groups)
+        let smart_ignore_groups: HashSet<String> = [
+            "Web Server", // System web servers
+            "Database",   // System databases
+        ].iter().map(|s| s.to_string()).collect();
+
+        (smart_ignore_ports, smart_ignore_processes, smart_ignore_groups)
     }
 
     /// Get a description of the port configuration

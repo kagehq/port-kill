@@ -27,6 +27,57 @@ async fn main() -> Result<()> {
     info!("Starting Console Port Kill application...");
     info!("Monitoring: {}", args.get_port_description());
 
+    // Handle special commands
+    if args.show_history {
+        let app = ConsolePortKillApp::new(args)?;
+        app.display_history().await?;
+        return Ok(());
+    }
+    
+    if args.clear_history {
+        let app = ConsolePortKillApp::new(args)?;
+        app.clear_history().await?;
+        return Ok(());
+    }
+    
+    if args.show_filters {
+        let app = ConsolePortKillApp::new(args)?;
+        app.display_filter_info().await?;
+        return Ok(());
+    }
+    
+    if args.kill_all {
+        let app = ConsolePortKillApp::new(args)?;
+        app.kill_all_processes().await?;
+        return Ok(());
+    }
+    
+    if let Some(ref groups) = args.kill_group {
+        let groups = groups.clone();
+        let app = ConsolePortKillApp::new(args)?;
+        app.kill_by_group(&groups).await?;
+        return Ok(());
+    }
+    
+    if let Some(ref projects) = args.kill_project {
+        let projects = projects.clone();
+        let app = ConsolePortKillApp::new(args)?;
+        app.kill_by_project(&projects).await?;
+        return Ok(());
+    }
+    
+    if args.restart {
+        let app = ConsolePortKillApp::new(args)?;
+        app.restart_processes().await?;
+        return Ok(());
+    }
+    
+    if args.show_tree {
+        let app = ConsolePortKillApp::new(args)?;
+        app.show_process_tree().await?;
+        return Ok(());
+    }
+
     // Create and run the console application
     let app = ConsolePortKillApp::new(args)?;
     app.run().await?;

@@ -14,26 +14,37 @@ export default defineEventHandler(async (event) => {
     const ports = query.ports || '3000,3001,3002,4000,9000,9001'
     const ignorePorts = query.ignorePorts || '5353,5000,7000'
     const ignoreProcesses = query.ignoreProcesses || 'Chrome,ControlCe,rapportd'
+    const ignorePatterns = query.ignorePatterns || ''
+    const ignoreGroups = query.ignoreGroups || ''
+    const onlyGroups = query.onlyGroups || ''
+    const smartFilter = query.smartFilter === 'true'
+    const performance = query.performance === 'true'
+    const showContext = query.showContext === 'true'
     const docker = query.docker === 'true'
     const verbose = query.verbose === 'true'
     
-    
-    // Try to find the port-kill binary
+    // Try to find the port-kill-console binary
     const binaryPath = findPortKillBinary(config.portKillBinaryPath)
     
     if (!binaryPath) {
       throw new Error('Port Kill binary not found. Please build the Rust application first.')
     }
     
-    // Use cross-platform process detection
-    const isWindows = process.platform === 'win32'
-    let processes
-    
-    if (isWindows) {
-      processes = await getProcessesWithNetstat(ports, ignorePorts, ignoreProcesses, docker, verbose)
-    } else {
-      processes = await getProcessesWithLsof(ports, ignorePorts, ignoreProcesses, docker, verbose)
-    }
+    // Use our Rust application for advanced process detection
+    const processes = await getProcessesWithRustApp(
+      binaryPath,
+      ports,
+      ignorePorts,
+      ignoreProcesses,
+      ignorePatterns,
+      ignoreGroups,
+      onlyGroups,
+      smartFilter,
+      performance,
+      showContext,
+      docker,
+      verbose
+    )
     
     return {
       success: true,
@@ -61,7 +72,7 @@ function findPortKillBinary(defaultPath: string): string | null {
     return defaultPath
   }
   
-  // Try common locations
+  // Try common locations for port-kill-console
   const possiblePaths = [
     './target/release/port-kill-console',
     './target/debug/port-kill-console',
@@ -78,6 +89,98 @@ function findPortKillBinary(defaultPath: string): string | null {
   }
   
   return null
+}
+
+async function getProcessesWithRustApp(
+  binaryPath: string,
+  ports: string,
+  ignorePorts: string,
+  ignoreProcesses: string,
+  ignorePatterns: string,
+  ignoreGroups: string,
+  onlyGroups: string,
+  smartFilter: boolean,
+  performance: boolean,
+  showContext: boolean,
+  docker: boolean,
+  verbose: boolean
+): Promise<any[]> {
+  return new Promise((resolve, reject) => {
+    // Build command arguments
+    const args = [
+      '--ports', ports,
+      '--json' // We'll add JSON output to our Rust app
+    ]
+    
+    // Add optional arguments
+    if (ignorePorts) args.push('--ignore-ports', ignorePorts)
+    if (ignoreProcesses) args.push('--ignore-processes', ignoreProcesses)
+    if (ignorePatterns) args.push('--ignore-patterns', ignorePatterns)
+    if (ignoreGroups) args.push('--ignore-groups', ignoreGroups)
+    if (onlyGroups) args.push('--only-groups', onlyGroups)
+    if (smartFilter) args.push('--smart-filter')
+    if (performance) args.push('--performance')
+    if (showContext) args.push('--show-context')
+    if (docker) args.push('--docker')
+    if (verbose) args.push('--verbose')
+    
+    const rustApp = spawn(binaryPath, args, {
+      stdio: ['pipe', 'pipe', 'pipe']
+    })
+    
+    let stdout = ''
+    let stderr = ''
+    
+    rustApp.stdout.on('data', (data) => {
+      stdout += data.toString()
+    })
+    
+    rustApp.stderr.on('data', (data) => {
+      stderr += data.toString()
+    })
+    
+    rustApp.on('close', (code) => {
+      if (code !== 0) {
+        // For now, fall back to the old method if Rust app fails
+        console.warn(`Rust app failed with code ${code}: ${stderr}`)
+        getProcessesWithLsof(ports, ignorePorts, ignoreProcesses, docker, verbose)
+          .then(resolve)
+          .catch(reject)
+        return
+      }
+      
+      try {
+        // Parse JSON output from Rust app
+        const lines = stdout.trim().split('\n')
+        const processes = []
+        
+        for (const line of lines) {
+          if (line.trim()) {
+            try {
+              const processData = JSON.parse(line)
+              if (processData.pid && processData.port) {
+                processes.push(processData)
+              }
+            } catch (e) {
+              // Skip invalid JSON lines
+            }
+          }
+        }
+        
+        resolve(processes)
+      } catch (error) {
+        reject(error)
+      }
+    })
+    
+    rustApp.on('error', (error) => {
+      // Fall back to old method if spawn fails
+      console.warn(`Failed to spawn Rust app: ${error.message}`)
+      getProcessesWithLsof(ports, ignorePorts, ignoreProcesses, docker, verbose)
+        .then(resolve)
+        .catch(reject)
+    })
+  })
 }
 
 async function getProcessesWithLsof(

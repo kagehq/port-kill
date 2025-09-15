@@ -468,7 +468,10 @@ const { data: processesData, error: processesError, pending: processesPending, r
   query: {
     ports: '3000,3001,3002,3003,3004,4000,9000,9001',
     docker: true,
-    verbose: true
+    verbose: true,
+    performance: true,
+    showContext: true,
+    smartFilter: true
   }
 })
 
@@ -507,7 +510,10 @@ const refreshData = async (showLoading = true) => {
         ignorePorts: settings.value.ignorePorts,
         ignoreProcesses: settings.value.ignoreProcesses,
         docker: settings.value.docker,
-        verbose: settings.value.verbose
+        verbose: settings.value.verbose,
+        performance: true,
+        showContext: true,
+        smartFilter: true
       }
     })
     if (newData && newData.success) {
@@ -563,7 +569,10 @@ const killAllProcesses = async () => {
         query: {
           ports: '3000,3001,3002,3003,3004,4000,9000,9001',
           docker: true,
-          verbose: true
+          verbose: true,
+          performance: true,
+          showContext: true,
+          smartFilter: true
         }
       })
       

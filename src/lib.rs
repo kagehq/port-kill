@@ -2,6 +2,8 @@ pub mod console_app;
 pub mod process_monitor;
 pub mod types;
 pub mod cli;
+pub mod smart_filter;
+pub mod system_monitor;
 
 // macOS-specific modules (only compiled on macOS)
 #[cfg(target_os = "macos")]

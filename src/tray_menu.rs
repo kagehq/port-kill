@@ -47,7 +47,8 @@ impl TrayMenu {
     }
 
     pub fn get_current_menu(&self) -> Result<Menu> {
-        Self::create_menu(&self.current_processes, self.show_pid)
+        let (menu, _) = Self::create_menu(&self.current_processes, self.show_pid)?;
+        Ok(menu)
     }
 
     pub fn update_status(&mut self, status_info: &StatusBarInfo) -> Result<()> {
@@ -59,22 +60,24 @@ impl TrayMenu {
         Ok(())
     }
 
-    pub fn create_menu(processes: &HashMap<u16, ProcessInfo>, show_pid: bool) -> Result<Menu> {
+    pub fn create_menu(processes: &HashMap<u16, ProcessInfo>, show_pid: bool) -> Result<(Menu, HashMap<String, u16>)> {
         Self::create_menu_with_verbose(processes, show_pid, false)
     }
 
-    pub fn create_menu_with_verbose(processes: &HashMap<u16, ProcessInfo>, show_pid: bool, verbose: bool) -> Result<Menu> {
+    pub fn create_menu_with_verbose(processes: &HashMap<u16, ProcessInfo>, show_pid: bool, verbose: bool) -> Result<(Menu, HashMap<String, u16>)> {
         let menu = Menu::new();
+        let mut menu_id_to_port = HashMap::new();
 
-        // Add "Kill All Processes" item with proper ID
+        // Add "Kill All Processes" item
         let kill_all_item = MenuItem::new("Kill All Processes", true, None);
+        let _kill_all_id = kill_all_item.id();
         menu.append(&kill_all_item)?;
 
         // Add separator
         let separator = PredefinedMenuItem::separator();
         menu.append(&separator)?;
 
-        // Add individual process items with proper IDs
+        // Add individual process items
         for (port, process_info) in processes {
             let menu_text = if verbose {
                 // Verbose mode: show command line and working directory
@@ -114,13 +117,13 @@ impl TrayMenu {
                 )
             };
             
-            // Create unique menu ID for each process (unused for now)
-            let _menu_id = format!("process_{}_{}", port, process_info.pid);
-            
-            // For now, we'll use the menu text to identify processes since tray-icon doesn't support custom IDs
-            // The menu event will contain the menu text which we can parse
+            // Create menu item for each process
             let process_item = MenuItem::new(&menu_text, true, None);
+            let process_id = process_item.id();
             menu.append(&process_item)?;
+            
+            // Store the mapping from menu ID to port
+            menu_id_to_port.insert(process_id.0.clone(), *port);
         }
 
         // Add another separator if there are processes
@@ -129,11 +132,12 @@ impl TrayMenu {
             menu.append(&separator)?;
         }
 
-        // Add "Quit" item with proper ID
+        // Add "Quit" item
         let quit_item = MenuItem::new("Quit", true, None);
+        let _quit_id = quit_item.id();
         menu.append(&quit_item)?;
 
-        Ok(menu)
+        Ok((menu, menu_id_to_port))
     }
 
 

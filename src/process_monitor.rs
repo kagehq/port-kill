@@ -1,4 +1,6 @@
-use crate::types::{ProcessInfo, ProcessUpdate};
+use crate::types::{ProcessInfo, ProcessUpdate, ProcessHistory, ProcessHistoryEntry};
+use crate::smart_filter::{SmartFilter, FilterStats};
+use crate::system_monitor::SystemMonitor;
 use anyhow::{Context, Result};
 use crossbeam_channel::Sender;
 use log::{error, info};
@@ -21,6 +23,10 @@ pub struct ProcessMonitor {
     ports_to_monitor: Vec<u16>,
     docker_enabled: bool,
     verbose: bool,
+    history: ProcessHistory,
+    smart_filter: Option<SmartFilter>,
+    system_monitor: SystemMonitor,
+    performance_enabled: bool,
 }
 
 impl ProcessMonitor {
@@ -31,6 +37,51 @@ impl ProcessMonitor {
             ports_to_monitor,
             docker_enabled,
             verbose,
+            history: ProcessHistory::load_from_file(&ProcessHistory::get_history_file_path(), 100).unwrap_or_else(|_| ProcessHistory::new(100)),
+            smart_filter: None,
+            system_monitor: SystemMonitor::new(),
+            performance_enabled: false,
+        })
+    }
+
+    pub fn new_with_filter(
+        update_sender: Sender<ProcessUpdate>, 
+        ports_to_monitor: Vec<u16>, 
+        docker_enabled: bool, 
+        verbose: bool,
+        smart_filter: SmartFilter,
+    ) -> Result<Self> {
+        Ok(Self {
+            update_sender,
+            current_processes: HashMap::new(),
+            ports_to_monitor,
+            docker_enabled,
+            verbose,
+            history: ProcessHistory::load_from_file(&ProcessHistory::get_history_file_path(), 100).unwrap_or_else(|_| ProcessHistory::new(100)),
+            smart_filter: Some(smart_filter),
+            system_monitor: SystemMonitor::new(),
+            performance_enabled: false,
+        })
+    }
+
+    pub fn new_with_performance(
+        update_sender: Sender<ProcessUpdate>, 
+        ports_to_monitor: Vec<u16>, 
+        docker_enabled: bool, 
+        verbose: bool,
+        smart_filter: Option<SmartFilter>,
+        performance_enabled: bool,
+    ) -> Result<Self> {
+        Ok(Self {
+            update_sender,
+            current_processes: HashMap::new(),
+            ports_to_monitor,
+            docker_enabled,
+            verbose,
+            history: ProcessHistory::load_from_file(&ProcessHistory::get_history_file_path(), 100).unwrap_or_else(|_| ProcessHistory::new(100)),
+            smart_filter,
+            system_monitor: SystemMonitor::new(),
+            performance_enabled,
         })
     }
 
@@ -70,13 +121,40 @@ impl ProcessMonitor {
         }
     }
 
-    pub async fn scan_processes(&self) -> Result<HashMap<u16, ProcessInfo>> {
+    pub async fn scan_processes(&mut self) -> Result<HashMap<u16, ProcessInfo>> {
         let mut processes = HashMap::new();
 
+        // Refresh system information for performance metrics
+        if self.performance_enabled {
+            self.system_monitor.refresh();
+        }
+
         for &port in &self.ports_to_monitor {
-            if let Ok(process_info) = self.get_process_on_port(port).await {
+            if let Ok(mut process_info) = self.get_process_on_port(port).await {
+                // Add performance metrics if enabled
+                if self.performance_enabled {
+                    if let Some(cpu_usage) = self.system_monitor.get_process_cpu_usage(process_info.pid) {
+                        process_info.cpu_usage = Some(cpu_usage);
+                    }
+                    
+                    if let Some((memory_bytes, memory_percentage)) = self.system_monitor.get_process_memory_usage(process_info.pid) {
+                        process_info.memory_usage = Some(memory_bytes);
+                        process_info.memory_percentage = Some(memory_percentage);
+                    }
+                }
+                
                 processes.insert(port, process_info);
             }
+        }
+
+        // Clean up old processes from system monitor
+        if self.performance_enabled {
+            self.system_monitor.cleanup_old_processes();
+        }
+
+        // Apply smart filtering if enabled
+        if let Some(ref filter) = self.smart_filter {
+            filter.filter_processes(&mut processes);
         }
 
         Ok(processes)
@@ -168,13 +246,21 @@ impl ProcessMonitor {
 
         // Check if this process is running in a Docker container (Unix-like systems only)
         let (container_id, container_name) = if self.docker_enabled {
-            self.get_docker_container_info(pid).await
+            let (container_id, container_name) = self.get_docker_container_info(pid).await;
+            // If no container found, mark as host process
+            if container_id.is_none() {
+                (Some("host-process".to_string()), Some("Host Process".to_string()))
+            } else {
+                (container_id, container_name)
+            }
         } else {
             (None, None)
         };
 
         log::debug!("Creating ProcessInfo for PID {} on port {} with command_line: {:?}, working_directory: {:?}", pid, port, command_line, working_directory);
-        Ok(ProcessInfo {
+        
+        // Create ProcessInfo with basic fields
+        let mut process_info = ProcessInfo {
             pid,
             port,
             command,
@@ -183,7 +269,21 @@ impl ProcessMonitor {
             container_name,
             command_line: command_line,
             working_directory: working_directory,
-        })
+            process_group: None,
+            project_name: None,
+            cpu_usage: None,
+            memory_usage: None,
+            memory_percentage: None,
+        };
+        
+        // Determine process group and project name
+        process_info.process_group = process_info.determine_process_group();
+        process_info.project_name = process_info.extract_project_name();
+        
+        // Enhance process name with better context
+        process_info.name = Self::enhance_process_name(&process_info);
+        
+        Ok(process_info)
     }
 
     #[cfg(target_os = "windows")]
@@ -210,7 +310,8 @@ impl ProcessMonitor {
                         };
                         
                         log::debug!("Creating ProcessInfo (Windows) for PID {} on port {} with command_line: {:?}, working_directory: {:?}", pid, port, command_line, working_directory);
-                        return Ok(ProcessInfo {
+                        
+                        let mut process_info = ProcessInfo {
                             pid,
                             port,
                             command: name.to_string(),
@@ -219,7 +320,18 @@ impl ProcessMonitor {
                             container_name: None,
                             command_line: command_line,
                             working_directory: working_directory,
-                        });
+                            process_group: None,
+                            project_name: None,
+                            cpu_usage: None,
+                            memory_usage: None,
+                            memory_percentage: None,
+                        };
+                        
+                        // Determine process group and project name
+                        process_info.process_group = process_info.determine_process_group();
+                        process_info.project_name = process_info.extract_project_name();
+                        
+                        return Ok(process_info);
                     }
                     // Get verbose information only if verbose mode is enabled
                     let (command_line, working_directory) = if self.verbose {
@@ -229,7 +341,8 @@ impl ProcessMonitor {
                     };
                     
                     log::debug!("Creating ProcessInfo (Windows fallback) for PID {} on port {} with command_line: {:?}, working_directory: {:?}", pid, port, command_line, working_directory);
-                    return Ok(ProcessInfo {
+                    
+                    let mut process_info = ProcessInfo {
                         pid,
                         port,
                         command: name.to_string(),
@@ -238,7 +351,18 @@ impl ProcessMonitor {
                         container_name: None,
                         command_line: command_line,
                         working_directory: working_directory,
-                    });
+                        process_group: None,
+                        project_name: None,
+                        cpu_usage: None,
+                        memory_usage: None,
+                        memory_percentage: None,
+                    };
+                    
+                    // Determine process group and project name
+                    process_info.process_group = process_info.determine_process_group();
+                    process_info.project_name = process_info.extract_project_name();
+                    
+                    return Ok(process_info);
                 }
             }
             "unknown".to_string()
@@ -259,7 +383,8 @@ impl ProcessMonitor {
         let (command_line, working_directory) = self.get_process_verbose_info_windows(pid).await;
 
         log::debug!("Creating ProcessInfo (Windows final) for PID {} on port {} with command_line: {:?}, working_directory: {:?}", pid, port, command_line, working_directory);
-        Ok(ProcessInfo {
+        
+        let mut process_info = ProcessInfo {
             pid,
             port,
             command: command.clone(),
@@ -268,7 +393,21 @@ impl ProcessMonitor {
             container_name: container_name,
             command_line: command_line,
             working_directory: working_directory,
-        })
+            process_group: None,
+            project_name: None,
+            cpu_usage: None,
+            memory_usage: None,
+            memory_percentage: None,
+        };
+        
+        // Determine process group and project name
+        process_info.process_group = process_info.determine_process_group();
+        process_info.project_name = process_info.extract_project_name();
+        
+        // Enhance process name with better context
+        process_info.name = Self::enhance_process_name(&process_info);
+        
+        Ok(process_info)
     }
 
     #[cfg(not(target_os = "windows"))]
@@ -522,8 +661,17 @@ impl ProcessMonitor {
         }
     }
 
-    pub async fn kill_process(&self, pid: i32) -> Result<()> {
+    pub async fn kill_process(&mut self, pid: i32) -> Result<()> {
+        self.kill_process_with_context(pid, "user", true).await
+    }
+    
+    pub async fn kill_process_with_context(&mut self, pid: i32, context: &str, add_to_history: bool) -> Result<()> {
         info!("Attempting to kill process {}", pid);
+        
+        // Find the process info before killing it
+        let process_info = self.current_processes.values()
+            .find(|p| p.pid == pid)
+            .cloned();
 
         #[cfg(not(target_os = "windows"))]
         {
@@ -587,6 +735,20 @@ impl ProcessMonitor {
                 }
             }
         }
+        
+        // Add to history if we found the process info and add_to_history is true
+        if add_to_history {
+            if let Some(process_info) = process_info {
+                let history_entry = ProcessHistoryEntry::new(&process_info, context.to_string());
+                self.history.add_entry(history_entry);
+                info!("Added process {} to history", pid);
+                
+                // Save history to file
+                if let Err(e) = self.history.save_to_file(&ProcessHistory::get_history_file_path()) {
+                    warn!("Failed to save history to file: {}", e);
+                }
+            }
+        }
 
         Ok(())
     }
@@ -622,7 +784,7 @@ impl ProcessMonitor {
         }
     }
 
-    pub async fn kill_all_processes(&self) -> Result<()> {
+    pub async fn kill_all_processes(&mut self) -> Result<()> {
         info!("Killing all monitored processes");
 
         let processes = self.scan_processes().await?;
@@ -630,7 +792,12 @@ impl ProcessMonitor {
 
         for (port, process_info) in processes {
             info!("Killing process on port {} (PID: {})", port, process_info.pid);
-            if let Err(e) = self.kill_process(process_info.pid).await {
+            
+            // Add to history before killing
+            let history_entry = ProcessHistoryEntry::new(&process_info, "bulk".to_string());
+            self.history.add_entry(history_entry);
+            
+            if let Err(e) = self.kill_process_with_context(process_info.pid, "bulk", false).await {
                 errors.push(format!("Port {} (PID {}): {}", port, process_info.pid, e));
             }
         }
@@ -638,6 +805,11 @@ impl ProcessMonitor {
         if !errors.is_empty() {
             let error_msg = errors.join("; ");
             return Err(anyhow::anyhow!("Some processes failed to kill: {}", error_msg));
+        }
+
+        // Save history to file after killing all processes
+        if let Err(e) = self.history.save_to_file(&ProcessHistory::get_history_file_path()) {
+            warn!("Failed to save history to file: {}", e);
         }
 
         info!("All processes killed successfully");
@@ -655,6 +827,85 @@ impl ProcessMonitor {
             Err(_) => false,
         }
     }
+    
+    pub fn get_history(&self) -> &ProcessHistory {
+        &self.history
+    }
+    
+    pub fn get_recent_history(&self, limit: usize) -> &[ProcessHistoryEntry] {
+        self.history.get_recent_entries(limit)
+    }
+    
+    pub fn clear_history(&mut self) {
+        self.history.clear();
+        // Save empty history to file
+        if let Err(e) = self.history.save_to_file(&ProcessHistory::get_history_file_path()) {
+            warn!("Failed to save cleared history to file: {}", e);
+        }
+    }
+    
+    pub fn get_filter_stats(&self) -> Option<FilterStats> {
+        self.smart_filter.as_ref().map(|filter| filter.get_filter_stats())
+    }
+    
+    /// Enhance process name with better context and descriptions
+    fn enhance_process_name(process_info: &ProcessInfo) -> String {
+        let original_name = &process_info.name;
+        
+        // If we have a command line, try to extract a better name from it
+        if let Some(ref cmd_line) = process_info.command_line {
+            // Look for common patterns in command lines
+            if cmd_line.contains("node") && cmd_line.contains("server") {
+                return "Node.js Server".to_string();
+            } else if cmd_line.contains("python") && cmd_line.contains("app") {
+                return "Python App".to_string();
+            } else if cmd_line.contains("npm") && cmd_line.contains("start") {
+                return "NPM Start".to_string();
+            } else if cmd_line.contains("yarn") && cmd_line.contains("start") {
+                return "Yarn Start".to_string();
+            } else if cmd_line.contains("docker") && cmd_line.contains("run") {
+                return "Docker Container".to_string();
+            } else if cmd_line.contains("java") && cmd_line.contains("jar") {
+                return "Java Application".to_string();
+            } else if cmd_line.contains("rails") && cmd_line.contains("server") {
+                return "Rails Server".to_string();
+            } else if cmd_line.contains("php") && cmd_line.contains("serve") {
+                return "PHP Server".to_string();
+            } else if cmd_line.contains("go") && cmd_line.contains("run") {
+                return "Go Application".to_string();
+            } else if cmd_line.contains("rust") && cmd_line.contains("run") {
+                return "Rust Application".to_string();
+            }
+        }
+        
+        // If we have a working directory, try to infer the purpose
+        if let Some(ref work_dir) = process_info.working_directory {
+            if work_dir.contains("frontend") || work_dir.contains("client") {
+                return format!("{} (Frontend)", original_name);
+            } else if work_dir.contains("backend") || work_dir.contains("api") {
+                return format!("{} (Backend)", original_name);
+            } else if work_dir.contains("database") || work_dir.contains("db") {
+                return format!("{} (Database)", original_name);
+            } else if work_dir.contains("test") || work_dir.contains("spec") {
+                return format!("{} (Test)", original_name);
+            }
+        }
+        
+        // If we have a process group, use that for context
+        if let Some(ref group) = process_info.process_group {
+            match group.as_str() {
+                "Node.js" => "Node.js Process".to_string(),
+                "Python" => "Python Process".to_string(),
+                "Java" => "Java Process".to_string(),
+                "Docker" => "Docker Container".to_string(),
+                "Web Server" => "Web Server".to_string(),
+                "Database" => "Database Server".to_string(),
+                _ => original_name.clone(),
+            }
+        } else {
+            original_name.clone()
+        }
+    }
 }
 
     // Platform-agnostic process management functions
@@ -664,7 +915,7 @@ pub fn get_processes_on_ports(ports: &[u16], args: &crate::cli::Args) -> (usize,
         use crossbeam_channel::bounded;
         
         let (update_sender, _update_receiver) = bounded(100);
-        if let Ok(process_monitor) = ProcessMonitor::new(update_sender, ports.to_vec(), args.docker, args.verbose) {
+        if let Ok(mut process_monitor) = ProcessMonitor::new(update_sender, ports.to_vec(), args.docker, args.verbose) {
             let rt = tokio::runtime::Runtime::new().unwrap();
             match rt.block_on(process_monitor.scan_processes()) {
                 Ok(processes) => return (processes.len(), processes),
@@ -709,17 +960,29 @@ pub fn get_processes_on_ports(ports: &[u16], args: &crate::cli::Args) -> (usize,
                         let should_ignore = ignore_ports.contains(&port) || ignore_processes.contains(&name);
                         
                         if !should_ignore {
-                            log::debug!("Creating ProcessInfo (lsof fallback) for PID {} on port {} with command_line: None, working_directory: None", pid, port);
-                            processes.insert(port, crate::types::ProcessInfo {
-                                pid,
-                                port,
-                                command,
-                                name,
-                                container_id: None,
-                                container_name: None,
-                                command_line: None,
-                                working_directory: None,
-                            });
+                        log::debug!("Creating ProcessInfo (lsof fallback) for PID {} on port {} with command_line: None, working_directory: None", pid, port);
+                        
+                        let mut process_info = crate::types::ProcessInfo {
+                            pid,
+                            port,
+                            command,
+                            name,
+                            container_id: None,
+                            container_name: None,
+                            command_line: None,
+                            working_directory: None,
+                            process_group: None,
+                            project_name: None,
+                            cpu_usage: None,
+                            memory_usage: None,
+                            memory_percentage: None,
+                        };
+                        
+                        // Determine process group and project name
+                        process_info.process_group = process_info.determine_process_group();
+                        process_info.project_name = process_info.extract_project_name();
+                        
+                        processes.insert(port, process_info);
                         } else {
                             log::info!("Ignoring process {} (PID {}) on port {} (ignored by user configuration)", name, pid, port);
                         }

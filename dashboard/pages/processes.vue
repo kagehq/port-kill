@@ -28,9 +28,13 @@
                 <PauseIcon v-else class="w-4 h-4" />
                 <span>{{ isAutoRefreshEnabled ? 'Pause' : 'Resume' }}</span>
               </button>
-              <button @click="refreshData(false)" class="border border-gray-500/10 text-sm rounded-xl px-4 py-2 text-white bg-gray-500/10 hover:bg-gray-500/15 flex items-center space-x-2">
-                <ArrowPathIcon class="w-4 h-4" />
-                <span>Refresh</span>
+              <button 
+                @click="refreshData(true)" 
+                :disabled="isLoading"
+                class="border border-gray-500/10 text-sm rounded-xl px-4 py-2 text-white bg-gray-500/10 hover:bg-gray-500/15 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+              >
+                <ArrowPathIcon :class="['w-4 h-4', isLoading ? 'animate-spin' : '']" />
+                <span>{{ isLoading ? 'Refreshing...' : 'Refresh' }}</span>
               </button>
 							<span class="text-sm text-gray-500/10">|</span>
               <button
@@ -215,13 +219,18 @@ const filteredProcesses = computed(() => {
 const refreshData = async (showLoading = true) => {
   try {
     if (showLoading) isLoading.value = true
+    
     const data = await $fetch('/api/processes', {
       query: {
-        ports: '3000,3001,3002,3003,3004,4000,9000,9001',
+        ports: '3000,3001,3002,3003,3004,4000,8000,9000,9001',
         docker: true,
-        verbose: true
+        verbose: true,
+        performance: true,
+        showContext: true,
+        smartFilter: true
       }
     })
+    
     if (data && data.success) {
       processes.value = data.processes || []
       isConnected.value = true
@@ -255,8 +264,11 @@ const killAllProcesses = async () => {
       await $fetch('/api/processes/kill-all', {
         method: 'POST',
         query: {
-          ports: '3000,3001,3002,3003,3004,4000,9000,9001',
+          ports: '3000,3001,3002,3003,3004,4000,8000,9000,9001',
           docker: true,
+          performance: true,
+          showContext: true,
+          smartFilter: true,
           verbose: true
         }
       })
@@ -274,7 +286,7 @@ const killAllProcesses = async () => {
 
 // Lifecycle
 onMounted(async () => {
-  await refreshData(false)
+  await refreshData(true) // Show loading state on initial load
   if (isAutoRefreshEnabled.value) {
     timer = setInterval(() => refreshData(false), refreshInterval)
   }

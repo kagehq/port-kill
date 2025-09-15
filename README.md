@@ -19,7 +19,7 @@ Join our Discord community for discussions, support, and updates:
 ## Features
 
 ### Core Features (All Platforms)
-- **Real-time Monitoring**: Scans configurable ports every 5 seconds using `lsof` commands
+- **Real-time Monitoring**: Scans configurable ports every 2 seconds using `lsof` commands
 - **Process Detection**: Identifies processes by name, PID, and Docker containers
 - **Safe Process Termination**: Uses SIGTERM → SIGKILL termination strategy
 - **Configurable Port Ranges**: Monitor specific ports or port ranges
@@ -28,6 +28,12 @@ Join our Discord community for discussions, support, and updates:
 - **PID Display**: Optional PID display for better process identification
 - **Graceful Error Handling**: Handles permission errors and process failures
 - **Log Level Control**: Configurable logging verbosity (info, warn, error, none)
+- **Smart Filtering**: Advanced filtering with pattern matching and group-based filtering
+- **Performance Monitoring**: Real-time CPU and memory usage tracking
+- **Process Grouping**: Automatic categorization of processes (Node.js, Python, Docker, etc.)
+- **Project Context**: Extract project names from working directories
+- **Process History**: Track killed processes with persistent storage
+- **JSON Output**: Machine-readable output for API integration
 
 ### Platform-Specific Features
 - **macOS**: Native system tray with dynamic context menu and visual status icon
@@ -38,9 +44,17 @@ Join our Discord community for discussions, support, and updates:
 ### Advanced Features
 - **Individual Process Killing**: Kill specific processes by clicking menu items
 - **Bulk Process Killing**: Kill all detected processes with one click
+- **Group-based Killing**: Kill processes by type (Node.js, Python, Docker, etc.)
+- **Project-based Killing**: Kill processes by project name
+- **Process Restart**: Restart processes after killing them
+- **Process Tree View**: Display hierarchical process relationships
 - **Ignore Configuration**: Exclude system processes (Chromecast, AirDrop, etc.)
 - **Docker Integration**: Display container names and IDs for Docker processes
 - **Verbose Mode**: Detailed process information including command line, working directory, and PID for better process identification
+- **Smart Defaults**: Intelligent filtering to focus on development processes
+- **Pattern Matching**: Advanced regex-based process filtering
+- **Quick Actions**: Command-line utilities for bulk operations
+- **Status Indicators**: Visual feedback for process health and system status
 
 ## Dashboard
 
@@ -50,9 +64,18 @@ A web dashboard is available in the `dashboard/` directory, providing a rich gra
 
 **Features:**
 - Real-time process monitoring with auto-refresh
-- Visual process table with filtering and search
+- Visual process table with advanced filtering and search
 - System resource monitoring (CPU, Memory, Disk, Load Average)
 - Port conflict detection and highlighting
+- Process history tracking with persistent storage
+- Group and project-based process management
+- Performance metrics display (CPU usage, memory usage)
+- Container information and Docker integration
+- Smart filtering with pattern matching
+- Process context and working directory display
+- Bulk operations (kill all, kill by group, kill by project)
+- Process restart functionality
+- Process tree visualization
 
 **Quick Start:**
 ```bash
@@ -62,6 +85,42 @@ npm run dev
 ```
 
 The dashboard will be available at `http://localhost:3002` and automatically connects to the Port Kill binary running on the same system.
+
+### Dashboard API Endpoints
+
+The dashboard provides a REST API for programmatic access to process monitoring and management:
+
+**Process Management:**
+- `GET /api/processes` - Get all processes with filtering options
+- `DELETE /api/processes/{pid}` - Kill a specific process by PID
+- `POST /api/processes/kill-all` - Kill all processes
+- `POST /api/processes/kill-group` - Kill processes by group
+- `POST /api/processes/kill-project` - Kill processes by project
+- `POST /api/processes/restart` - Restart processes
+- `GET /api/processes/tree` - Get process tree view
+
+**History Management:**
+- `GET /api/history` - Get process kill history
+- `POST /api/history/clear` - Clear process history
+
+**System Information:**
+- `GET /api/system/resources` - Get system resource usage
+- `GET /api/filters` - Get filter information
+
+**Example API Usage:**
+```bash
+# Get all processes
+curl "http://localhost:3002/api/processes?ports=3000,8000&performance=true"
+
+# Kill all processes
+curl -X POST "http://localhost:3002/api/processes/kill-all?ports=3000,8000"
+
+# Get process history
+curl "http://localhost:3002/api/history"
+
+# Get system resources
+curl "http://localhost:3002/api/system/resources"
+```
 
 ### Unified Quick Start
 
@@ -482,15 +541,62 @@ Port 8000: Python -m http.server 8000 (PID 5678) - ~/port-kill
 - `--help, -h`: Show help information
 - `--version, -V`: Show version information
 
+#### Advanced Command-Line Options
+
+The console application now supports many advanced features for power users:
+
+**Smart Filtering:**
+- `--smart-filter`: Enable smart filtering (focuses on development processes)
+- `--only-groups`: Filter by process groups (e.g., Node.js,Python,Docker)
+- `--ignore-groups`: Ignore specific groups (e.g., Docker,system)
+- `--ignore-patterns`: Ignore by regex patterns (e.g., "systemd|kernel")
+
+**Performance Monitoring:**
+- `--performance`: Enable CPU and memory usage tracking
+- `--show-context`: Show process context (project names, working directories)
+
+**Quick Actions:**
+- `--kill-all`: Kill all processes immediately
+- `--kill-group`: Kill processes by group (e.g., Node.js)
+- `--kill-project`: Kill processes by project name
+- `--restart`: Restart processes after killing them
+- `--show-tree`: Display hierarchical process relationships
+
+**History Management:**
+- `--show-history`: Show process kill history
+- `--clear-history`: Clear process history
+- `--show-filters`: Show filter information
+
+**JSON Output:**
+- `--json`: Output processes as JSON (for API integration)
+
+**Example Advanced Usage:**
+```bash
+# Smart filtering with performance monitoring
+./target/release/port-kill-console --smart-filter --performance --ports 3000,8000
+
+# Kill all Node.js processes
+./target/release/port-kill-console --kill-group Node.js --ports 3000,8000
+
+# Show process tree with context
+./target/release/port-kill-console --show-tree --show-context --ports 3000,8000
+
+# JSON output for API integration
+./target/release/port-kill-console --json --performance --ports 3000,8000
+```
 
 ## Technical Details
 
 ### Architecture
 
 - **Main Thread**: Handles UI events and menu interactions with winit event loop
-- **Process Monitor**: Scans for processes every 5 seconds using `lsof`
+- **Process Monitor**: Scans for processes every 2 seconds using `lsof` and `sysinfo`
 - **Menu Updates**: Updates context menu every 3 seconds when processes change
 - **Process Killing**: Runs in background threads to maintain UI responsiveness
+- **Smart Filtering**: Advanced pattern matching and group-based filtering
+- **Performance Monitoring**: Real-time CPU and memory usage tracking
+- **Process History**: Persistent storage of killed processes with timestamps
+- **JSON API**: Machine-readable output for dashboard integration
 
 ### Process Detection
 

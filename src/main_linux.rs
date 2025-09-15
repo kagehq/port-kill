@@ -160,37 +160,91 @@ async fn start_tray_mode(args: Args) -> Result<()> {
         let status_info = StatusBarInfo::from_process_count(process_count);
         println!("🔄 Port Status: {} - {}", status_info.text, status_info.tooltip);
         
-        // Print detected processes
+        // Print detected processes with grouping
         if process_count > 0 {
             println!("📋 Detected Processes:");
+            
+            // Group processes by type
+            let mut grouped_processes: std::collections::HashMap<String, Vec<(&u16, &crate::types::ProcessInfo)>> = std::collections::HashMap::new();
+            let mut ungrouped_processes = Vec::new();
+            
             for (port, process_info) in &processes {
-                if args_clone.verbose {
-                    // Verbose mode: show command line and working directory
-                    let mut parts = vec![format!("   • Port {}: {}", port, process_info.name)];
-                    
-                    if let Some(ref cmd_line) = process_info.command_line {
-                        parts.push(format!("({})", cmd_line));
-                    }
-                    
-                    if args_clone.show_pid {
-                        parts.push(format!("(PID {})", process_info.pid));
-                    }
-                    
-                    if let Some(ref work_dir) = process_info.working_directory {
-                        parts.push(format!("- {}", work_dir));
-                    }
-                    
-                    if let (Some(_container_id), Some(container_name)) = (&process_info.container_id, &process_info.container_name) {
-                        parts.push(format!("[Docker: {}]", container_name));
-                    }
-                    
-                    println!("{}", parts.join(" "));
-                } else if let (Some(_container_id), Some(container_name)) = (&process_info.container_id, &process_info.container_name) {
-                    println!("   • Port {}: {} [Docker: {}]", port, process_info.name, container_name);
-                } else if args_clone.show_pid {
-                    println!("   • Port {}: {} (PID {})", port, process_info.name, process_info.pid);
+                if let Some(ref group) = process_info.process_group {
+                    grouped_processes.entry(group.clone()).or_insert_with(Vec::new).push((port, process_info));
                 } else {
-                    println!("   • Port {}: {}", port, process_info.name);
+                    ungrouped_processes.push((port, process_info));
+                }
+            }
+            
+            // Print grouped processes
+            for (group_name, group_processes) in &grouped_processes {
+                println!("   🔹 {} ({} processes):", group_name, group_processes.len());
+                for (port, process_info) in group_processes {
+                    let display_name = process_info.get_display_name();
+                    if args_clone.verbose {
+                        // Verbose mode: show command line and working directory
+                        let mut parts = vec![format!("      • Port {}: {}", port, display_name)];
+                        
+                        if let Some(ref cmd_line) = process_info.command_line {
+                            parts.push(format!("({})", cmd_line));
+                        }
+                        
+                        if args_clone.show_pid {
+                            parts.push(format!("(PID {})", process_info.pid));
+                        }
+                        
+                        if let Some(ref work_dir) = process_info.working_directory {
+                            parts.push(format!("- {}", work_dir));
+                        }
+                        
+                        if let (Some(_container_id), Some(container_name)) = (&process_info.container_id, &process_info.container_name) {
+                            parts.push(format!("[Docker: {}]", container_name));
+                        }
+                        
+                        println!("{}", parts.join(" "));
+                    } else if let (Some(_container_id), Some(container_name)) = (&process_info.container_id, &process_info.container_name) {
+                        println!("      • Port {}: {} [Docker: {}]", port, display_name, container_name);
+                    } else if args_clone.show_pid {
+                        println!("      • Port {}: {} (PID {})", port, display_name, process_info.pid);
+                    } else {
+                        println!("      • Port {}: {}", port, display_name);
+                    }
+                }
+            }
+            
+            // Print ungrouped processes
+            if !ungrouped_processes.is_empty() {
+                println!("   🔹 Other ({} processes):", ungrouped_processes.len());
+                for (port, process_info) in &ungrouped_processes {
+                    let display_name = process_info.get_display_name();
+                    if args_clone.verbose {
+                        // Verbose mode: show command line and working directory
+                        let mut parts = vec![format!("      • Port {}: {}", port, display_name)];
+                        
+                        if let Some(ref cmd_line) = process_info.command_line {
+                            parts.push(format!("({})", cmd_line));
+                        }
+                        
+                        if args_clone.show_pid {
+                            parts.push(format!("(PID {})", process_info.pid));
+                        }
+                        
+                        if let Some(ref work_dir) = process_info.working_directory {
+                            parts.push(format!("- {}", work_dir));
+                        }
+                        
+                        if let (Some(_container_id), Some(container_name)) = (&process_info.container_id, &process_info.container_name) {
+                            parts.push(format!("[Docker: {}]", container_name));
+                        }
+                        
+                        println!("{}", parts.join(" "));
+                    } else if let (Some(_container_id), Some(container_name)) = (&process_info.container_id, &process_info.container_name) {
+                        println!("      • Port {}: {} [Docker: {}]", port, display_name, container_name);
+                    } else if args_clone.show_pid {
+                        println!("      • Port {}: {} (PID {})", port, display_name, process_info.pid);
+                    } else {
+                        println!("      • Port {}: {}", port, display_name);
+                    }
                 }
             }
         } else {

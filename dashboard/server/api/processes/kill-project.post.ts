@@ -5,8 +5,9 @@ import { promisify } from 'util'
 export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig()
   try {
-    // Get query parameters to determine which processes to kill
+    // Get query parameters
     const query = getQuery(event)
+    const projects = String(query.projects || '')
     const ports = String(query.ports || '3000,3001,3002,3003,3004,4000,9000,9001')
     const ignorePorts = String(query.ignorePorts || '5353,5000,7000')
     const ignoreProcesses = String(query.ignoreProcesses || 'Chrome,ControlCe,rapportd')
@@ -19,8 +20,12 @@ export default defineEventHandler(async (event) => {
     const docker = query.docker === 'true' || query.docker === true
     const verbose = query.verbose === 'true' || query.verbose === true
     
-    console.log('Kill-all API called with ports:', ports)
-    console.log('Binary path:', config.portKillBinaryPath)
+    if (!projects) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'Projects parameter is required'
+      })
+    }
     
     // Find the correct binary path
     const binaryPath = findPortKillBinary(config.portKillBinaryPath)
@@ -28,38 +33,10 @@ export default defineEventHandler(async (event) => {
       throw new Error('Port Kill binary not found. Please build the Rust application first.')
     }
     
-    console.log('Using binary path:', binaryPath)
-    
-    // First, get all processes using the Rust application
-    const processes = await getProcessesWithRustApp(
+    // Kill processes by project using the Rust application
+    const results = await killProjectProcessesWithRustApp(
       binaryPath,
-      ports,
-      ignorePorts,
-      ignoreProcesses,
-      ignorePatterns,
-      ignoreGroups,
-      onlyGroups,
-      smartFilter,
-      performance,
-      showContext,
-      docker,
-      verbose
-    )
-    
-    console.log('Found processes:', processes.length)
-    
-    if (processes.length === 0) {
-      return {
-        success: true,
-        message: 'No processes found to kill',
-        killedCount: 0,
-        timestamp: new Date().toISOString()
-      }
-    }
-    
-    // Kill all processes using the Rust application
-    const results = await killAllProcessesWithRustApp(
-      binaryPath,
+      projects,
       ports,
       ignorePorts,
       ignoreProcesses,
@@ -75,18 +52,19 @@ export default defineEventHandler(async (event) => {
     
     return {
       success: true,
-      message: `Killed ${results.killedCount} processes${results.failedCount > 0 ? `, ${results.failedCount} failed` : ''}`,
+      message: `Killed ${results.killedCount} processes from projects: ${projects}${results.failedCount > 0 ? `, ${results.failedCount} failed` : ''}`,
       killedCount: results.killedCount,
       failedCount: results.failedCount,
+      projects: projects.split(','),
       timestamp: new Date().toISOString()
     }
     
   } catch (error: any) {
-    console.error('Error killing all processes:', error)
+    console.error('Error killing processes by project:', error)
     
     throw createError({
       statusCode: 500,
-      statusMessage: `Failed to kill all processes: ${error.message}`
+      statusMessage: `Failed to kill processes by project: ${error.message}`
     })
   }
 })
@@ -114,87 +92,9 @@ function findPortKillBinary(defaultPath: string): string | null {
   return null
 }
 
-async function getProcessesWithRustApp(
+async function killProjectProcessesWithRustApp(
   binaryPath: string,
-  ports: string,
-  ignorePorts: string,
-  ignoreProcesses: string,
-  ignorePatterns: string,
-  ignoreGroups: string,
-  onlyGroups: string,
-  smartFilter: boolean,
-  performance: boolean,
-  showContext: boolean,
-  docker: boolean,
-  verbose: boolean
-): Promise<any[]> {
-  return new Promise((resolve, reject) => {
-    const args = [
-      '--ports', ports,
-      '--json'
-    ]
-    if (ignorePorts) args.push('--ignore-ports', ignorePorts)
-    if (ignoreProcesses) args.push('--ignore-processes', ignoreProcesses)
-    if (ignorePatterns) args.push('--ignore-patterns', ignorePatterns)
-    if (ignoreGroups) args.push('--ignore-groups', ignoreGroups)
-    if (onlyGroups) args.push('--only-groups', onlyGroups)
-    if (smartFilter) args.push('--smart-filter')
-    if (performance) args.push('--performance')
-    if (showContext) args.push('--show-context')
-    if (docker) args.push('--docker')
-    if (verbose) args.push('--verbose')
-
-    const rustApp = spawn(binaryPath, args, { stdio: ['pipe', 'pipe', 'pipe'] })
-    let stdout = ''
-    let stderr = ''
-    
-    rustApp.stdout.on('data', (data) => {
-      stdout += data.toString()
-    })
-    
-    rustApp.stderr.on('data', (data) => {
-      stderr += data.toString()
-    })
-    
-    rustApp.on('close', (code) => {
-      if (code !== 0) {
-        console.warn(`Rust app failed with code ${code}: ${stderr}`)
-        // Fallback to empty array if Rust app fails
-        resolve([])
-        return
-      }
-      
-      try {
-        const lines = stdout.trim().split('\n')
-        const processes = []
-        for (const line of lines) {
-          if (line.trim()) {
-            try {
-              const process = JSON.parse(line)
-              if (process.pid && process.port) {
-                processes.push(process)
-              }
-            } catch (e) {
-              // Skip invalid JSON lines
-            }
-          }
-        }
-        resolve(processes)
-      } catch (error) {
-        reject(error)
-      }
-    })
-    
-    rustApp.on('error', (error) => {
-      console.warn(`Failed to spawn Rust app: ${error.message}`)
-      // Fallback to empty array if spawn fails
-      resolve([])
-    })
-  })
-}
-
-async function killAllProcessesWithRustApp(
-  binaryPath: string,
+  projects: string,
   ports: string,
   ignorePorts: string,
   ignoreProcesses: string,
@@ -208,10 +108,9 @@ async function killAllProcessesWithRustApp(
   verbose: boolean
 ): Promise<{ killedCount: number; failedCount: number }> {
   return new Promise((resolve, reject) => {
-    // Use the new --kill-all command
     const args = [
       '--ports', ports,
-      '--kill-all'
+      '--kill-project', projects
     ]
     if (ignorePorts) args.push('--ignore-ports', ignorePorts)
     if (ignoreProcesses) args.push('--ignore-processes', ignoreProcesses)
@@ -226,7 +125,7 @@ async function killAllProcessesWithRustApp(
 
     const rustApp = spawn(binaryPath, args, { 
       stdio: ['pipe', 'pipe', 'pipe'],
-      timeout: 10000 // 10 second timeout
+      timeout: 10000
     })
     
     let stdout = ''
@@ -239,10 +138,10 @@ async function killAllProcessesWithRustApp(
       stdout += output
       
       // Count killed processes from output
-      const killMatches = output.match(/✅ Killed \d+\/\d+ processes/g)
+      const killMatches = output.match(/✅ Killed \d+\/\d+ processes from projects:/g)
       if (killMatches) {
         const match = killMatches[0]
-        const countMatch = match.match(/✅ Killed (\d+)\/\d+ processes/)
+        const countMatch = match.match(/✅ Killed (\d+)\/\d+ processes from projects:/)
         if (countMatch) {
           killedCount = parseInt(countMatch[1])
         }
@@ -261,7 +160,6 @@ async function killAllProcessesWithRustApp(
     rustApp.on('close', (code) => {
       if (code !== 0) {
         console.warn(`Rust app failed with code ${code}: ${stderr}`)
-        // Still return the counts we managed to get
       }
       
       resolve({ killedCount, failedCount })

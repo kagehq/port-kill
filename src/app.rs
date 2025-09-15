@@ -26,6 +26,7 @@ pub struct PortKillApp {
     tray_menu: TrayMenu,
     args: Args,
     current_processes: Arc<StdMutex<HashMap<u16, crate::types::ProcessInfo>>>,
+    menu_id_to_port: Arc<StdMutex<HashMap<String, u16>>>,
 }
 
 #[cfg(target_os = "macos")]
@@ -43,6 +44,7 @@ impl PortKillApp {
             tray_menu,
             args,
             current_processes: Arc::new(StdMutex::new(HashMap::new())),
+            menu_id_to_port: Arc::new(StdMutex::new(HashMap::new())),
         })
     }
 
@@ -86,6 +88,7 @@ impl PortKillApp {
         // Set up menu event handling
         let menu_event_receiver = self.menu_event_receiver.clone();
         let current_processes = self.current_processes.clone();
+        let menu_id_to_port = self.menu_id_to_port.clone();
         let args = self.args.clone();
         
         // Run the event loop
@@ -103,6 +106,7 @@ impl PortKillApp {
                     let current_processes_clone = current_processes.clone();
                     let is_killing_clone = is_killing_processes.clone();
                     let args_clone = args.clone();
+                    let menu_id_to_port_clone = menu_id_to_port.clone();
                     
                     std::thread::spawn(move || {
                         // Add a delay to ensure the menu system is stable
@@ -113,61 +117,48 @@ impl PortKillApp {
                             let processes = &*current_processes_guard;
                             
                             // Parse the menu event to determine action
-                            let menu_id_str = event.id.0.clone();
-                            info!("Menu ID: {}", menu_id_str);
+                            let menu_id = event.id.0.clone();
+                            info!("Menu ID: {}", menu_id);
                             
-                            // Menu structure:
-                            // 0: "Kill All Processes"
-                            // 1: separator
-                            // 2+: individual processes
-                            // last: separator + "Quit"
+                            // We need to determine which menu item was clicked based on the menu ID
+                            // Since the tray-icon crate uses internal IDs, we'll use a different approach
+                            // We'll check if this is a known special menu ID first
                             
-                            if menu_id_str == "0" {
+                            if menu_id == "0" {
                                 // "Kill All Processes" clicked
                                 info!("Kill All Processes clicked, killing all processes...");
                                 let ports_to_kill = args_clone.get_ports_to_monitor();
                                 Self::kill_all_processes(&ports_to_kill, &args_clone)
-                            } else if let Ok(menu_index) = menu_id_str.parse::<usize>() {
-                                // Calculate the actual menu structure
-                                let kill_all_index = 0;
-                                let separator1_index = 1;
-                                let first_process_index = 2;
-                                let last_process_index = first_process_index + processes.len() - 1;
-                                let separator2_index = last_process_index + 1;
-                                let quit_index = separator2_index + 1;
+                            } else if menu_id == "1" {
+                                // "Quit" clicked - just exit gracefully without killing processes
+                                info!("Quit clicked, exiting gracefully...");
+                                // Exit the application gracefully without killing processes
+                                std::process::exit(0);
+                            } else {
+                                // For individual process clicks, use the menu ID mapping
+                                info!("Individual process clicked (ID: {}), looking up port...", menu_id);
                                 
-                                info!("Menu structure: KillAll={}, Sep1={}, Processes={}-{}, Sep2={}, Quit={}", 
-                                      kill_all_index, separator1_index, first_process_index, last_process_index, 
-                                      separator2_index, quit_index);
-                                
-                                if menu_index >= first_process_index && menu_index <= last_process_index {
-                                    // Individual process clicked
-                                    let process_index = menu_index - first_process_index;
-                                    let process_entries: Vec<_> = processes.iter().collect();
-                                    if process_index < process_entries.len() {
-                                        let (port, process_info) = process_entries[process_index];
-                                        info!("Killing individual process on port {} with PID {}", port, process_info.pid);
-                                        Self::kill_single_process(process_info.pid, &args_clone)
+                                // Get the menu ID to port mapping
+                                if let Ok(menu_id_guard) = menu_id_to_port_clone.lock() {
+                                    if let Some(&port) = menu_id_guard.get(&menu_id) {
+                                        // Found the port for this menu ID, kill the specific process
+                                        if let Some(process_info) = processes.get(&port) {
+                                            info!("Killing specific process on port {} with PID {}", port, process_info.pid);
+                                            Self::kill_single_process(process_info.pid, &args_clone)
+                                        } else {
+                                            error!("Process not found for port {}", port);
+                                            Ok(())
+                                        }
                                     } else {
-                                        error!("Invalid process index: {} (max: {})", process_index, process_entries.len());
-                                        Ok(())
+                                        // Menu ID not found in mapping, kill all processes as fallback
+                                        info!("Menu ID {} not found in mapping, killing all processes as fallback...", menu_id);
+                                        let ports_to_kill = args_clone.get_ports_to_monitor();
+                                        Self::kill_all_processes(&ports_to_kill, &args_clone)
                                     }
-                                } else if menu_index == quit_index {
-                                    // "Quit" clicked - just exit gracefully without killing processes
-                                    info!("Quit clicked, exiting gracefully...");
-                                    // Exit the application gracefully without killing processes
-                                    std::process::exit(0);
                                 } else {
-                                    // Invalid menu index
-                                    error!("Invalid menu index: {} (processes: {}, valid range: {}-{})", 
-                                           menu_index, processes.len(), first_process_index, quit_index);
+                                    error!("Failed to access menu ID mapping");
                                     Ok(())
                                 }
-                            } else {
-                                // Default to kill all processes for unknown menu items
-                                info!("Unknown menu item clicked: {}, killing all processes...", menu_id_str);
-                                let ports_to_kill = args_clone.get_ports_to_monitor();
-                                Self::kill_all_processes(&ports_to_kill, &args_clone)
                             }
                         } else {
                             error!("Failed to access current processes");
@@ -229,16 +220,49 @@ impl PortKillApp {
                     *current_processes_guard = processes.clone();
                 }
                 
-                // Print detected processes
+                // Print detected processes with grouping
                 if process_count > 0 {
                     println!("📋 Detected Processes:");
+                    
+                    // Group processes by type
+                    let mut grouped_processes: std::collections::HashMap<String, Vec<(&u16, &crate::types::ProcessInfo)>> = std::collections::HashMap::new();
+                    let mut ungrouped_processes = Vec::new();
+                    
                     for (port, process_info) in &processes {
-                        if let (Some(_container_id), Some(container_name)) = (&process_info.container_id, &process_info.container_name) {
-                            println!("   • Port {}: {} [Docker: {}]", port, process_info.name, container_name);
-                        } else if args.show_pid {
-                            println!("   • Port {}: {} (PID {})", port, process_info.name, process_info.pid);
+                        if let Some(ref group) = process_info.process_group {
+                            grouped_processes.entry(group.clone()).or_insert_with(Vec::new).push((port, process_info));
                         } else {
-                            println!("   • Port {}: {}", port, process_info.name);
+                            ungrouped_processes.push((port, process_info));
+                        }
+                    }
+                    
+                    // Print grouped processes
+                    for (group_name, group_processes) in &grouped_processes {
+                        println!("   🔹 {} ({} processes):", group_name, group_processes.len());
+                        for (port, process_info) in group_processes {
+                            let display_name = process_info.get_display_name();
+                            if let (Some(_container_id), Some(container_name)) = (&process_info.container_id, &process_info.container_name) {
+                                println!("      • Port {}: {} [Docker: {}]", port, display_name, container_name);
+                            } else if args.show_pid {
+                                println!("      • Port {}: {} (PID {})", port, display_name, process_info.pid);
+                            } else {
+                                println!("      • Port {}: {}", port, display_name);
+                            }
+                        }
+                    }
+                    
+                    // Print ungrouped processes
+                    if !ungrouped_processes.is_empty() {
+                        println!("   🔹 Other ({} processes):", ungrouped_processes.len());
+                        for (port, process_info) in &ungrouped_processes {
+                            let display_name = process_info.get_display_name();
+                            if let (Some(_container_id), Some(container_name)) = (&process_info.container_id, &process_info.container_name) {
+                                println!("      • Port {}: {} [Docker: {}]", port, display_name, container_name);
+                            } else if args.show_pid {
+                                println!("      • Port {}: {} (PID {})", port, display_name, process_info.pid);
+                            } else {
+                                println!("      • Port {}: {}", port, display_name);
+                            }
                         }
                     }
                 } else {
@@ -289,9 +313,15 @@ impl PortKillApp {
                                 match std::panic::catch_unwind(|| {
                                     TrayMenu::create_menu_with_verbose(&valid_processes, args.show_pid, args.verbose)
                                 }) {
-                                    Ok(Ok(new_menu)) => {
+                                    Ok(Ok((new_menu, new_menu_id_to_port))) => {
                                         // Set the new menu on the tray icon
                                         icon.set_menu(Some(Box::new(new_menu)));
+                                        
+                                        // Store the menu ID to port mapping for event handling
+                                        if let Ok(mut menu_id_guard) = menu_id_to_port.lock() {
+                                            *menu_id_guard = new_menu_id_to_port;
+                                        }
+                                        
                                         last_process_count = valid_process_count;
                                         last_menu_update = std::time::Instant::now();
                                         info!("Menu updated successfully for {} processes", valid_process_count);
@@ -327,7 +357,7 @@ impl PortKillApp {
         
         // Create a temporary ProcessMonitor to get verbose information
         let (update_sender, _update_receiver) = bounded(100);
-        if let Ok(process_monitor) = ProcessMonitor::new(update_sender, ports.to_vec(), args.docker, args.verbose) {
+        if let Ok(mut process_monitor) = ProcessMonitor::new_with_performance(update_sender, ports.to_vec(), args.docker, args.verbose, None, true) {
             // Use tokio runtime to run the async scan_processes method
             let rt = tokio::runtime::Runtime::new().unwrap();
             match rt.block_on(process_monitor.scan_processes()) {
@@ -373,7 +403,8 @@ impl PortKillApp {
                             
                             if !should_ignore {
                         log::debug!("Creating ProcessInfo (app.rs) for PID {} on port {} with command_line: None, working_directory: None", pid, port);
-                        processes.insert(port, crate::types::ProcessInfo {
+                        
+                        let mut process_info = crate::types::ProcessInfo {
                             pid,
                             port,
                             command,
@@ -382,7 +413,18 @@ impl PortKillApp {
                             container_name: None,
                             command_line: None,
                             working_directory: None,
-                        });
+                            process_group: None,
+                            project_name: None,
+                            cpu_usage: None,
+                            memory_usage: None,
+                            memory_percentage: None,
+                        };
+                        
+                        // Determine process group and project name
+                        process_info.process_group = process_info.determine_process_group();
+                        process_info.project_name = process_info.extract_project_name();
+                        
+                        processes.insert(port, process_info);
                             } else {
                                 info!("Ignoring process {} (PID {}) on port {} (ignored by user configuration)", name, pid, port);
                             }
