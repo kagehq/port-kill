@@ -399,6 +399,16 @@ jobs:
           Copy-Item "src/smart_filter.rs" "console-build/smart_filter.rs"
           Copy-Item "src/system_monitor.rs" "console-build/system_monitor.rs"
           
+          # Create lib.rs for module declarations
+          @"
+          pub mod types;
+          pub mod cli;
+          pub mod smart_filter;
+          pub mod system_monitor;
+          pub mod process_monitor;
+          pub mod console_app;
+          "@ | Out-File -FilePath "console-build/lib.rs" -Encoding utf8
+          
           # Create standalone main.rs with direct imports
           @"
           use anyhow::Result;
@@ -411,6 +421,8 @@ jobs:
           mod process_monitor;
           mod types;
           mod cli;
+          mod smart_filter;
+          mod system_monitor;
 
           #[tokio::main]
           async fn main() -> Result<()> {
