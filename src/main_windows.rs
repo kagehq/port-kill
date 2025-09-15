@@ -1,9 +1,7 @@
-use port_kill::{
-    cli::Args,
-    console_app::ConsolePortKillApp,
-    types::StatusBarInfo,
-    process_monitor::{get_processes_on_ports, kill_all_processes},
-};
+use cli::Args;
+use console_app::ConsolePortKillApp;
+use types::StatusBarInfo;
+use process_monitor::{get_processes_on_ports, kill_all_processes};
 use tray_item::TrayItem;
 use anyhow::Result;
 use clap::Parser;
@@ -141,7 +139,7 @@ fn run_windows_tray_mode(args: Args) -> Result<()> {
                     println!("📋 Detected Processes:");
                     
                     // Group processes by type
-                    let mut grouped_processes: std::collections::HashMap<String, Vec<(&u16, &crate::types::ProcessInfo)>> = std::collections::HashMap::new();
+                    let mut grouped_processes: std::collections::HashMap<String, Vec<(&u16, &ProcessInfo)>> = std::collections::HashMap::new();
                     let mut ungrouped_processes = Vec::new();
                     
                     for (port, process_info) in &processes {

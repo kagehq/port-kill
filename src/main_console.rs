@@ -1,6 +1,7 @@
 use anyhow::Result;
 use log::info;
-use port_kill::{console_app::ConsolePortKillApp, cli::Args};
+use console_app::ConsolePortKillApp;
+use cli::Args;
 use clap::Parser;
 
 #[tokio::main]
