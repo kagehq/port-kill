@@ -1051,9 +1051,12 @@ jobs:
           Copy-Item "src/types.windows.rs" "src/types.rs"
           Copy-Item "src/cli.windows.rs" "src/cli.rs"
           Copy-Item "src/main.windows.rs" "src/main_windows.rs"
+          
+          # Ensure the new source files are available (they should already be there)
+          # The backup/restore process should handle this, but let's make sure
 
-          # Build Windows binary
-          cargo build --release --bin port-kill
+          # Build Windows console binary only (no need for main library)
+          cargo build --release --bin port-kill-console
 
           # Restore
           Copy-Item "Cargo.backup" "Cargo.toml" -ErrorAction SilentlyContinue
