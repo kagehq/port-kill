@@ -16,7 +16,7 @@ echo "📦 Creating Linux-specific build configuration..."
 cat > Cargo.linux.tmp.toml << 'EOF'
 [package]
 name = "port-kill"
-version = "0.1.0"
+version = "0.2.2"
 edition = "2021"
 
 [[bin]]
@@ -39,6 +39,9 @@ thiserror = "1.0"
 log = "0.4"
 env_logger = "0.10"
 clap = { version = "4.0", features = ["derive"] }
+regex = "1.0"
+sysinfo = "0.30"
+chrono = { version = "0.4", features = ["serde"] }
 
 # Linux-specific tray support
 libappindicator = "0.7"
@@ -53,6 +56,8 @@ pub mod console_app;
 pub mod process_monitor;
 pub mod types;
 pub mod cli;
+pub mod smart_filter;
+pub mod system_monitor;
 
 // Exclude macOS-specific modules for Linux build
 // pub mod app;
