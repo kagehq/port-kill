@@ -1033,6 +1033,7 @@ jobs:
           pub mod process_monitor;
           pub mod smart_filter;
           pub mod system_monitor;
+          pub mod console_app;
           "@ | Out-File -FilePath "src/lib.windows.rs" -Encoding utf8
 
           # Backup and switch
@@ -1043,6 +1044,7 @@ jobs:
           Copy-Item "src/cli.rs" "src/cli.backup" -ErrorAction SilentlyContinue
           Copy-Item "src/smart_filter.rs" "src/smart_filter.backup" -ErrorAction SilentlyContinue
           Copy-Item "src/system_monitor.rs" "src/system_monitor.backup" -ErrorAction SilentlyContinue
+          Copy-Item "src/console_app.rs" "src/console_app.backup" -ErrorAction SilentlyContinue
           Copy-Item "src/main_windows.rs" "src/main_windows.backup" -ErrorAction SilentlyContinue
           
           # Use the main Cargo.toml (no need for separate Windows file)
@@ -1066,6 +1068,7 @@ jobs:
           Copy-Item "src/cli.backup" "src/cli.rs" -ErrorAction SilentlyContinue
           Copy-Item "src/smart_filter.backup" "src/smart_filter.rs" -ErrorAction SilentlyContinue
           Copy-Item "src/system_monitor.backup" "src/system_monitor.rs" -ErrorAction SilentlyContinue
+          Copy-Item "src/console_app.backup" "src/console_app.rs" -ErrorAction SilentlyContinue
           Copy-Item "src/main_windows.backup" "src/main_windows.rs" -ErrorAction SilentlyContinue
           
           # Clean up
@@ -1081,6 +1084,7 @@ jobs:
           Remove-Item "src/cli.backup" -ErrorAction SilentlyContinue
           Remove-Item "src/smart_filter.backup" -ErrorAction SilentlyContinue
           Remove-Item "src/system_monitor.backup" -ErrorAction SilentlyContinue
+          Remove-Item "src/console_app.backup" -ErrorAction SilentlyContinue
           Remove-Item "src/main_windows.backup" -ErrorAction SilentlyContinue
         shell: pwsh
 
