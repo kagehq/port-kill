@@ -48,13 +48,11 @@ A web dashboard is available in the `dashboard/` directory, providing a rich gra
 
 ![Port Kill Dashboard](dashboard/assets/img/portkill-dashboard.png)
 
-**Dashboard Features:**
+**Features:**
 - Real-time process monitoring with auto-refresh
 - Visual process table with filtering and search
 - System resource monitoring (CPU, Memory, Disk, Load Average)
 - Port conflict detection and highlighting
-- Docker container integration
-- Responsive design with dark theme
 
 **Quick Start:**
 ```bash
@@ -64,6 +62,48 @@ npm run dev
 ```
 
 The dashboard will be available at `http://localhost:3002` and automatically connects to the Port Kill binary running on the same system.
+
+### Unified Quick Start
+
+Prerequisites:
+- Rust toolchain (via `rustup`)
+- Node.js 18+ and npm
+
+Clone and install (CLI only):
+```bash
+git clone https://github.com/kagehq/port-kill.git
+cd port-kill
+./install.sh
+```
+
+Run the CLI:
+```bash
+./run.sh                   # macOS
+./run-linux.sh             # Linux
+run-windows.bat            # Windows
+```
+
+Install dashboard deps only (Nuxt):
+```bash
+./install.sh --dashboard
+cd dashboard && npm run dev  # http://localhost:3002
+```
+
+Full setup (CLI build + dashboard deps):
+```bash
+./install.sh --all
+```
+
+Build dashboard for deployment:
+```bash
+cd dashboard
+npm run build     # Nitro server output: .output/
+# or static build
+npm run generate  # Static output: dist/
+```
+
+Serve the dashboard from the Rust binary (optional):
+- Build a static dashboard (`npm run generate`) and serve `dist/` with a static-files handler in your Rust app, or run the Nitro output alongside the binary.
 
 ## Status Bar Icon
 
