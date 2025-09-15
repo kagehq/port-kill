@@ -9,7 +9,7 @@
     />
     
     <!-- Process Table -->
-    <div class="overflow-x-auto border-t border-gray-500/10">
+    <div class="overflow-auto border-t border-gray-500/10">
     <table class="process-table">
       <thead class="bg-transparent border-b border-gray-500/10">
         <tr>

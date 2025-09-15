@@ -1,41 +1,40 @@
 <template>
-  <div class="min-h-screen bg-black">
-    <div class="flex">
-      <!-- Left Sidebar -->
-      <aside class="w-64 min-h-screen">
-        <!-- Sidebar Header -->
-        <div class="p-4">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center space-x-2">
-              <img 
-                src="/assets/img/logo.png" 
-                alt="Port Kill Logo" 
-                class="w-5 h-5 rounded-lg"
-              />
-              <h1 class="text-base font-semibold text-white">
-                Port Kill
-              </h1>
-            </div>
+  <div class="h-screen bg-black flex">
+    <!-- Left Sidebar -->
+    <aside class="w-64 h-screen flex flex-col">
+      <!-- Sidebar Header -->
+      <div class="p-4 border-b border-gray-500/10">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center space-x-2">
+            <img 
+              src="/assets/img/logo.png" 
+              alt="Port Kill Logo" 
+              class="w-5 h-5 rounded-lg"
+            />
+            <h1 class="text-base font-semibold text-white">
+              Port Kill
+            </h1>
           </div>
         </div>
+      </div>
 
-        <!-- Sidebar Navigation -->
-        <nav class="p-4">
-          <ul class="space-y-2">
-            <li>
-              <a href="#" class="flex items-center space-x-3 px-3 py-2 text-sm rounded-xl bg-gray-500/10 border border-gray-500/10 text-white font-medium">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="size-4 text-gray-500">
-                  <path fill-rule="evenodd" d="M9.293 2.293a1 1 0 0 1 1.414 0l7 7A1 1 0 0 1 17 11h-1v6a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1v-3a1 1 0 0 0-1-1H9a1 1 0 0 0-1 1v3a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-6H3a1 1 0 0 1-.707-1.707l7-7Z" clip-rule="evenodd" />
-                </svg>
-                <span>Overview</span>
-              </a>
-            </li>
-          </ul>
-        </nav>
-      </aside>
+      <!-- Sidebar Navigation -->
+      <nav class="p-4 flex-1 overflow-y-auto">
+        <ul class="space-y-2">
+          <li>
+            <a href="#" class="flex items-center space-x-3 px-3 py-2 text-sm rounded-xl bg-gray-500/10 border border-gray-500/10 text-white font-medium">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="size-4 text-gray-500">
+                <path fill-rule="evenodd" d="M9.293 2.293a1 1 0 0 1 1.414 0l7 7A1 1 0 0 1 17 11h-1v6a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1v-3a1 1 0 0 0-1-1H9a1 1 0 0 0-1 1v3a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-6H3a1 1 0 0 1-.707-1.707l7-7Z" clip-rule="evenodd" />
+              </svg>
+              <span>Overview</span>
+            </a>
+          </li>
+        </ul>
+      </nav>
+    </aside>
 
-      <!-- Main Content Area -->
-      <div class="flex-1 flex flex-col mr-2 my-2 rounded-xl bg-gray-500/10 border border-gray-500/10">
+    <!-- Main Content Area -->
+    <div class="flex-1 flex flex-col mr-2 my-2 rounded-xl bg-gray-500/10 border border-gray-500/10 overflow-hidden">
         <!-- Top Header -->
         <header class="border-b border-gray-500/10">
           <div class="px-6 py-4">
@@ -92,7 +91,7 @@
         </header>
 
         <!-- Main Content -->
-        <main class="flex-1">
+        <main class="flex-1 overflow-y-auto">
           <!-- Stats Overview -->
           <div class="grid grid-cols-1 md:grid-cols-5 gap-6 border-b border-gray-500/10 p-6">
             <StatsCard
@@ -243,7 +242,6 @@
           </div>
         </main>
       </div>
-    </div>
 
     <!-- Settings Modal -->
     <SettingsModal
@@ -255,7 +253,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { 
   ArrowPathIcon, 
   MagnifyingGlassIcon,
@@ -548,12 +546,16 @@ const refreshData = async (showLoading = true) => {
       isConnected.value = true
     }
     
-    // Also refresh system resources
-    if (systemResourcesRef.value && typeof systemResourcesRef.value.refreshData === 'function') {
-      await systemResourcesRef.value.refreshData()
-    } else {
-      console.warn('SystemResources ref not available or refreshData not a function')
-    }
+    // Also refresh system resources (non-blocking)
+    nextTick(() => {
+      try {
+        if (systemResourcesRef.value && typeof systemResourcesRef.value.refreshData === 'function') {
+          systemResourcesRef.value.refreshData()
+        }
+      } catch (error) {
+        console.warn('Failed to refresh system resources:', error)
+      }
+    })
   } catch (err) {
     console.error('Error refreshing processes:', err)
     isConnected.value = false
