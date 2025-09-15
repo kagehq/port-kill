@@ -1,43 +1,13 @@
 <template>
   <div class="h-screen bg-black flex">
     <!-- Left Sidebar -->
-    <aside class="w-64 h-screen flex flex-col">
-      <!-- Sidebar Header -->
-      <div class="p-4 border-b border-gray-500/10">
-        <div class="flex items-center justify-between">
-          <div class="flex items-center space-x-2">
-            <img 
-              src="/assets/img/logo.png" 
-              alt="Port Kill Logo" 
-              class="w-5 h-5 rounded-lg"
-            />
-            <h1 class="text-base font-semibold text-white">
-              Port Kill
-            </h1>
-          </div>
-        </div>
-      </div>
-
-      <!-- Sidebar Navigation -->
-      <nav class="p-4 flex-1 overflow-y-auto">
-        <ul class="space-y-2">
-          <li>
-            <a href="#" class="flex items-center space-x-3 px-3 py-2 text-sm rounded-xl bg-gray-500/10 border border-gray-500/10 text-white font-medium">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="size-4 text-gray-500">
-                <path fill-rule="evenodd" d="M9.293 2.293a1 1 0 0 1 1.414 0l7 7A1 1 0 0 1 17 11h-1v6a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1v-3a1 1 0 0 0-1-1H9a1 1 0 0 0-1 1v3a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-6H3a1 1 0 0 1-.707-1.707l7-7Z" clip-rule="evenodd" />
-              </svg>
-              <span>Overview</span>
-            </a>
-          </li>
-        </ul>
-      </nav>
-    </aside>
+    <Sidebar :is-connected="isConnected" />
 
     <!-- Main Content Area -->
     <div class="flex-1 flex flex-col mr-2 my-2 rounded-xl bg-gray-500/10 border border-gray-500/10 overflow-hidden">
         <!-- Top Header -->
         <header class="border-b border-gray-500/10">
-          <div class="px-6 py-4">
+          <div class="px-6 py-3">
             <div class="flex justify-between items-center">
               <div class="flex items-center space-x-2">
                 <h2 class="text-base font-medium text-white">Overview</h2>
@@ -45,19 +15,6 @@
               </div>
               
               <div class="flex items-center space-x-4">
-                <!-- Connection Status -->
-                <div class="flex items-center space-x-2">
-                  <div 
-                    :class="[
-                      'w-2 h-2 rounded-full',
-                      isConnected ? 'bg-green-400' : 'bg-red-500'
-                    ]"
-                  ></div>
-                  <span class="text-sm text-gray-400">
-                    {{ isConnected ? 'Connected' : 'Disconnected' }}
-                  </span>
-                </div>
-                
                 <!-- Auto-refresh Toggle Button -->
                 <button
                   @click="toggleAutoRefresh"
@@ -150,6 +107,13 @@
                     <XMarkIcon class="w-4 h-4" />
                     <span>Kill All</span>
                   </button>
+                  <NuxtLink
+                    to="/processes"
+                    class="border border-gray-500/10 rounded-xl text-sm px-3 py-2 text-gray-400 bg-transparent hover:bg-gray-500/15 flex items-center space-x-2"
+                  >
+                    <EyeIcon class="w-4 h-4" />
+                    <span>View All</span>
+                  </NuxtLink>
                 </div>
               </div>
             </div>
@@ -234,7 +198,7 @@
             </div>
             
             <ProcessTable
-              :processes="filteredProcesses"
+              :processes="limitedProcesses"
               :is-loading="isLoading"
               :has-port-conflict="hasPortConflict"
               @kill-process="killProcess"
@@ -265,7 +229,8 @@ import {
   CubeIcon,
   ChartBarIcon,
   ChevronDownIcon,
-  BeakerIcon
+  BeakerIcon,
+  EyeIcon
 } from '@heroicons/vue/24/solid'
 
 // Meta data for SEO and social sharing
@@ -356,6 +321,7 @@ import StatsCard from '~/components/StatsCard.vue'
 import ProcessTable from '~/components/ProcessTable.vue'
 import SettingsModal from '~/components/SettingsModal.vue'
 import SystemResources from '~/components/SystemResources.vue'
+import Sidebar from '~/components/Sidebar.vue'
 
 // Reactive data
 const processes = ref([])
@@ -463,6 +429,9 @@ const filteredProcesses = computed(() => {
 
   return filtered
 })
+
+// Show only first 10 on overview page
+const limitedProcesses = computed(() => filteredProcesses.value.slice(0, 10))
 
 const activePorts = computed(() => {
   return new Set(processes.value.map(p => p.port)).size
