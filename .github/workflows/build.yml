@@ -229,7 +229,7 @@ jobs:
           
           # Create standalone process_monitor.rs with direct imports
           @"
-          use crate::types::{ProcessInfo, ProcessUpdate};
+          use crate::types::{ProcessInfo, ProcessUpdate, ProcessHistory, ProcessHistoryEntry};
           use anyhow::{Context, Result};
           use crossbeam_channel::Sender;
           use log::{error, info};
@@ -245,6 +245,9 @@ jobs:
               current_processes: HashMap<u16, ProcessInfo>,
               ports_to_monitor: Vec<u16>,
               docker_enabled: bool,
+              verbose: bool,
+              history: ProcessHistory,
+              performance_enabled: bool,
           }
 
           impl ProcessMonitor {
@@ -254,6 +257,28 @@ jobs:
                       current_processes: HashMap::new(),
                       ports_to_monitor,
                       docker_enabled,
+                      verbose: false,
+                      history: ProcessHistory::new(100),
+                      performance_enabled: false,
+                  })
+              }
+
+              pub fn new_with_performance(
+                  update_sender: Sender<ProcessUpdate>, 
+                  ports_to_monitor: Vec<u16>, 
+                  docker_enabled: bool, 
+                  verbose: bool,
+                  smart_filter: Option<()>, 
+                  performance_enabled: bool
+              ) -> Result<Self> {
+                  Ok(Self {
+                      update_sender,
+                      current_processes: HashMap::new(),
+                      ports_to_monitor,
+                      docker_enabled,
+                      verbose,
+                      history: ProcessHistory::new(100),
+                      performance_enabled,
                   })
               }
 
@@ -590,7 +615,7 @@ jobs:
           
           # Create Windows-specific process_monitor.rs (simplified, no Unix methods)
           @"
-          use crate::types::{ProcessInfo, ProcessUpdate};
+          use crate::types::{ProcessInfo, ProcessUpdate, ProcessHistory, ProcessHistoryEntry};
           use anyhow::{Context, Result};
           use crossbeam_channel::Sender;
           use log::{error, info};
@@ -606,6 +631,9 @@ jobs:
               current_processes: HashMap<u16, ProcessInfo>,
               ports_to_monitor: Vec<u16>,
               docker_enabled: bool,
+              verbose: bool,
+              history: ProcessHistory,
+              performance_enabled: bool,
           }
 
           impl ProcessMonitor {
@@ -615,6 +643,28 @@ jobs:
                       current_processes: HashMap::new(),
                       ports_to_monitor,
                       docker_enabled,
+                      verbose: false,
+                      history: ProcessHistory::new(100),
+                      performance_enabled: false,
+                  })
+              }
+
+              pub fn new_with_performance(
+                  update_sender: Sender<ProcessUpdate>, 
+                  ports_to_monitor: Vec<u16>, 
+                  docker_enabled: bool, 
+                  verbose: bool,
+                  smart_filter: Option<()>, 
+                  performance_enabled: bool
+              ) -> Result<Self> {
+                  Ok(Self {
+                      update_sender,
+                      current_processes: HashMap::new(),
+                      ports_to_monitor,
+                      docker_enabled,
+                      verbose,
+                      history: ProcessHistory::new(100),
+                      performance_enabled,
                   })
               }
 
@@ -750,6 +800,52 @@ jobs:
                       let stderr = String::from_utf8_lossy(&output.stderr);
                       Err(anyhow::anyhow!("Failed to kill process {}: {}", pid, stderr))
                   }
+              }
+
+              // Make scan_processes public for console_app
+              pub async fn scan_processes(&self) -> Result<HashMap<u16, ProcessInfo>> {
+                  let mut processes = HashMap::new();
+
+                  for &port in &self.ports_to_monitor {
+                      if let Ok(process_info) = self.get_process_on_port(port).await {
+                          processes.insert(port, process_info);
+                      }
+                  }
+
+                  Ok(processes)
+              }
+
+              // Add missing methods for console_app compatibility
+              pub fn get_filter_stats(&self) -> Option<()> {
+                  None // Simplified for Windows
+              }
+
+              pub fn get_history(&self) -> &ProcessHistory {
+                  &self.history
+              }
+
+              pub fn clear_history(&mut self) {
+                  self.history.clear();
+              }
+
+              pub async fn kill_all_processes(&mut self) -> Result<()> {
+                  let processes = self.scan_processes().await?;
+                  let mut errors = Vec::new();
+
+                  for (port, process_info) in processes {
+                      info!("Killing process on port {} (PID: {})", port, process_info.pid);
+                      if let Err(e) = self.kill_process(process_info.pid).await {
+                          errors.push(format!("Port {} (PID {}): {}", port, process_info.pid, e));
+                      }
+                  }
+
+                  if !errors.is_empty() {
+                      let error_msg = errors.join("; ");
+                      return Err(anyhow::anyhow!("Some processes failed to kill: {}", error_msg));
+                  }
+
+                  info!("All processes killed successfully");
+                  Ok(())
               }
           }
           "@ | Out-File -FilePath "src/process_monitor.windows.rs" -Encoding utf8
@@ -1039,7 +1135,7 @@ jobs:
           # Backup and switch
           Copy-Item "Cargo.toml" "Cargo.backup" -ErrorAction SilentlyContinue
           Copy-Item "src/lib.rs" "src/lib.backup" -ErrorAction SilentlyContinue
-          Copy-Item "src/process_monitor.rs" "src/process_monitor.backup" -ErrorAction SilentlyContinue
+          # No need to backup process_monitor.rs since we're using the full version
           Copy-Item "src/types.rs" "src/types.backup" -ErrorAction SilentlyContinue
           Copy-Item "src/cli.rs" "src/cli.backup" -ErrorAction SilentlyContinue
           Copy-Item "src/smart_filter.rs" "src/smart_filter.backup" -ErrorAction SilentlyContinue
@@ -1049,7 +1145,7 @@ jobs:
           
           # Use the main Cargo.toml (no need for separate Windows file)
           Copy-Item "src/lib.windows.rs" "src/lib.rs"
-          Copy-Item "src/process_monitor.windows.rs" "src/process_monitor.rs"
+          # Use the full process_monitor.rs (no need for simplified Windows version)
           Copy-Item "src/types.windows.rs" "src/types.rs"
           Copy-Item "src/cli.windows.rs" "src/cli.rs"
           Copy-Item "src/main.windows.rs" "src/main_windows.rs"
@@ -1063,7 +1159,7 @@ jobs:
           # Restore
           Copy-Item "Cargo.backup" "Cargo.toml" -ErrorAction SilentlyContinue
           Copy-Item "src/lib.backup" "src/lib.rs" -ErrorAction SilentlyContinue
-          Copy-Item "src/process_monitor.backup" "src/process_monitor.rs" -ErrorAction SilentlyContinue
+          # No need to restore process_monitor.rs since we didn't modify it
           Copy-Item "src/types.backup" "src/types.rs" -ErrorAction SilentlyContinue
           Copy-Item "src/cli.backup" "src/cli.rs" -ErrorAction SilentlyContinue
           Copy-Item "src/smart_filter.backup" "src/smart_filter.rs" -ErrorAction SilentlyContinue
@@ -1073,13 +1169,13 @@ jobs:
           
           # Clean up
           Remove-Item "src/lib.windows.rs" -ErrorAction SilentlyContinue
-          Remove-Item "src/process_monitor.windows.rs" -ErrorAction SilentlyContinue
+          # No need to clean up process_monitor.windows.rs since we're not using it
           Remove-Item "src/types.windows.rs" -ErrorAction SilentlyContinue
           Remove-Item "src/cli.windows.rs" -ErrorAction SilentlyContinue
           Remove-Item "src/main.windows.rs" -ErrorAction SilentlyContinue
           Remove-Item "Cargo.backup" -ErrorAction SilentlyContinue
           Remove-Item "src/lib.backup" -ErrorAction SilentlyContinue
-          Remove-Item "src/process_monitor.backup" -ErrorAction SilentlyContinue
+          # No need to clean up process_monitor.backup since we didn't create it
           Remove-Item "src/types.backup" -ErrorAction SilentlyContinue
           Remove-Item "src/cli.backup" -ErrorAction SilentlyContinue
           Remove-Item "src/smart_filter.backup" -ErrorAction SilentlyContinue
