@@ -677,18 +677,16 @@ pub fn get_processes_on_ports(ports: &[u16], args: &crate::cli::Args) -> (usize,
         }
     }
     
-    // Build port range string for lsof
-    let port_range = if ports.len() <= 10 {
-        // For small number of ports, list them individually
-        ports.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(",")
-    } else {
-        // For large ranges, use range format
-        format!("{}-{}", ports.first().unwrap_or(&0), ports.last().unwrap_or(&0))
-    };
+    // Build lsof command with multiple -i flags for each port
+    let mut lsof_args = vec!["-sTCP:LISTEN".to_string(), "-P".to_string(), "-n".to_string()];
+    for port in ports {
+        lsof_args.push("-i".to_string());
+        lsof_args.push(format!(":{}", port));
+    }
     
     // Use lsof to get detailed process information
     let output = std::process::Command::new("lsof")
-        .args(&["-i", &format!(":{}", port_range), "-sTCP:LISTEN", "-P", "-n"])
+        .args(&lsof_args)
         .output();
         
     match output {
@@ -737,19 +735,19 @@ pub fn get_processes_on_ports(ports: &[u16], args: &crate::cli::Args) -> (usize,
 
 pub fn kill_all_processes(ports: &[u16], args: &crate::cli::Args) -> anyhow::Result<()> {
     // Build port range string for lsof
-    let port_range = if ports.len() <= 10 {
-        // For small number of ports, list them individually
-        ports.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(",")
-    } else {
-        // For large ranges, use range format
-        format!("{}-{}", ports.first().unwrap_or(&0), ports.last().unwrap_or(&0))
-    };
+    let port_list = ports.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(", ");
+    log::info!("Killing all processes on ports {}...", port_list);
     
-    log::info!("Killing all processes on ports {}...", port_range);
+    // Build lsof command with multiple -i flags for each port
+    let mut lsof_args = vec!["-sTCP:LISTEN".to_string(), "-P".to_string(), "-n".to_string()];
+    for port in ports {
+        lsof_args.push("-i".to_string());
+        lsof_args.push(format!(":{}", port));
+    }
     
     // Get all PIDs on the monitored ports
     let output = match std::process::Command::new("lsof")
-        .args(&["-i", &format!(":{}", port_range), "-sTCP:LISTEN", "-P", "-n"])
+        .args(&lsof_args)
         .output() {
         Ok(output) => output,
         Err(e) => {

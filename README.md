@@ -42,6 +42,27 @@ Join our Discord community for discussions, support, and updates:
 - **Docker Integration**: Display container names and IDs for Docker processes
 - **Verbose Mode**: Detailed process information including command line, working directory, and PID for better process identification
 
+## Dashboard
+
+A web dashboard is available in the `dashboard/` directory, providing a rich graphical interface for monitoring and managing processes. The dashboard runs independently as a Nuxt.js application and communicates with the Port Kill binary via HTTP API.
+
+**Dashboard Features:**
+- Real-time process monitoring with auto-refresh
+- Visual process table with filtering and search
+- System resource monitoring (CPU, Memory, Disk, Load Average)
+- Port conflict detection and highlighting
+- Docker container integration
+- Responsive design with dark theme
+
+**Quick Start:**
+```bash
+cd dashboard
+npm install
+npm run dev
+```
+
+The dashboard will be available at `http://localhost:3002` and automatically connects to the Port Kill binary running on the same system.
+
 ## Status Bar Icon
 
 The status bar icon provides instant visual feedback:
