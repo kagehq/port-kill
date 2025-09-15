@@ -1,7 +1,9 @@
-use cli::Args;
-use console_app::ConsolePortKillApp;
-use types::StatusBarInfo;
-use process_monitor::{get_processes_on_ports, kill_all_processes};
+use port_kill::{
+    cli::Args,
+    console_app::ConsolePortKillApp,
+    types::StatusBarInfo,
+    process_monitor::{get_processes_on_ports, kill_all_processes},
+};
 use tray_item::TrayItem;
 use anyhow::Result;
 use clap::Parser;

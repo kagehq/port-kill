@@ -1,7 +1,6 @@
 use anyhow::Result;
 use log::info;
-use console_app::ConsolePortKillApp;
-use cli::Args;
+use port_kill::{console_app::ConsolePortKillApp, cli::Args};
 use clap::Parser;
 
 #[tokio::main]
@@ -54,14 +53,14 @@ async fn main() -> Result<()> {
     }
     
     if let Some(ref groups) = args.kill_group {
-        let groups = groups.clone();
+        let groups: Vec<String> = groups.clone();
         let app = ConsolePortKillApp::new(args)?;
         app.kill_by_group(&groups).await?;
         return Ok(());
     }
     
     if let Some(ref projects) = args.kill_project {
-        let projects = projects.clone();
+        let projects: Vec<String> = projects.clone();
         let app = ConsolePortKillApp::new(args)?;
         app.kill_by_project(&projects).await?;
         return Ok(());

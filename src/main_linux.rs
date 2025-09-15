@@ -1,10 +1,12 @@
 // Linux-specific main entry point
 // This provides Linux tray support while maintaining all core functionality
 
-use cli::Args;
-use console_app::ConsolePortKillApp;
-use types::{ProcessInfo, StatusBarInfo};
-use process_monitor::{get_processes_on_ports, kill_all_processes, kill_single_process};
+use port_kill::{
+    cli::Args,
+    console_app::ConsolePortKillApp,
+    types::{ProcessInfo, StatusBarInfo},
+    process_monitor::{get_processes_on_ports, kill_all_processes, kill_single_process},
+};
 use libappindicator::{AppIndicator, AppIndicatorStatus};
 use anyhow::Result;
 use clap::Parser;
