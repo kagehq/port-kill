@@ -1031,6 +1031,8 @@ jobs:
           pub mod types;
           pub mod cli;
           pub mod process_monitor;
+          pub mod smart_filter;
+          pub mod system_monitor;
           "@ | Out-File -FilePath "src/lib.windows.rs" -Encoding utf8
 
           # Backup and switch
@@ -1039,9 +1041,11 @@ jobs:
           Copy-Item "src/process_monitor.rs" "src/process_monitor.backup" -ErrorAction SilentlyContinue
           Copy-Item "src/types.rs" "src/types.backup" -ErrorAction SilentlyContinue
           Copy-Item "src/cli.rs" "src/cli.backup" -ErrorAction SilentlyContinue
+          Copy-Item "src/smart_filter.rs" "src/smart_filter.backup" -ErrorAction SilentlyContinue
+          Copy-Item "src/system_monitor.rs" "src/system_monitor.backup" -ErrorAction SilentlyContinue
           Copy-Item "src/main_windows.rs" "src/main_windows.backup" -ErrorAction SilentlyContinue
           
-          Copy-Item "Cargo.windows.toml" "Cargo.toml"
+          # Use the main Cargo.toml (no need for separate Windows file)
           Copy-Item "src/lib.windows.rs" "src/lib.rs"
           Copy-Item "src/process_monitor.windows.rs" "src/process_monitor.rs"
           Copy-Item "src/types.windows.rs" "src/types.rs"
@@ -1057,10 +1061,11 @@ jobs:
           Copy-Item "src/process_monitor.backup" "src/process_monitor.rs" -ErrorAction SilentlyContinue
           Copy-Item "src/types.backup" "src/types.rs" -ErrorAction SilentlyContinue
           Copy-Item "src/cli.backup" "src/cli.rs" -ErrorAction SilentlyContinue
+          Copy-Item "src/smart_filter.backup" "src/smart_filter.rs" -ErrorAction SilentlyContinue
+          Copy-Item "src/system_monitor.backup" "src/system_monitor.rs" -ErrorAction SilentlyContinue
           Copy-Item "src/main_windows.backup" "src/main_windows.rs" -ErrorAction SilentlyContinue
           
           # Clean up
-          Remove-Item "Cargo.windows.toml" -ErrorAction SilentlyContinue
           Remove-Item "src/lib.windows.rs" -ErrorAction SilentlyContinue
           Remove-Item "src/process_monitor.windows.rs" -ErrorAction SilentlyContinue
           Remove-Item "src/types.windows.rs" -ErrorAction SilentlyContinue
@@ -1071,6 +1076,8 @@ jobs:
           Remove-Item "src/process_monitor.backup" -ErrorAction SilentlyContinue
           Remove-Item "src/types.backup" -ErrorAction SilentlyContinue
           Remove-Item "src/cli.backup" -ErrorAction SilentlyContinue
+          Remove-Item "src/smart_filter.backup" -ErrorAction SilentlyContinue
+          Remove-Item "src/system_monitor.backup" -ErrorAction SilentlyContinue
           Remove-Item "src/main_windows.backup" -ErrorAction SilentlyContinue
         shell: pwsh
 
