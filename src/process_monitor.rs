@@ -3,9 +3,7 @@ use crate::smart_filter::{SmartFilter, FilterStats};
 use crate::system_monitor::SystemMonitor;
 use anyhow::{Context, Result};
 use crossbeam_channel::Sender;
-use log::{error, info};
-#[cfg(not(target_os = "windows"))]
-use log::warn;
+use log::{error, info, warn};
 #[cfg(not(target_os = "windows"))]
 use nix::sys::signal::{kill, Signal};
 #[cfg(not(target_os = "windows"))]
