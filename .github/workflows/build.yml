@@ -85,7 +85,7 @@ jobs:
           Write-Host "Files in current directory:"
           Get-ChildItem | ForEach-Object { Write-Host "  $_" }
           
-          # Build both binaries normally
+          # Build both Windows binaries
           Write-Host "=== Building both Windows binaries ==="
           cargo build --release --verbose
           
@@ -125,7 +125,7 @@ jobs:
             exit 1
           }
           
-          # Test the binaries
+          # Test both binaries
           Write-Host "Testing port-kill.exe --help..."
           .\target\release\port-kill.exe --help
           

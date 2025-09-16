@@ -41,12 +41,55 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "windows")]
+use anyhow::Result;
+#[cfg(target_os = "windows")]
+use log::info;
+#[cfg(target_os = "windows")]
+use port_kill::{console_app::ConsolePortKillApp, cli::Args};
+#[cfg(target_os = "windows")]
+use clap::Parser;
+
+#[cfg(target_os = "windows")]
+#[tokio::main]
+async fn main() -> Result<()> {
+    // Parse command-line arguments
+    let args = Args::parse();
+    
+    // Validate arguments
+    if let Err(e) = args.validate() {
+        eprintln!("Error: {}", e);
+        std::process::exit(1);
+    }
+
+    // Set up logging level based on log_level argument
+    let log_level = if args.verbose {
+        // Verbose flag overrides log_level for backward compatibility
+        "debug"
+    } else {
+        args.log_level.to_rust_log()
+    };
+    std::env::set_var("RUST_LOG", log_level);
+
+    // Initialize logging
+    env_logger::init();
+    
+    info!("Starting Port Kill application on Windows...");
+    info!("Monitoring: {}", args.get_port_description());
+
+    // Create and run the console application
+    let app = ConsolePortKillApp::new(args)?;
+    app.run().await?;
+
+    info!("Port Kill application stopped");
+    Ok(())
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
 fn main() {
-    eprintln!("Error: This binary is only available on macOS.");
+    eprintln!("Error: This binary is only available on macOS and Windows.");
     eprintln!("For other platforms, use the platform-specific binaries:");
     eprintln!("  - Linux: ./run-linux.sh");
-    eprintln!("  - Windows: ./run-windows.bat");
     eprintln!("  - Console mode (all platforms): ./run.sh --console");
     std::process::exit(1);
 }
