@@ -1,7 +1,7 @@
 use port_kill::{
     cli::Args,
     console_app::ConsolePortKillApp,
-    types::StatusBarInfo,
+    types::{ProcessInfo, StatusBarInfo},
     process_monitor::{get_processes_on_ports, kill_all_processes},
 };
 use tray_item::TrayItem;
