@@ -308,6 +308,13 @@ const toggleAutoRefresh = () => {
     timer = null
   }
 }
+// Meta
+useHead({
+  title: 'Running Processes',
+  meta: [
+    { name: 'description', content: 'Track and view running processes' }
+  ]
+})
 </script>
 
 

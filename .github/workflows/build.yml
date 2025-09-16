@@ -95,7 +95,7 @@ jobs:
             Write-Host "✅ port-kill.exe built successfully"
           } else {
             Write-Host "❌ port-kill.exe NOT found"
-            exit 1
+              exit 1
           }
           
           if (Test-Path ".\target\release\port-kill-console.exe") {

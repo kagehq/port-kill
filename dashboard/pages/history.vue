@@ -169,9 +169,9 @@ onUnmounted(() => {
 
 // Meta
 useHead({
-  title: 'Process History - Port Kill Dashboard',
+  title: 'Process History',
   meta: [
-    { name: 'description', content: 'Track and view process kill history in the Port Kill dashboard' }
+    { name: 'description', content: 'Track and view process kill history' }
   ]
 })
 </script>
