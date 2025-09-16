@@ -46,6 +46,9 @@ echo thiserror = "1.0"
 echo log = "0.4"
 echo env_logger = "0.10"
 echo clap = { version = "4.0", features = ["derive"] }
+echo regex = "1.0"
+echo sysinfo = "0.30"
+echo chrono = { version = "0.4", features = ["serde"] }
 echo.
 echo # Windows-specific tray support
 echo tray-item = "0.10.0"
@@ -66,6 +69,8 @@ echo pub mod console_app;
 echo pub mod process_monitor;
 echo pub mod types;
 echo pub mod cli;
+echo pub mod smart_filter;
+echo pub mod system_monitor;
 ) > src/lib.windows.tmp.rs
 
 REM Backup current files
