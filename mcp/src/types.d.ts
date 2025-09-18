@@ -1,0 +1,2 @@
+declare module '@modelcontextprotocol/sdk';
+

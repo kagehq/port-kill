@@ -45,11 +45,36 @@ git clone https://github.com/kagehq/port-kill.git && cd port-kill && ./install.s
 
 ## Dashboard (optional)
 
+![Port Kill Dashboard](dashboard/assets/img/portkill-dashboard.png)
+
 ```bash
 cd dashboard
 npm install
 npm run dev   # http://localhost:3000
 ```
+
+## MCP (use Port Kill from Cursor)
+
+```bash
+cd mcp
+npm install
+npm run dev    # starts the MCP server
+```
+
+Cursor auto-discovers `.cursor/mcp.json`. Then you can run tools like:
+
+```text
+port-kill.list { ports: "3000,8000", verbose: true }
+port-kill.reset {}
+port-kill.kill { ports: "3000" }
+port-kill.audit { suspiciousOnly: true }
+```
+
+Notes:
+- The server shells out to `./target/release/port-kill-console`. If yours lives elsewhere, set `PORT_KILL_BIN=/absolute/path/to/port-kill-console`.
+- It runs in the repo root by default. Override with `PORT_KILL_CWD=/your/project` if needed.
+
+See [DETAILED.md](DETAILED.md) for more.
 
 ## Features
 
