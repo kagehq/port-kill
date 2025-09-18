@@ -31,3 +31,25 @@ export PORT_KILL_CWD=/abs/path/for/commands
 ```
 
 
+### Optional HTTP wrapper (use outside MCP/Cursor)
+
+```bash
+# Start the MCP server with an HTTP wrapper for tools (POST /tool)
+HTTP_PORT=8787 npm run dev
+
+# Call a tool over HTTP
+curl -s -X POST \
+  -H 'content-type: application/json' \
+  --data '{
+    "name": "list",
+    "args": { "ports": "3000,8000" }
+  }' \
+  http://localhost:8787/tool
+
+# Override binary and working dir if needed
+PORT_KILL_BIN=/abs/path/to/port-kill-console \
+PORT_KILL_CWD=/abs/path/to/project \
+HTTP_PORT=8787 npm run dev
+```
+
+

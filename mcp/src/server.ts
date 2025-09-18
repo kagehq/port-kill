@@ -1,29 +1,8 @@
-// The SDK exports differ by version; import minimal types dynamically
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-// Resolve SDK CJS server entry without relying on package exports
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+// Import MCP SDK using direct paths (package exports not working properly)
 const path = require("node:path");
-const fs = require("node:fs");
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const sdkPkgPath = require.resolve("@modelcontextprotocol/sdk/package.json");
-const sdkDir = path.dirname(sdkPkgPath);
-function resolveSdkServerEntry() {
-  const candidates = [
-    path.join(sdkDir, "server", "index.js"),
-    path.join(sdkDir, "../server/index.js"),
-    path.join(sdkDir, "../..", "dist", "cjs", "server", "index.js"),
-    path.join(sdkDir, "dist", "cjs", "server", "index.js")
-  ];
-  for (const p of candidates) {
-    try {
-      const full = path.resolve(p);
-      if (fs.existsSync(full)) return full;
-    } catch {}
-  }
-  throw new Error("Could not locate @modelcontextprotocol/sdk CJS server entry");
-}
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const SDK = require(resolveSdkServerEntry());
+const { McpServer } = require(path.join(__dirname, "../node_modules/@modelcontextprotocol/sdk/dist/cjs/server/mcp.js"));
+const { StdioServerTransport } = require(path.join(__dirname, "../node_modules/@modelcontextprotocol/sdk/dist/cjs/server/stdio.js"));
+const { z } = require("zod");
 const { exec } = require("node:child_process");
 const { promisify } = require("node:util");
 
@@ -39,40 +18,7 @@ async function run(cmd: string) {
   return stdout.trim();
 }
 
-const tools: Record<string, any> = {
-  list: {
-    description: "List processes on ports. Args: ports (comma), docker(bool), verbose(bool), json(bool)",
-    inputSchema: {
-      type: "object",
-      properties: {
-        ports: { type: "string", description: "e.g. 3000,8000,8080" },
-        docker: { type: "boolean" },
-        verbose: { type: "boolean" },
-        remote: { type: "string", description: "user@host for SSH remote" }
-      }
-    }
-  },
-  kill: {
-    description: "Kill processes on given ports. Args: ports (comma)",
-    inputSchema: {
-      type: "object",
-      required: ["ports"],
-      properties: { ports: { type: "string" }, remote: { type: "string" } }
-    }
-  },
-  reset: {
-    description: "Kill common dev ports (3000,5000,8000,5432,3306,6379,27017,8080,9000)",
-    inputSchema: { type: "object", properties: { remote: { type: "string" } } }
-  },
-  audit: {
-    description: "Run security audit. Returns JSON.",
-    inputSchema: { type: "object", properties: { suspiciousOnly: { type: "boolean" }, remote: { type: "string" } } }
-  },
-  guardStatus: {
-    description: "Return Port Guard status if running via dashboard API.",
-    inputSchema: { type: "object", properties: { baseUrl: { type: "string" } } }
-  }
-};
+// Tool handler function
 
 const handler = async (name: string, args: any) => {
   switch (name) {
@@ -115,9 +61,76 @@ const handler = async (name: string, args: any) => {
   }
 };
 
-const create = (SDK as any).createServer || ((options: any) => new (SDK as any).Server(options));
-const server = create({ name: "port-kill-mcp", version: "0.1.0", tools, handler });
-(server as any).listen?.();
+// Create MCP server with proper tool registration
+const server = new McpServer({
+  name: "port-kill-mcp",
+  version: "0.1.0"
+});
+
+// Register each tool individually with proper Zod schemas
+server.registerTool("list", {
+  description: "List processes on ports. Args: ports (comma), docker(bool), verbose(bool), json(bool)",
+  inputSchema: {
+    ports: z.string().optional().describe("e.g. 3000,8000,8080"),
+    docker: z.boolean().optional(),
+    verbose: z.boolean().optional(),
+    remote: z.string().optional().describe("user@host for SSH remote")
+  }
+}, async (args: any) => {
+  const result = await handler("list", args || {});
+  return { content: [{ type: "text", text: result.content }] };
+});
+
+server.registerTool("kill", {
+  description: "Kill processes on given ports. Args: ports (comma)",
+  inputSchema: {
+    ports: z.string().describe("Comma-separated list of ports"),
+    remote: z.string().optional().describe("user@host for SSH remote")
+  }
+}, async (args: any) => {
+  const result = await handler("kill", args || {});
+  return { content: [{ type: "text", text: result.content }] };
+});
+
+server.registerTool("reset", {
+  description: "Kill common dev ports (3000,5000,8000,5432,3306,6379,27017,8080,9000)",
+  inputSchema: {
+    remote: z.string().optional().describe("user@host for SSH remote")
+  }
+}, async (args: any) => {
+  const result = await handler("reset", args || {});
+  return { content: [{ type: "text", text: result.content }] };
+});
+
+server.registerTool("audit", {
+  description: "Run security audit. Returns JSON.",
+  inputSchema: {
+    suspiciousOnly: z.boolean().optional(),
+    remote: z.string().optional().describe("user@host for SSH remote")
+  }
+}, async (args: any) => {
+  const result = await handler("audit", args || {});
+  return { content: [{ type: "text", text: result.content }] };
+});
+
+server.registerTool("guardStatus", {
+  description: "Return Port Guard status if running via dashboard API.",
+  inputSchema: {
+    baseUrl: z.string().optional().describe("Dashboard base URL")
+  }
+}, async (args: any) => {
+  const result = await handler("guardStatus", args || {});
+  return { content: [{ type: "text", text: result.content }] };
+});
+
+// Start server with stdio transport
+async function startServer() {
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+  console.error("Port Kill MCP server running on stdio");
+}
+
+startServer().catch(console.error);
 
 // Optional HTTP wrapper so non-MCP clients can call the same tools
 if (process.env.HTTP_PORT) {
