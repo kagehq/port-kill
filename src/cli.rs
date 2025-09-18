@@ -120,6 +120,86 @@ pub struct Args {
     /// Output processes in JSON format (for API integration)
     #[arg(long)]
     pub json: bool,
+
+    /// Reset common development ports (3000, 5000, 8000, 5432, 3306, 6379, 27017, 8080, 9000)
+    #[arg(long)]
+    pub reset: bool,
+
+    /// Show frequent offenders (processes killed multiple times)
+    #[arg(long)]
+    pub show_offenders: bool,
+
+    /// Show time patterns and statistics
+    #[arg(long)]
+    pub show_patterns: bool,
+
+    /// Show auto-suggestions for ignore lists
+    #[arg(long)]
+    pub show_suggestions: bool,
+
+    /// Show detailed history statistics
+    #[arg(long)]
+    pub show_stats: bool,
+
+    /// Show smart root cause analysis
+    #[arg(long)]
+    pub show_root_cause: bool,
+
+    /// Enable Port Guard Mode - proactive port conflict prevention
+    #[arg(long)]
+    pub guard_mode: bool,
+
+    /// Ports to watch in guard mode (comma-separated)
+    #[arg(long, default_value = "3000,3001,3002,8000,8080,9000")]
+    pub guard_ports: String,
+
+    /// Auto-resolve conflicts by killing conflicting processes
+    #[arg(long)]
+    pub auto_resolve: bool,
+
+    /// Port reservation file path for persistent port assignments
+    #[arg(long, default_value = "~/.port-kill/reservations.json")]
+    pub reservation_file: String,
+
+    /// Enable process interception for development commands
+    #[arg(long)]
+    pub intercept_commands: bool,
+
+    /// Reserve a port for a specific project (requires guard mode)
+    #[arg(long)]
+    pub reserve_port: Option<u16>,
+
+    /// Project name for port reservation
+    #[arg(long)]
+    pub project_name: Option<String>,
+
+    /// Process name for port reservation
+    #[arg(long)]
+    pub process_name: Option<String>,
+
+    /// Enable Security Audit Mode - comprehensive security analysis
+    #[arg(long)]
+    pub audit: bool,
+
+    /// Security mode with enhanced suspicious port detection
+    #[arg(long)]
+    pub security_mode: bool,
+
+    /// Suspicious ports to flag (comma-separated)
+    #[arg(long, default_value = "8444,4444,9999,14444,5555,6666,7777")]
+    pub suspicious_ports: String,
+
+    /// Baseline file for approved ports comparison
+    #[arg(long)]
+    pub baseline_file: Option<String>,
+
+    /// Show only suspicious/unauthorized processes
+    #[arg(long)]
+    pub suspicious_only: bool,
+
+    /// Remote mode: connect to remote host via SSH
+    #[arg(long)]
+    pub remote: Option<String>,
 }
 
 impl Args {
@@ -276,6 +356,64 @@ impl Args {
         }
 
         Ok(())
+    }
+
+    /// Get common development ports for reset functionality
+    pub fn get_reset_ports(&self) -> Vec<u16> {
+        vec![
+            3000,   // React, Next.js, Node.js dev servers
+            5000,   // Flask, Express, various dev servers
+            8000,   // Django, Rails, various dev servers
+            5432,   // PostgreSQL
+            3306,   // MySQL
+            6379,   // Redis
+            27017,  // MongoDB
+            8080,   // Tomcat, various Java apps
+            9000,   // Various dev servers
+        ]
+    }
+
+    /// Get the list of ports to watch in guard mode
+    pub fn get_guard_ports(&self) -> Vec<u16> {
+        self.guard_ports
+            .split(',')
+            .filter_map(|s| s.trim().parse().ok())
+            .collect()
+    }
+
+    /// Get the expanded reservation file path
+    pub fn get_reservation_file_path(&self) -> String {
+        if self.reservation_file.starts_with("~/") {
+            let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
+            self.reservation_file.replace("~/", &format!("{}/", home))
+        } else {
+            self.reservation_file.clone()
+        }
+    }
+
+    /// Get the list of suspicious ports
+    pub fn get_suspicious_ports(&self) -> Vec<u16> {
+        self.suspicious_ports
+            .split(',')
+            .filter_map(|s| s.trim().parse().ok())
+            .collect()
+    }
+
+    /// Get the expanded baseline file path
+    pub fn get_baseline_file_path(&self) -> Option<String> {
+        self.baseline_file.as_ref().map(|path| {
+            if path.starts_with("~/") {
+                let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
+                path.replace("~/", &format!("{}/", home))
+            } else {
+                path.clone()
+            }
+        })
+    }
+
+    /// Get the remote host for SSH connection
+    pub fn get_remote_host(&self) -> Option<String> {
+        self.remote.clone()
     }
 }
 

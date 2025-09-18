@@ -72,6 +72,78 @@ async fn main() -> Result<()> {
         return Ok(());
     }
     
+    if args.reset {
+        let app = ConsolePortKillApp::new(args)?;
+        app.reset_development_ports().await?;
+        return Ok(());
+    }
+    
+    if args.show_offenders {
+        let app = ConsolePortKillApp::new(args)?;
+        app.show_frequent_offenders().await?;
+        return Ok(());
+    }
+    
+    if args.show_patterns {
+        let app = ConsolePortKillApp::new(args)?;
+        app.show_time_patterns().await?;
+        return Ok(());
+    }
+    
+    if args.show_suggestions {
+        let app = ConsolePortKillApp::new(args)?;
+        app.show_ignore_suggestions().await?;
+        return Ok(());
+    }
+    
+    if args.show_stats {
+        let app = ConsolePortKillApp::new(args)?;
+        app.show_history_statistics().await?;
+        return Ok(());
+    }
+    
+    if args.show_root_cause {
+        let app = ConsolePortKillApp::new(args)?;
+        app.show_root_cause_analysis().await?;
+        return Ok(());
+    }
+    
+    if args.audit {
+        let app = ConsolePortKillApp::new(args)?;
+        app.perform_security_audit().await?;
+        return Ok(());
+    }
+    
+    // Handle remote mode
+    if let Some(remote_host) = args.get_remote_host() {
+        let app = ConsolePortKillApp::new(args)?;
+        app.run_remote_mode(&remote_host).await?;
+        return Ok(());
+    }
+    
+    if args.guard_mode {
+        // Extract reservation parameters before moving args
+        let reserve_port = args.reserve_port;
+        let project_name = args.project_name.clone();
+        let process_name = args.process_name.clone();
+        
+        let app = ConsolePortKillApp::new(args)?;
+        
+        // Check if we need to create a reservation
+        if let (Some(port), Some(project_name), Some(process_name)) = (reserve_port, project_name, process_name) {
+            app.reserve_port(port, project_name, process_name).await?;
+            return Ok(());
+        }
+        
+        app.start_port_guard().await?;
+        
+        // Keep the daemon running
+        info!("🛡️  Port Guard daemon is running. Press Ctrl+C to stop.");
+        tokio::signal::ctrl_c().await?;
+        app.stop_port_guard().await?;
+        return Ok(());
+    }
+    
     if args.show_tree {
         let app = ConsolePortKillApp::new(args)?;
         app.show_process_tree().await?;

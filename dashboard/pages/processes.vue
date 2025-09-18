@@ -1,7 +1,7 @@
 <template>
   <div class="h-screen bg-black flex">
     <!-- Left Sidebar -->
-    <Sidebar :is-connected="isConnected" />
+    <Sidebar :is-connected="isConnected" :remote-mode="settings.remoteMode" :remote-host="settings.remoteHost" @open-settings="showSettings = true" />
 
     <!-- Main Content Area -->
     <div class="flex-1 flex flex-col mr-2 my-2 rounded-xl bg-gray-500/10 border border-gray-500/10 overflow-hidden">
@@ -143,6 +143,13 @@
         </div>
       </main>
     </div>
+    
+    <!-- Settings Modal -->
+    <SettingsModal
+      v-model:open="showSettings"
+      :config="settings"
+      @save="saveSettings"
+    />
   </div>
   
 </template>
@@ -152,14 +159,27 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { ArrowPathIcon, PlayIcon, PauseIcon, XMarkIcon, MagnifyingGlassIcon, ChevronDownIcon } from '@heroicons/vue/24/solid'
 import ProcessTable from '@/components/ProcessTable.vue'
 import Sidebar from '@/components/Sidebar.vue'
+import SettingsModal from '@/components/SettingsModal.vue'
 
 // State
 const processes = ref([])
 const isLoading = ref(false)
-const refreshInterval = 10000
 let timer = null
 const isConnected = ref(false)
 const isAutoRefreshEnabled = ref(true)
+
+// Settings
+const settings = ref({
+  ports: '3000,3001,3002,3003,3004,4000,9000,9001',
+  ignorePorts: '5353,5000,7000',
+  ignoreProcesses: 'Chrome,ControlCe,rapportd',
+  docker: true,
+  verbose: true,
+  refreshInterval: 10000,
+  remoteMode: false,
+  remoteHost: ''
+})
+const showSettings = ref(false)
 
 // Helpers
 const hasPortConflict = (proc) => {
@@ -222,12 +242,16 @@ const refreshData = async (showLoading = true) => {
     
     const data = await $fetch('/api/processes', {
       query: {
-        ports: '3000,3001,3002,3003,3004,4000,8000,9000,9001',
-        docker: true,
-        verbose: true,
+        ports: settings.value.ports,
+        ignorePorts: settings.value.ignorePorts,
+        ignoreProcesses: settings.value.ignoreProcesses,
+        docker: settings.value.docker,
+        verbose: settings.value.verbose,
         performance: true,
         showContext: true,
-        smartFilter: true
+        smartFilter: true,
+        remoteMode: settings.value.remoteMode,
+        remoteHost: settings.value.remoteHost
       }
     })
     
@@ -284,11 +308,25 @@ const killAllProcesses = async () => {
   }
 }
 
+const saveSettings = (newSettings) => {
+  settings.value = { ...newSettings }
+  // Restart monitoring with new settings
+  refreshData()
+  
+  // Restart auto-refresh with new interval if it's enabled
+  if (isAutoRefreshEnabled.value) {
+    if (timer) {
+      clearInterval(timer)
+    }
+    timer = setInterval(() => refreshData(false), settings.value.refreshInterval)
+  }
+}
+
 // Lifecycle
 onMounted(async () => {
   await refreshData(true) // Show loading state on initial load
   if (isAutoRefreshEnabled.value) {
-    timer = setInterval(() => refreshData(false), refreshInterval)
+    timer = setInterval(() => refreshData(false), settings.value.refreshInterval)
   }
 })
 
@@ -301,7 +339,7 @@ const toggleAutoRefresh = () => {
   if (isAutoRefreshEnabled.value) {
     // start
     if (timer) clearInterval(timer)
-    timer = setInterval(() => refreshData(false), refreshInterval)
+    timer = setInterval(() => refreshData(false), settings.value.refreshInterval)
   } else {
     // stop
     if (timer) clearInterval(timer)

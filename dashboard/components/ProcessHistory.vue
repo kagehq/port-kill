@@ -1,5 +1,5 @@
 <template>
-  <div class="process-history">
+  <div class="process-history p-6 pt-3">
     <!-- Header -->
     <div class="flex items-center justify-between mb-3">
       <div class="flex items-center space-x-2">

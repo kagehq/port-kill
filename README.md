@@ -1,12 +1,18 @@
 # 🚧 Port Kill
 
-A lightweight cross-platform status bar app that monitors and manages development processes running on configurable ports. The app provides real-time process detection and allows you to kill individual processes or all processes at once.
+A cross-platform observability, control and status bar that monitors and manages development processes running on configurable ports. The app provides real-time process detection and allows you to kill individual processes or all processes at once.
+
+**Works everywhere:** Local dev, Docker, Kubernetes, WSL, macOS, Linux, Windows, CI/CD pipelines, and cloud environments.
 
 **Supported Platforms:**
 - ✅ **macOS**: Native system tray with full functionality
 - ✅ **Linux**: Native system tray with full functionality (requires GTK packages)
 - ✅ **Windows**: Native system tray with full functionality
 - ✅ **Console Mode**: Works on all platforms without GUI dependencies
+- ✅ **Docker**: Full container monitoring and management
+- ✅ **Kubernetes**: Works in pods and containers for cluster monitoring
+- ✅ **WSL**: Full support in Windows Subsystem for Linux
+- ✅ **CI/CD**: Perfect for automated environments and build pipelines
 
 ![Port Kill Status Bar Icon](image-short.png)
 
@@ -34,6 +40,10 @@ Join our Discord community for discussions, support, and updates:
 - **Project Context**: Extract project names from working directories
 - **Process History**: Track killed processes with persistent storage
 - **JSON Output**: Machine-readable output for API integration
+- **Development Port Reset**: One-command cleanup of common development ports (3000, 5000, 8000, 5432, 3306, 6379, 27017, 8080, 9000)
+- **Smart Root Cause Analysis**: Intelligent analysis of process conflicts, workflow patterns, and actionable recommendations
+- **Port Guard Mode**: Proactive port conflict prevention with background daemon and auto-resolution
+- **Security Audit Mode**: Comprehensive security analysis with suspicious port detection and risk assessment
 
 ### Platform-Specific Features
 - **macOS**: Native system tray with dynamic context menu and visual status icon
@@ -76,6 +86,8 @@ A web dashboard is available in the `dashboard/` directory, providing a rich gra
 - Bulk operations (kill all, kill by group, kill by project)
 - Process restart functionality
 - Process tree visualization
+- **Remote Mode**: SSH-based remote server management
+- **Remote Connection Status**: Visual indicators for remote connections
 
 **Quick Start:**
 ```bash
@@ -85,6 +97,28 @@ npm run dev
 ```
 
 The dashboard will be available at `http://localhost:3002` and automatically connects to the Port Kill binary running on the same system.
+
+**Remote Dashboard Configuration:**
+
+**Method 1: Environment Variables**
+```bash
+# Set environment variables for remote mode
+export REMOTE_MODE=true
+export REMOTE_HOST=user@staging.company.com
+
+# Start the dashboard with remote mode
+cd dashboard && npm run dev
+```
+
+**Method 2: Settings Panel (Recommended)**
+1. Start the dashboard: `cd dashboard && npm run dev`
+2. Open any page (Overview, Processes, or Advanced)
+3. Click the **Settings** button in the top-right corner
+4. Toggle **Remote Mode (SSH)** checkbox
+5. Enter your remote host (e.g., `user@staging.company.com`)
+6. Click **Save Settings**
+
+The dashboard will automatically use remote mode when configured, allowing you to manage remote servers through the web interface.
 
 ### Dashboard API Endpoints
 
@@ -102,6 +136,16 @@ The dashboard provides a REST API for programmatic access to process monitoring 
 **History Management:**
 - `GET /api/history` - Get process kill history
 - `POST /api/history/clear` - Clear process history
+- `GET /api/history/offenders` - Get frequent offenders analysis
+- `GET /api/history/stats` - Get history statistics
+- `GET /api/history/suggestions` - Get ignore suggestions
+- `GET /api/history/root-cause` - Get smart root cause analysis
+
+**Port Guard Management:**
+- `GET /api/guard/status` - Get Port Guard daemon status
+
+**Security Audit:**
+- `GET /api/security/audit` - Perform comprehensive security audit with suspicious port detection
 
 **System Information:**
 - `GET /api/system/resources` - Get system resource usage
@@ -216,6 +260,72 @@ Hover over the icon to see the exact process count in the tooltip.
 - `netstat` command (Windows)
 - Docker (optional, for container monitoring)
 - **No GUI dependencies required**
+
+## Deployment Environments
+
+Port Kill works seamlessly across all modern development and deployment environments:
+
+### 🐳 **Docker & Container Environments**
+```bash
+# Run in Docker container
+docker run -it --rm -v /var/run/docker.sock:/var/run/docker.sock port-kill-console --docker
+
+# Monitor containerized applications
+./port-kill-console --docker --ports 3000,8000,8080
+```
+
+### ☸️ **Kubernetes & Cluster Environments**
+```bash
+# Deploy as a sidecar container in pods
+kubectl run port-kill --image=port-kill-console -- --audit --json
+
+# Monitor services across the cluster
+./port-kill-console --console --ports 3000-8080 --json > audit-results.json
+```
+
+### 🐧 **WSL (Windows Subsystem for Linux)**
+```bash
+# Full Linux compatibility in WSL
+./port-kill-console --console --ports 3000,8000,8080
+
+# Works with Windows processes via WSL
+./port-kill-console --audit --security-mode
+```
+
+### 🏗️ **CI/CD & Build Pipelines**
+```bash
+# Automated security auditing in CI
+./port-kill-console --audit --json > security-report.json
+
+# Clean up development ports in build scripts
+./port-kill-console --reset --ports 3000,8000,8080
+```
+
+### 🌐 **Cloud & Remote Environments**
+```bash
+# SSH into remote servers
+ssh user@server "./port-kill-console --audit --json"
+
+# Fleet-wide security auditing
+for server in $(cat server-list.txt); do
+  ssh $server "./port-kill-console --audit --json" > audit-$server.json
+done
+```
+
+### 🚀 **Remote Mode - Instant Staging/Prod Management**
+```bash
+# Monitor remote staging server
+./port-kill-console --remote user@staging.company.com --ports 3000,8000,8080
+
+# Security audit on production server
+./port-kill-console --remote admin@prod.company.com --audit --json
+
+# Kill processes on remote server
+./port-kill-console --remote deploy@server.com --reset --ports 3000,8000
+
+# Monitor with Docker support on remote
+./port-kill-console --remote user@server.com --docker --ports 3000-8080 --json
+```
 
 ## Installation
 
@@ -457,6 +567,214 @@ run-windows.bat -p 3000,3001,8000,8080              # Windows
 ./run.sh --verbose --ports 3000,8000
 ```
 
+### Development Port Reset
+
+The `--reset` flag provides cleanup of common development ports, perfect for quickly freeing up your development environment:
+
+```bash
+# Reset all common development ports
+./target/release/port-kill-console --reset
+```
+
+### Enhanced History & Analytics
+
+Port Kill now includes powerful history analysis features to help you understand and optimize your development workflow:
+
+#### **Frequent Offenders Detection**
+```bash
+./target/release/port-kill-console --show-offenders
+```
+Shows processes that have been killed multiple times, helping you identify recurring conflicts:
+```
+🚨 Frequent Offenders (killed 2+ times):
+────────────────────────────────────────────────────────────────────────────────
+1. Node.js Server on port 3001 (killed 2 times over 0m)
+   Group: Node.js
+   Project: port-kill
+   First killed: 2025-09-15 21:44
+   Last killed: 2025-09-15 21:44
+
+💡 Consider adding these to your ignore lists to avoid repeated kills!
+```
+
+#### **Time Pattern Analysis**
+```bash
+./target/release/port-kill-console --show-patterns
+```
+Analyzes when you most commonly kill processes, showing peak hours and days:
+```
+📊 Time Patterns Analysis:
+──────────────────────────────────────────────────
+Total kills: 5
+Peak hour: 14:00
+Peak day: Mon
+
+📈 Hour Distribution:
+14:00 │████████████████████ 5 kills
+```
+
+#### **Auto-Suggestions for Ignore Lists**
+```bash
+./target/release/port-kill-console --show-suggestions
+```
+Provides intelligent suggestions for ignore lists based on your kill history:
+```
+💡 Auto-Suggestions for Ignore Lists:
+────────────────────────────────────────────────────────────
+🔌 Suggested Ports to Ignore:
+  --ignore-ports 3001
+
+⚙️  Suggested Process Names to Ignore:
+  --ignore-processes Node.js Server
+
+📋 Complete Command Example:
+./port-kill-console --console --ports 3000,8000 --ignore-ports 3001 --ignore-processes "Node.js Server"
+```
+
+#### **Detailed Statistics**
+```bash
+./target/release/port-kill-console --show-stats
+```
+Shows comprehensive statistics about your process kill history:
+```
+📊 History Statistics:
+──────────────────────────────────────────────────
+Total kills: 5
+Unique processes: 3
+Unique ports: 2
+Unique projects: 1
+Average kills per day: 5.0
+Most killed process: Python Process (2 times)
+Most killed port: 3001 (3 times)
+Most killed project: port-kill (2 times)
+```
+
+#### **Smart Root Cause Analysis**
+```bash
+./target/release/port-kill-console --show-root-cause
+```
+Provides intelligent analysis of your development workflow patterns:
+```
+🧠 Smart Root Cause Analysis:
+────────────────────────────────────────────────────────────
+Analysis of 5 process kills revealed 1 conflicts, 1 workflow patterns, and 2 recommendations for improvement.
+
+⚠️  Detected Conflicts:
+1. Port 3001 - PortCollision (Severity: Low)
+   Processes: Node.js Process, Node.js Server
+   Recommendation: Consider using different ports for different services. Port 3001 is being used by multiple processes.
+
+📊 Workflow Patterns:
+1. Most kills happen around 22:00 (Confidence: 70%)
+   Type: TimeBased
+   Frequency: 3 kills at this hour
+   Recommendation: Consider scheduling development work or adding processes to ignore list during peak hours.
+
+💡 Smart Recommendations:
+1. Add Frequent Offenders to Ignore List (Priority: High)
+   Category: ProcessManagement
+   Description: 2 processes are being killed repeatedly
+   Action: Use --ignore-processes flag to prevent repeated kills
+   Impact: Reduces manual intervention and improves workflow efficiency
+
+2. Resolve Port Conflicts (Priority: Medium)
+   Category: PortOptimization
+   Description: 1 ports have conflicting processes
+   Action: Use different ports for different services or add conflicting ports to ignore list
+   Impact: Prevents port binding errors and improves service reliability
+```
+
+#### **Port Guard Mode**
+```bash
+./target/release/port-kill-console --guard-mode --auto-resolve
+```
+Proactive port conflict prevention with background daemon:
+```
+🛡️  Port Guard daemon started, watching ports: [3000, 3001, 3002, 8000, 8080, 9000]
+⚠️  Port conflict detected on port 3000: node vs python
+🔧 Auto-resolving port conflict on 3000 by killing process node (PID: 1234)
+✅ Port conflict resolved on port 3000
+```
+
+**Features:**
+- **Background Monitoring**: Continuously watches specified ports for conflicts
+- **Auto-Resolution**: Automatically kills conflicting processes when detected
+- **Process Interception**: Intercepts development commands (npm start, python -m http.server) and checks for port conflicts before execution
+- **Port Reservations**: Reserve ports for specific projects with expiration
+- **Smart Conflict Detection**: Identifies port collisions and process conflicts
+- **Persistent Storage**: Saves port reservations across restarts
+
+**Example Usage:**
+```bash
+# Start guard mode with auto-resolution
+./port-kill-console --guard-mode --auto-resolve
+
+# Watch specific ports
+./port-kill-console --guard-mode --guard-ports 3000,8000,5432
+
+# Custom reservation file
+./port-kill-console --guard-mode --reservation-file ~/.my-reservations.json
+
+# Enable process interception for development commands
+./port-kill-console --guard-mode --auto-resolve --intercept-commands
+```
+
+#### **Security Audit Mode**
+```bash
+./target/release/port-kill-console --audit --security-mode
+```
+Comprehensive security analysis with suspicious port detection:
+```
+🔒 SECURITY AUDIT RESULTS
+══════════════════════════════════════════════════
+📊 Audit Timestamp: 2025-09-18 02:26:06 UTC
+🔍 Total Ports Scanned: 4
+🛡️  Security Score: 0.0/100
+
+🚨 SUSPICIOUS ACTIVITY DETECTED:
+1. Port 8444: suspicious-miner (PID: 12345)
+   Risk Level: Critical
+   Reason: SuspiciousPort
+   Binary Hash: sha256:abc123def456
+   Network: 0.0.0.0
+
+💡 SECURITY RECOMMENDATIONS:
+1. Investigate Suspicious Processes (Priority: High)
+   1 suspicious processes detected
+   Action: Review and terminate suspicious processes immediately
+```
+
+**Key Features:**
+- **Suspicious Port Detection**: Flags crypto miner ports (8444, 4444, 9999, etc.)
+- **Process Analysis**: Detects unknown binaries, unexpected locations, high privileges
+- **Risk Assessment**: 4-level risk scoring (Low, Medium, High, Critical)
+- **Security Scoring**: 0-100 security score based on findings
+- **JSON Output**: Perfect for SIEM integration and fleet deployment
+- **Baseline Comparison**: Compare against approved port configurations
+
+**Example Usage:**
+```bash
+# Basic security audit
+./port-kill-console --audit
+
+# Enhanced security mode with custom suspicious ports
+./port-kill-console --audit --security-mode --suspicious-ports 8444,4444,9999,14444
+
+# Show only suspicious processes (clean output)
+./port-kill-console --audit --suspicious-only
+
+# JSON output for SIEM integration
+./port-kill-console --audit --json
+
+# Baseline comparison
+./port-kill-console --audit --baseline-file /etc/approved-ports.json
+
+# Fleet deployment across multiple servers
+for server in $(cat server-list.txt); do
+  ssh $server "./port-kill-console --audit --json" > audit-$server.json
+done
+```
+
 #### Verbose Mode
 
 The `--verbose` flag provides detailed process information to help you identify the right processes to kill:
@@ -560,12 +878,29 @@ The console application now supports many advanced features for power users:
 - `--kill-group`: Kill processes by group (e.g., Node.js)
 - `--kill-project`: Kill processes by project name
 - `--restart`: Restart processes after killing them
+- `--reset`: Reset common development ports (3000, 5000, 8000, 5432, 3306, 6379, 27017, 8080, 9000)
 - `--show-tree`: Display hierarchical process relationships
 
 **History Management:**
 - `--show-history`: Show process kill history
 - `--clear-history`: Clear process history
 - `--show-filters`: Show filter information
+- `--show-offenders`: Show frequent offenders (processes killed multiple times)
+- `--show-patterns`: Show time patterns and statistics
+- `--show-suggestions`: Show auto-suggestions for ignore lists
+- `--show-stats`: Show detailed history statistics
+- `--show-root-cause`: Show smart root cause analysis
+- `--guard-mode`: Enable Port Guard Mode (proactive port conflict prevention)
+- `--guard-ports`: Ports to watch in guard mode (default: 3000,3001,3002,8000,8080,9000)
+- `--auto-resolve`: Auto-resolve conflicts by killing conflicting processes
+- `--reservation-file`: Port reservation file path (default: ~/.port-kill/reservations.json)
+- `--intercept-commands`: Enable process interception for development commands
+- `--audit`: Enable Security Audit Mode (comprehensive security analysis)
+- `--security-mode`: Enhanced security mode with suspicious port detection
+- `--suspicious-ports`: Suspicious ports to flag (default: 8444,4444,9999,14444,5555,6666,7777)
+- `--baseline-file`: Baseline file for approved ports comparison
+- `--suspicious-only`: Show only suspicious/unauthorized processes
+- `--remote <host>`: Remote mode - connect to remote host via SSH for instant staging/prod management
 
 **JSON Output:**
 - `--json`: Output processes as JSON (for API integration)
@@ -578,11 +913,33 @@ The console application now supports many advanced features for power users:
 # Kill all Node.js processes
 ./target/release/port-kill-console --kill-group Node.js --ports 3000,8000
 
+# Reset common development ports (one-command cleanup)
+./target/release/port-kill-console --reset
+
 # Show process tree with context
 ./target/release/port-kill-console --show-tree --show-context --ports 3000,8000
 
 # JSON output for API integration
 ./target/release/port-kill-console --json --performance --ports 3000,8000
+
+# Enhanced history analysis
+./target/release/port-kill-console --show-offenders
+./target/release/port-kill-console --show-patterns
+./target/release/port-kill-console --show-suggestions
+./target/release/port-kill-console --show-stats
+./target/release/port-kill-console --show-root-cause
+
+# Port Guard Mode - proactive conflict prevention
+./target/release/port-kill-console --guard-mode --auto-resolve
+./target/release/port-kill-console --guard-mode --guard-ports 3000,8000,5432
+
+# Security Audit Mode - comprehensive security analysis
+./target/release/port-kill-console --audit --security-mode
+./target/release/port-kill-console --audit --suspicious-only --json
+
+# Remote Mode - instant staging/prod management
+./target/release/port-kill-console --remote user@staging.company.com --ports 3000,8000
+./target/release/port-kill-console --remote admin@prod.company.com --audit --json
 ```
 
 ## Technical Details

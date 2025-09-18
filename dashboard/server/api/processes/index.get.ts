@@ -22,6 +22,8 @@ export default defineEventHandler(async (event) => {
     const showContext = query.showContext === 'true'
     const docker = query.docker === 'true'
     const verbose = query.verbose === 'true'
+    const remoteMode = query.remoteMode === 'true' || config.remoteMode
+    const remoteHost = query.remoteHost || config.remoteHost
     
     // Try to find the port-kill-console binary
     const binaryPath = findPortKillBinary(config.portKillBinaryPath)
@@ -43,7 +45,9 @@ export default defineEventHandler(async (event) => {
       performance,
       showContext,
       docker,
-      verbose
+      verbose,
+      remoteMode,
+      remoteHost
     )
     
     return {
@@ -103,7 +107,9 @@ async function getProcessesWithRustApp(
   performance: boolean,
   showContext: boolean,
   docker: boolean,
-  verbose: boolean
+  verbose: boolean,
+  remoteMode: boolean = false,
+  remoteHost: string = ''
 ): Promise<any[]> {
   return new Promise((resolve, reject) => {
     // Build command arguments
@@ -123,6 +129,11 @@ async function getProcessesWithRustApp(
     if (showContext) args.push('--show-context')
     if (docker) args.push('--docker')
     if (verbose) args.push('--verbose')
+    
+    // Add remote mode arguments
+    if (remoteMode && remoteHost) {
+      args.push('--remote', remoteHost)
+    }
     
     const rustApp = spawn(binaryPath, args, {
       stdio: ['pipe', 'pipe', 'pipe']

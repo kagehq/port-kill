@@ -1,7 +1,7 @@
 <template>
   <div class="h-screen bg-black flex">
     <!-- Left Sidebar -->
-    <Sidebar :is-connected="isConnected" />
+    <Sidebar :is-connected="isConnected" :remote-mode="settings.remoteMode" :remote-host="settings.remoteHost" @open-settings="showSettings = true" />
 
     <!-- Main Content Area -->
     <div class="flex-1 flex flex-col mr-2 my-2 rounded-xl bg-gray-500/10 border border-gray-500/10 overflow-hidden">
@@ -42,6 +42,7 @@
                   />
                   <span>{{ isLoading ? 'Refreshing...' : 'Refresh' }}</span>
                 </button>
+                
               </div>
             </div>
           </div>
@@ -341,7 +342,9 @@ const settings = ref({
   ignoreProcesses: 'Chrome,ControlCe,rapportd',
   docker: true,
   verbose: true,
-  refreshInterval: 10000
+  refreshInterval: 10000,
+  remoteMode: false,
+  remoteHost: ''
 })
 
 // Helper function to detect port conflicts
@@ -471,7 +474,9 @@ const { data: processesData, error: processesError, pending: processesPending, r
     verbose: true,
     performance: true,
     showContext: true,
-    smartFilter: true
+    smartFilter: true,
+    remoteMode: false,
+    remoteHost: ''
   }
 })
 
@@ -513,7 +518,9 @@ const refreshData = async (showLoading = true) => {
         verbose: settings.value.verbose,
         performance: true,
         showContext: true,
-        smartFilter: true
+        smartFilter: true,
+        remoteMode: settings.value.remoteMode,
+        remoteHost: settings.value.remoteHost
       }
     })
     if (newData && newData.success) {
@@ -590,6 +597,14 @@ const saveSettings = (newSettings) => {
   settings.value = { ...newSettings }
   // Restart monitoring with new settings
   refreshData()
+  
+  // Restart auto-refresh with new interval if it's enabled
+  if (isAutoRefreshEnabled.value) {
+    if (refreshInterval) {
+      clearInterval(refreshInterval)
+    }
+    refreshInterval = setInterval(() => refreshData(false), settings.value.refreshInterval)
+  }
 }
 
 // Auto-refresh

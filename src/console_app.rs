@@ -1,8 +1,10 @@
 use crate::{
     process_monitor::ProcessMonitor,
-    types::{ProcessUpdate, StatusBarInfo},
+    types::{ProcessUpdate, StatusBarInfo, GuardStatus, SecurityAuditResult},
     cli::Args,
     smart_filter::SmartFilter,
+    port_guard::PortGuardDaemon,
+    security_audit::SecurityAuditor,
 };
 use anyhow::Result;
 use crossbeam_channel::{bounded, Receiver};
@@ -15,6 +17,7 @@ pub struct ConsolePortKillApp {
     process_monitor: Arc<Mutex<ProcessMonitor>>,
     update_receiver: Receiver<ProcessUpdate>,
     args: Args,
+    port_guard: Option<Arc<PortGuardDaemon>>,
 }
 
 impl ConsolePortKillApp {
@@ -33,10 +36,27 @@ impl ConsolePortKillApp {
             Arc::new(Mutex::new(ProcessMonitor::new_with_performance(update_sender, args.get_ports_to_monitor(), args.docker, args.verbose, None, args.performance)?))
         };
 
+        // Initialize Port Guard if enabled
+        let port_guard = if args.guard_mode {
+            let guard_ports = args.get_guard_ports();
+            let reservation_file = args.get_reservation_file_path();
+            let mut daemon = PortGuardDaemon::new(
+                guard_ports,
+                reservation_file,
+                args.auto_resolve,
+                process_monitor.clone(),
+            );
+            daemon.set_process_interception(args.intercept_commands);
+            Some(Arc::new(daemon))
+        } else {
+            None
+        };
+
         Ok(Self {
             process_monitor,
             update_receiver,
             args,
+            port_guard,
         })
     }
     
@@ -529,6 +549,583 @@ impl ConsolePortKillApp {
             println!();
         }
         
+        Ok(())
+    }
+    
+    pub async fn reset_development_ports(&self) -> Result<()> {
+        let reset_ports = self.args.get_reset_ports();
+        let port_list = reset_ports.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(", ");
+        
+        println!("🔄 Resetting common development ports: {}", port_list);
+        println!("This will kill all processes on these ports:");
+        for port in &reset_ports {
+            println!("  • Port {} (common dev services)", port);
+        }
+        println!();
+        
+        // Use the existing kill_all_processes function directly with reset ports
+        use crate::process_monitor::kill_all_processes;
+        kill_all_processes(&reset_ports, &self.args)?;
+        
+        println!("✅ Reset complete! Development ports are now free and ready for use!");
+        
+        Ok(())
+    }
+    
+    pub async fn show_frequent_offenders(&self) -> Result<()> {
+        let monitor = self.process_monitor.lock().await;
+        let history = monitor.get_history();
+        
+        if history.is_empty() {
+            if self.args.json {
+                println!("[]");
+            } else {
+                println!("ℹ️  No history available. Start killing some processes to see frequent offenders!");
+            }
+            return Ok(());
+        }
+        
+        let offenders = history.get_frequent_offenders(2); // Show processes killed 2+ times
+        
+        if self.args.json {
+            // Output JSON for API consumption
+            for offender in &offenders {
+                println!("{}", serde_json::to_string(offender)?);
+            }
+            return Ok(());
+        }
+        
+        if offenders.is_empty() {
+            println!("✅ No frequent offenders found! All processes have been killed only once.");
+            return Ok(());
+        }
+        
+        println!("🚨 Frequent Offenders (killed 2+ times):");
+        println!("{}", "─".repeat(80));
+        
+        for (i, offender) in offenders.iter().enumerate() {
+            let time_span = offender.last_killed.signed_duration_since(offender.first_killed);
+            let time_span_str = if time_span.num_days() > 0 {
+                format!("{}d", time_span.num_days())
+            } else if time_span.num_hours() > 0 {
+                format!("{}h", time_span.num_hours())
+            } else {
+                format!("{}m", time_span.num_minutes())
+            };
+            
+            println!("{}. {} on port {} (killed {} times over {})", 
+                    i + 1, 
+                    offender.process_name, 
+                    offender.port, 
+                    offender.kill_count,
+                    time_span_str);
+            
+            if let Some(ref group) = offender.process_group {
+                println!("   Group: {}", group);
+            }
+            if let Some(ref project) = offender.project_name {
+                println!("   Project: {}", project);
+            }
+            println!("   First killed: {}", offender.first_killed.format("%Y-%m-%d %H:%M"));
+            println!("   Last killed: {}", offender.last_killed.format("%Y-%m-%d %H:%M"));
+            println!();
+        }
+        
+        println!("💡 Consider adding these to your ignore lists to avoid repeated kills!");
+        
+        Ok(())
+    }
+    
+    pub async fn show_time_patterns(&self) -> Result<()> {
+        let monitor = self.process_monitor.lock().await;
+        let history = monitor.get_history();
+        
+        if history.is_empty() {
+            println!("ℹ️  No history available. Start killing some processes to see time patterns!");
+            return Ok(());
+        }
+        
+        let patterns = history.get_time_patterns();
+        
+        println!("📊 Time Patterns Analysis:");
+        println!("{}", "─".repeat(50));
+        println!("Total kills: {}", patterns.total_kills);
+        
+        if let Some(peak_hour) = patterns.peak_hour {
+            println!("Peak hour: {}:00", peak_hour);
+        }
+        
+        if let Some(peak_day) = patterns.peak_day {
+            println!("Peak day: {}", peak_day);
+        }
+        
+        println!();
+        println!("📈 Hour Distribution:");
+        let mut hour_entries: Vec<_> = patterns.hour_distribution.iter().collect();
+        hour_entries.sort_by_key(|(hour, _)| *hour);
+        
+        for (hour, count) in hour_entries {
+            let bar_length = (*count as f32 / patterns.total_kills as f32 * 20.0) as usize;
+            let bar = "█".repeat(bar_length);
+            println!("{:2}:00 │{} {} kills", hour, bar, count);
+        }
+        
+        println!();
+        println!("📅 Day Distribution:");
+        let day_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+        for (day, count) in &patterns.day_distribution {
+            let day_name = day_names[*day as usize];
+            let bar_length = (*count as f32 / patterns.total_kills as f32 * 20.0) as usize;
+            let bar = "█".repeat(bar_length);
+            println!("{} │{} {} kills", day_name, bar, count);
+        }
+        
+        Ok(())
+    }
+    
+    pub async fn show_ignore_suggestions(&self) -> Result<()> {
+        let monitor = self.process_monitor.lock().await;
+        let history = monitor.get_history();
+        
+        if history.is_empty() {
+            if self.args.json {
+                println!("null");
+            } else {
+                println!("ℹ️  No history available. Start killing some processes to get suggestions!");
+            }
+            return Ok(());
+        }
+        
+        let suggestions = history.get_ignore_suggestions(2); // Suggest for processes killed 2+ times
+        
+        if self.args.json {
+            // Output JSON for API consumption
+            println!("{}", serde_json::to_string(&suggestions)?);
+            return Ok(());
+        }
+        
+        println!("💡 Auto-Suggestions for Ignore Lists:");
+        println!("{}", "─".repeat(60));
+        
+        if !suggestions.suggested_ports.is_empty() {
+            println!("🔌 Suggested Ports to Ignore:");
+            for port in &suggestions.suggested_ports {
+                println!("  --ignore-ports {}", port);
+            }
+            println!();
+        }
+        
+        if !suggestions.suggested_processes.is_empty() {
+            println!("⚙️  Suggested Process Names to Ignore:");
+            for process in &suggestions.suggested_processes {
+                println!("  --ignore-processes {}", process);
+            }
+            println!();
+        }
+        
+        if !suggestions.suggested_groups.is_empty() {
+            println!("📦 Suggested Groups to Ignore:");
+            for group in &suggestions.suggested_groups {
+                println!("  --ignore-groups {}", group);
+            }
+            println!();
+        }
+        
+        if suggestions.suggested_ports.is_empty() && 
+           suggestions.suggested_processes.is_empty() && 
+           suggestions.suggested_groups.is_empty() {
+            println!("✅ No suggestions! Your current ignore settings are working well.");
+        } else {
+            println!("📋 Complete Command Example:");
+            let mut args = Vec::new();
+            if !suggestions.suggested_ports.is_empty() {
+                let ports = suggestions.suggested_ports.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(",");
+                args.push(format!("--ignore-ports {}", ports));
+            }
+            if !suggestions.suggested_processes.is_empty() {
+                let processes = suggestions.suggested_processes.join(",");
+                args.push(format!("--ignore-processes {}", processes));
+            }
+            if !suggestions.suggested_groups.is_empty() {
+                let groups = suggestions.suggested_groups.join(",");
+                args.push(format!("--ignore-groups {}", groups));
+            }
+            
+            if !args.is_empty() {
+                println!("./port-kill-console --console --ports 3000,8000 {}", args.join(" "));
+            }
+        }
+        
+        Ok(())
+    }
+    
+    pub async fn show_history_statistics(&self) -> Result<()> {
+        let monitor = self.process_monitor.lock().await;
+        let history = monitor.get_history();
+        
+        if history.is_empty() {
+            if self.args.json {
+                println!("null");
+            } else {
+                println!("ℹ️  No history available. Start killing some processes to see statistics!");
+            }
+            return Ok(());
+        }
+        
+        let stats = history.get_statistics();
+        
+        if self.args.json {
+            // Output JSON for API consumption
+            println!("{}", serde_json::to_string(&stats)?);
+            return Ok(());
+        }
+        
+        println!("📊 History Statistics:");
+        println!("{}", "─".repeat(50));
+        println!("Total kills: {}", stats.total_kills);
+        println!("Unique processes: {}", stats.unique_processes);
+        println!("Unique ports: {}", stats.unique_ports);
+        println!("Unique projects: {}", stats.unique_projects);
+        println!("Average kills per day: {:.1}", stats.average_kills_per_day);
+        
+        if let Some((name, count)) = &stats.most_killed_process {
+            println!("Most killed process: {} ({} times)", name, count);
+        }
+        
+        if let Some((port, count)) = &stats.most_killed_port {
+            println!("Most killed port: {} ({} times)", port, count);
+        }
+        
+        if let Some((project, count)) = &stats.most_killed_project {
+            println!("Most killed project: {} ({} times)", project, count);
+        }
+        
+        if let Some(oldest) = &stats.oldest_kill {
+            println!("Oldest kill: {}", oldest.format("%Y-%m-%d %H:%M"));
+        }
+        
+        if let Some(newest) = &stats.newest_kill {
+            println!("Newest kill: {}", newest.format("%Y-%m-%d %H:%M"));
+        }
+        
+        Ok(())
+    }
+    
+    pub async fn show_root_cause_analysis(&self) -> Result<()> {
+        let monitor = self.process_monitor.lock().await;
+        let history = monitor.get_history();
+        
+        if history.is_empty() {
+            if self.args.json {
+                println!("null");
+            } else {
+                println!("ℹ️  No history available. Start killing some processes to get root cause analysis!");
+            }
+            return Ok(());
+        }
+        
+        let analysis = history.get_root_cause_analysis();
+        
+        if self.args.json {
+            // Output JSON for API consumption
+            println!("{}", serde_json::to_string(&analysis)?);
+            return Ok(());
+        }
+        
+        println!("🧠 Smart Root Cause Analysis:");
+        println!("{}", "─".repeat(60));
+        println!("{}", analysis.summary);
+        println!();
+        
+        // Show conflicts
+        if !analysis.conflicts.is_empty() {
+            println!("⚠️  Detected Conflicts:");
+            for (i, conflict) in analysis.conflicts.iter().enumerate() {
+                println!("{}. Port {} - {} (Severity: {:?})", 
+                    i + 1, 
+                    conflict.port, 
+                    format!("{:?}", conflict.conflict_type).replace("ConflictType::", ""),
+                    conflict.severity
+                );
+                println!("   Processes: {}", conflict.conflicting_processes.join(", "));
+                println!("   Recommendation: {}", conflict.recommendation);
+                println!();
+            }
+        }
+        
+        // Show patterns
+        if !analysis.patterns.is_empty() {
+            println!("📊 Workflow Patterns:");
+            for (i, pattern) in analysis.patterns.iter().enumerate() {
+                println!("{}. {} (Confidence: {:.0}%)", 
+                    i + 1, 
+                    pattern.description,
+                    pattern.confidence * 100.0
+                );
+                println!("   Type: {:?}", pattern.pattern_type);
+                println!("   Frequency: {}", pattern.frequency);
+                println!("   Recommendation: {}", pattern.recommendation);
+                println!();
+            }
+        }
+        
+        // Show recommendations
+        if !analysis.recommendations.is_empty() {
+            println!("💡 Smart Recommendations:");
+            for (i, rec) in analysis.recommendations.iter().enumerate() {
+                println!("{}. {} (Priority: {:?})", 
+                    i + 1, 
+                    rec.title,
+                    rec.priority
+                );
+                println!("   Category: {:?}", rec.category);
+                println!("   Description: {}", rec.description);
+                println!("   Action: {}", rec.action);
+                println!("   Impact: {}", rec.impact);
+                println!();
+            }
+        }
+        
+        if analysis.conflicts.is_empty() && analysis.patterns.is_empty() && analysis.recommendations.is_empty() {
+            println!("✅ No issues detected! Your development workflow is running smoothly.");
+        }
+        
+        Ok(())
+    }
+
+    /// Start Port Guard daemon
+    pub async fn start_port_guard(&self) -> Result<()> {
+        if let Some(guard) = &self.port_guard {
+            guard.start().await?;
+            info!("🛡️  Port Guard daemon started successfully");
+        } else {
+            return Err(anyhow::anyhow!("Port Guard mode not enabled"));
+        }
+        Ok(())
+    }
+
+    /// Stop Port Guard daemon
+    pub async fn stop_port_guard(&self) -> Result<()> {
+        if let Some(guard) = &self.port_guard {
+            guard.stop().await?;
+            info!("🛡️  Port Guard daemon stopped");
+        } else {
+            return Err(anyhow::anyhow!("Port Guard mode not enabled"));
+        }
+        Ok(())
+    }
+
+    /// Get Port Guard status
+    pub async fn get_port_guard_status(&self) -> Result<GuardStatus> {
+        if let Some(guard) = &self.port_guard {
+            Ok(guard.get_status().await)
+        } else {
+            Err(anyhow::anyhow!("Port Guard mode not enabled"))
+        }
+    }
+
+    /// Reserve a port
+    pub async fn reserve_port(&self, port: u16, project_name: String, process_name: String) -> Result<()> {
+        if let Some(guard) = &self.port_guard {
+            guard.reserve_port(port, project_name, process_name).await?;
+            info!("🔒 Port {} reserved", port);
+        } else {
+            return Err(anyhow::anyhow!("Port Guard mode not enabled"));
+        }
+        Ok(())
+    }
+
+    /// Release a port reservation
+    pub async fn release_port(&self, port: u16) -> Result<()> {
+        if let Some(guard) = &self.port_guard {
+            guard.release_port(port).await?;
+            info!("🔓 Port {} reservation released", port);
+        } else {
+            return Err(anyhow::anyhow!("Port Guard mode not enabled"));
+        }
+        Ok(())
+    }
+
+    /// Intercept a command for port conflict checking
+    pub async fn intercept_command(&self, command: &str, args: &[String]) -> Result<()> {
+        if let Some(guard) = &self.port_guard {
+            guard.intercept_command(command, args).await?;
+        } else {
+            return Err(anyhow::anyhow!("Port Guard mode not enabled"));
+        }
+        Ok(())
+    }
+
+    /// Get intercepted commands count
+    pub async fn get_intercepted_commands_count(&self) -> Result<usize> {
+        if let Some(guard) = &self.port_guard {
+            Ok(guard.get_intercepted_commands_count().await)
+        } else {
+            Err(anyhow::anyhow!("Port Guard mode not enabled"))
+        }
+    }
+
+    /// Perform security audit
+    pub async fn perform_security_audit(&self) -> Result<()> {
+        let mut monitor = self.process_monitor.lock().await;
+        let processes = monitor.scan_processes().await?;
+        
+        let auditor = SecurityAuditor::new(
+            self.args.get_suspicious_ports(),
+            self.args.get_baseline_file_path(),
+            self.args.suspicious_only,
+        );
+
+        let audit_result = auditor.perform_audit(processes).await?;
+
+        if self.args.json {
+            // Output JSON for API consumption
+            println!("{}", serde_json::to_string_pretty(&audit_result)?);
+            return Ok(());
+        }
+
+        // Display audit results
+        self.display_audit_results(&audit_result).await?;
+        Ok(())
+    }
+
+    /// Execute command on remote host via SSH
+    pub async fn execute_remote_command(&self, command: &str) -> Result<String> {
+        if let Some(remote_host) = &self.args.get_remote_host() {
+            let ssh_command = format!("ssh {} '{}'", remote_host, command);
+            
+            let output = std::process::Command::new("sh")
+                .arg("-c")
+                .arg(&ssh_command)
+                .output()?;
+            
+            if output.status.success() {
+                Ok(String::from_utf8_lossy(&output.stdout).to_string())
+            } else {
+                Err(anyhow::anyhow!(
+                    "Remote command failed: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                ))
+            }
+        } else {
+            Err(anyhow::anyhow!("No remote host specified"))
+        }
+    }
+
+    /// Run in remote mode - execute commands on remote host
+    pub async fn run_remote_mode(&self, remote_host: &str) -> Result<()> {
+        println!("🌐 Remote Mode: Connecting to {}", remote_host);
+        
+        // Build the remote command
+        let mut remote_command = String::from("./port-kill-console");
+        
+        // Add console mode
+        remote_command.push_str(" --console");
+        
+        // Add ports if specified
+        if !self.args.get_ports_to_monitor().is_empty() {
+            let ports_str = self.args.get_ports_to_monitor()
+                .iter()
+                .map(|p| p.to_string())
+                .collect::<Vec<_>>()
+                .join(",");
+            remote_command.push_str(&format!(" --ports {}", ports_str));
+        }
+        
+        // Add other flags
+        if self.args.verbose {
+            remote_command.push_str(" --verbose");
+        }
+        if self.args.docker {
+            remote_command.push_str(" --docker");
+        }
+        if self.args.show_pid {
+            remote_command.push_str(" --show-pid");
+        }
+        if self.args.json {
+            remote_command.push_str(" --json");
+        }
+        
+        println!("📡 Executing: {}", remote_command);
+        
+        // Execute the command on remote host
+        let output = self.execute_remote_command(&remote_command).await?;
+        
+        // Display the output
+        print!("{}", output);
+        
+        Ok(())
+    }
+
+    /// Display security audit results
+    async fn display_audit_results(&self, result: &SecurityAuditResult) -> Result<()> {
+        println!("🔒 SECURITY AUDIT RESULTS");
+        println!("{}", "═".repeat(50));
+        println!("📊 Audit Timestamp: {}", result.audit_timestamp.format("%Y-%m-%d %H:%M:%S UTC"));
+        println!("🔍 Total Ports Scanned: {}", result.total_ports_scanned);
+        println!("🛡️  Security Score: {:.1}/100", result.security_score);
+        println!();
+
+        // Show suspicious processes
+        if !result.suspicious_processes.is_empty() {
+            println!("🚨 SUSPICIOUS ACTIVITY DETECTED:");
+            for (i, suspicious) in result.suspicious_processes.iter().enumerate() {
+                println!("{}. Port {}: {} (PID: {})", 
+                    i + 1, 
+                    suspicious.port, 
+                    suspicious.process_info.name, 
+                    suspicious.process_info.pid
+                );
+                println!("   Risk Level: {:?}", suspicious.risk_level);
+                println!("   Reason: {:?}", suspicious.suspicion_reason);
+                if let Some(hash) = &suspicious.binary_hash {
+                    println!("   Binary Hash: {}", hash);
+                }
+                println!("   Network: {}", suspicious.network_interface);
+                println!();
+            }
+        } else {
+            println!("✅ No suspicious processes detected!");
+        }
+
+        // Show approved processes (if not suspicious_only mode)
+        if !self.args.suspicious_only && !result.approved_processes.is_empty() {
+            println!("✅ APPROVED SERVICES:");
+            for approved in &result.approved_processes {
+                println!("   Port {}: {} ({:?})", 
+                    approved.port, 
+                    approved.process_info.name, 
+                    approved.service_type
+                );
+            }
+            println!();
+        }
+
+        // Show recommendations
+        if !result.recommendations.is_empty() {
+            println!("💡 SECURITY RECOMMENDATIONS:");
+            for (i, rec) in result.recommendations.iter().enumerate() {
+                println!("{}. {} (Priority: {:?})", 
+                    i + 1, 
+                    rec.title, 
+                    rec.priority
+                );
+                println!("   {}", rec.description);
+                println!("   Action: {}", rec.action);
+                println!();
+            }
+        }
+
+        // Show baseline comparison
+        if let Some(baseline) = &result.baseline_comparison {
+            println!("📋 BASELINE COMPARISON:");
+            println!("   Baseline File: {}", baseline.baseline_file);
+            println!("   New Processes: {}", baseline.new_processes.len());
+            println!("   Removed Processes: {}", baseline.removed_processes.len());
+            println!("   Changed Processes: {}", baseline.changed_processes.len());
+            println!();
+        }
+
         Ok(())
     }
 }
