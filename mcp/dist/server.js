@@ -226,7 +226,7 @@ server.registerTool("reset", {
 server.registerTool("audit", {
     description: "Run security audit. Returns detailed audit results for all processes on all ports.",
     inputSchema: {
-        suspiciousOnly: z.boolean().describe("Set to true to only show suspicious/unauthorized processes (recommended value is false)"),
+        suspiciousOnly: z.boolean().describe("Set to true to only show suspicious/unauthorized processes, set to false to show all processes listening on scanned ports (recommended value is false)"),
         remote: z.string().describe("Set to an ssh 'user@host' string to run the audit on a remote machine over SSH. Leave as an empty string to run locally (recommended value is an empty string)")
     }
 }, async (args) => {
@@ -236,7 +236,7 @@ server.registerTool("audit", {
 server.registerTool("guardStatus", {
     description: "Return Port Guard status if running via dashboard API.",
     inputSchema: {
-        baseUrl: z.string().describe("Dashboard base URL")
+        baseUrl: z.string().describe("Dashboard base URL (default is http://localhost:3000)")
     }
 }, async (args) => {
     const result = await invokeWithTimeout("guardStatus", args || {});
