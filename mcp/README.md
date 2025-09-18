@@ -10,6 +10,16 @@ Expose Port Kill as MCP tools for Cursor.
 - `audit(suspiciousOnly?, remote?)`
 - `guardStatus(baseUrl?)` (uses dashboard API)
 
+## Quick Install
+
+```bash
+# One-liner (from anywhere)
+curl -fsSL https://raw.githubusercontent.com/kagehq/port-kill/main/install-mcp.sh | bash
+
+# From port-kill root directory
+./install-mcp.sh
+```
+
 ## Dev
 
 ```bash

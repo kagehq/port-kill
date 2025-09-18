@@ -56,6 +56,13 @@ npm run dev   # http://localhost:3000
 ## MCP (use Port Kill from Cursor)
 
 ```bash
+# One-liner install
+curl -fsSL https://raw.githubusercontent.com/kagehq/port-kill/main/install-mcp.sh | bash
+
+ From port-kill root directory
+./install-mcp.sh
+
+# Or manual setup
 cd mcp
 npm install
 npm run dev    # starts the MCP server
