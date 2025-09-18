@@ -254,7 +254,7 @@ run-windows.bat -p 3000,3001,8000,8080              # Windows
 
 ## More Detailed Information
 
-This README is intentionally short. For full docs (all features, flags, API, architecture), see [DETAILED.md](DETAILED.md).
+This README is intentionally short. For full docs (all features, flags, API, architecture), see [DETAILED.md](DETAILED.md). Windows users: see [WINDOWS.md](WINDOWS.md).
 
 ## License
 
