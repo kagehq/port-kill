@@ -60,6 +60,29 @@ impl ConsolePortKillApp {
         })
     }
     
+    /// Get ports to scan, using smart defaults when no ports are specified
+    fn get_ports_to_scan(args: &Args) -> Vec<u16> {
+        if args.ports.is_some() {
+            // User specified ports, use them
+            args.get_ports_to_monitor()
+        } else {
+            // No ports specified, use common development ports to avoid hanging
+            vec![3000, 3001, 5000, 8000, 8080, 9000]
+        }
+    }
+
+    /// Create a temporary process monitor with smart port selection
+    async fn create_temp_monitor(&self, ports_to_scan: Vec<u16>) -> Result<ProcessMonitor> {
+        let (update_sender, _update_receiver) = crossbeam_channel::bounded(100);
+        let smart_filter = Self::create_smart_filter(&self.args)?;
+        
+        if let Some(filter) = smart_filter {
+            ProcessMonitor::new_with_performance(update_sender, ports_to_scan, self.args.docker, self.args.verbose, Some(filter), self.args.performance)
+        } else {
+            ProcessMonitor::new_with_performance(update_sender, ports_to_scan, self.args.docker, self.args.verbose, None, self.args.performance)
+        }
+    }
+
     fn create_smart_filter(args: &Args) -> Result<Option<SmartFilter>> {
         // Get smart filter defaults
         let (smart_ignore_ports, smart_ignore_processes, smart_ignore_groups) = args.get_smart_filter_defaults();
@@ -130,26 +153,9 @@ impl ConsolePortKillApp {
     }
     
     async fn output_processes_json(&mut self) -> Result<()> {
-        // For JSON mode, if no specific ports are provided, use a reasonable default range
-        // to avoid scanning 4000+ ports which can cause hanging
-        let ports_to_scan = if self.args.ports.is_some() {
-            // User specified ports, use them
-            self.args.get_ports_to_monitor()
-        } else {
-            // No ports specified, use common development ports for JSON mode
-            vec![3000, 3001, 5000, 8000, 8080, 9000]
-        };
-        
-        // Create a temporary process monitor with the limited port set
-        let (update_sender, _update_receiver) = crossbeam_channel::bounded(100);
-        let smart_filter = Self::create_smart_filter(&self.args)?;
-        
-        let mut temp_monitor = if let Some(filter) = smart_filter {
-            ProcessMonitor::new_with_performance(update_sender, ports_to_scan, self.args.docker, self.args.verbose, Some(filter), self.args.performance)?
-        } else {
-            ProcessMonitor::new_with_performance(update_sender, ports_to_scan, self.args.docker, self.args.verbose, None, self.args.performance)?
-        };
-        
+        // Use smart port selection to avoid hanging on large port ranges
+        let ports_to_scan = Self::get_ports_to_scan(&self.args);
+        let mut temp_monitor = self.create_temp_monitor(ports_to_scan).await?;
         let processes = temp_monitor.scan_processes().await?;
         
         // Filter out ignored processes
@@ -401,8 +407,10 @@ impl ConsolePortKillApp {
     }
     
     pub async fn kill_by_group(&self, groups: &[String]) -> Result<()> {
-        let mut monitor = self.process_monitor.lock().await;
-        let processes = monitor.scan_processes().await?;
+        // Use smart port selection to avoid hanging on large port ranges
+        let ports_to_scan = Self::get_ports_to_scan(&self.args);
+        let mut temp_monitor = self.create_temp_monitor(ports_to_scan).await?;
+        let processes = temp_monitor.scan_processes().await?;
         
         let mut killed_count = 0;
         let mut total_count = 0;
@@ -414,7 +422,7 @@ impl ConsolePortKillApp {
                     println!("🔪 Killing {} (PID {}) on port {} - Group: {}", 
                             process_info.get_short_name(), process_info.pid, port, group);
                     
-                    if let Err(e) = monitor.kill_process(process_info.pid).await {
+                    if let Err(e) = temp_monitor.kill_process(process_info.pid).await {
                         println!("❌ Failed to kill {} (PID {}): {}", 
                                 process_info.get_short_name(), process_info.pid, e);
                     } else {
@@ -435,8 +443,10 @@ impl ConsolePortKillApp {
     }
     
     pub async fn kill_by_project(&self, projects: &[String]) -> Result<()> {
-        let mut monitor = self.process_monitor.lock().await;
-        let processes = monitor.scan_processes().await?;
+        // Use smart port selection to avoid hanging on large port ranges
+        let ports_to_scan = Self::get_ports_to_scan(&self.args);
+        let mut temp_monitor = self.create_temp_monitor(ports_to_scan).await?;
+        let processes = temp_monitor.scan_processes().await?;
         
         let mut killed_count = 0;
         let mut total_count = 0;
@@ -448,7 +458,7 @@ impl ConsolePortKillApp {
                     println!("🔪 Killing {} (PID {}) on port {} - Project: {}", 
                             process_info.get_short_name(), process_info.pid, port, project);
                     
-                    if let Err(e) = monitor.kill_process(process_info.pid).await {
+                    if let Err(e) = temp_monitor.kill_process(process_info.pid).await {
                         println!("❌ Failed to kill {} (PID {}): {}", 
                                 process_info.get_short_name(), process_info.pid, e);
                     } else {
@@ -469,8 +479,10 @@ impl ConsolePortKillApp {
     }
     
     pub async fn kill_all_processes(&self) -> Result<()> {
-        let mut monitor = self.process_monitor.lock().await;
-        let processes = monitor.scan_processes().await?;
+        // Use smart port selection to avoid hanging on large port ranges
+        let ports_to_scan = Self::get_ports_to_scan(&self.args);
+        let mut temp_monitor = self.create_temp_monitor(ports_to_scan).await?;
+        let processes = temp_monitor.scan_processes().await?;
         
         if processes.is_empty() {
             println!("ℹ️  No processes found to kill");
@@ -481,7 +493,7 @@ impl ConsolePortKillApp {
         println!("🔪 Killing all {} processes...", total_count);
         
         // Use the ProcessMonitor's kill_all_processes method which handles history properly
-        monitor.kill_all_processes().await?;
+        temp_monitor.kill_all_processes().await?;
         
         println!("✅ Killed all {} processes", total_count);
         
@@ -489,8 +501,10 @@ impl ConsolePortKillApp {
     }
     
     pub async fn restart_processes(&self) -> Result<()> {
-        let mut monitor = self.process_monitor.lock().await;
-        let processes = monitor.scan_processes().await?;
+        // Use smart port selection to avoid hanging on large port ranges
+        let ports_to_scan = Self::get_ports_to_scan(&self.args);
+        let mut temp_monitor = self.create_temp_monitor(ports_to_scan).await?;
+        let processes = temp_monitor.scan_processes().await?;
         
         if processes.is_empty() {
             println!("ℹ️  No processes to restart");
@@ -504,7 +518,7 @@ impl ConsolePortKillApp {
             println!("🔪 Killing {} (PID {}) on port {}", 
                     process_info.get_short_name(), process_info.pid, port);
             
-            if let Err(e) = monitor.kill_process(process_info.pid).await {
+            if let Err(e) = temp_monitor.kill_process(process_info.pid).await {
                 println!("❌ Failed to kill {} (PID {}): {}", 
                         process_info.get_short_name(), process_info.pid, e);
             }
@@ -514,7 +528,7 @@ impl ConsolePortKillApp {
         tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
         
         // Check if processes have restarted
-        let new_processes = monitor.scan_processes().await?;
+        let new_processes = temp_monitor.scan_processes().await?;
         if new_processes.is_empty() {
             println!("ℹ️  No processes detected after restart");
         } else {
@@ -525,8 +539,10 @@ impl ConsolePortKillApp {
     }
     
     pub async fn show_process_tree(&self) -> Result<()> {
-        let mut monitor = self.process_monitor.lock().await;
-        let processes = monitor.scan_processes().await?;
+        // Use smart port selection to avoid hanging on large port ranges
+        let ports_to_scan = Self::get_ports_to_scan(&self.args);
+        let mut temp_monitor = self.create_temp_monitor(ports_to_scan).await?;
+        let processes = temp_monitor.scan_processes().await?;
         
         if processes.is_empty() {
             println!("ℹ️  No processes detected");
@@ -985,26 +1001,9 @@ impl ConsolePortKillApp {
 
     /// Perform security audit
     pub async fn perform_security_audit(&self) -> Result<()> {
-        // For audit mode, if no specific ports are provided, use a reasonable default range
-        // to avoid scanning 4000+ ports which can cause hanging
-        let ports_to_scan = if self.args.ports.is_some() {
-            // User specified ports, use them
-            self.args.get_ports_to_monitor()
-        } else {
-            // No ports specified, use common development ports for audit mode
-            vec![3000, 3001, 5000, 8000, 8080, 9000]
-        };
-        
-        // Create a temporary process monitor with the limited port set
-        let (update_sender, _update_receiver) = crossbeam_channel::bounded(100);
-        let smart_filter = Self::create_smart_filter(&self.args)?;
-        
-        let mut temp_monitor = if let Some(filter) = smart_filter {
-            ProcessMonitor::new_with_performance(update_sender, ports_to_scan, self.args.docker, self.args.verbose, Some(filter), self.args.performance)?
-        } else {
-            ProcessMonitor::new_with_performance(update_sender, ports_to_scan, self.args.docker, self.args.verbose, None, self.args.performance)?
-        };
-        
+        // Use smart port selection to avoid hanging on large port ranges
+        let ports_to_scan = Self::get_ports_to_scan(&self.args);
+        let mut temp_monitor = self.create_temp_monitor(ports_to_scan).await?;
         let processes = temp_monitor.scan_processes().await?;
         
         // Limit audit to only processes that are actually running
