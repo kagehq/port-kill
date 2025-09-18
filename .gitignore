@@ -19,3 +19,9 @@ Thumbs.db
 # Environment variables
 .env
 .env.local
+
+# Node
+node_modules/
+**/node_modules/
+mcp/node_modules/
+dashboard/node_modules/
