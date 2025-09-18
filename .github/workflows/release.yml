@@ -102,6 +102,10 @@ jobs:
           log = "0.4"
           env_logger = "0.10"
           clap = { version = "4.0", features = ["derive"] }
+          regex = "1.0"
+          sysinfo = "0.30"
+          chrono = { version = "0.4", features = ["serde"] }
+          reqwest = { version = "0.11", features = ["json"] }
 
           # Windows-specific tray support
           tray-item = "0.10.0"
@@ -117,6 +121,7 @@ jobs:
           pub mod system_monitor;
           pub mod port_guard;
           pub mod security_audit;
+          pub mod endpoint_monitor;
 
           // Exclude macOS/Linux-specific modules for Windows build
           // pub mod app;

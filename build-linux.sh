@@ -42,6 +42,7 @@ clap = { version = "4.0", features = ["derive"] }
 regex = "1.0"
 sysinfo = "0.30"
 chrono = { version = "0.4", features = ["serde"] }
+reqwest = { version = "0.11", features = ["json"] }
 
 # Linux-specific tray support
 libappindicator = "0.7"
@@ -64,6 +65,7 @@ pub mod smart_filter;
 pub mod system_monitor;
 pub mod port_guard;
 pub mod security_audit;
+pub mod endpoint_monitor;
 
 // Exclude macOS-specific modules for Linux build
 // pub mod app;
