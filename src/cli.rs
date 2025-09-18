@@ -29,9 +29,9 @@ pub struct Args {
     #[arg(short, long, default_value = "6000")]
     pub end_port: u16,
 
-    /// Specific ports to monitor (comma-separated, overrides start/end port range)
+    /// Specific ports to monitor (comma-separated, supports ranges like 3000-3010, overrides start/end port range)
     #[arg(short, long, value_delimiter = ',')]
-    pub ports: Option<Vec<u16>>,
+    pub ports: Option<Vec<String>>,
 
     /// Ports to ignore (comma-separated, e.g., 5353,5000,7000 for Chromecast/AirDrop)
     #[arg(long, value_delimiter = ',')]
@@ -206,11 +206,38 @@ impl Args {
     /// Get the list of ports to monitor
     pub fn get_ports_to_monitor(&self) -> Vec<u16> {
         if let Some(ref specific_ports) = self.ports {
-            // Use specific ports if provided
-            specific_ports.clone()
+            // Parse port strings (supports individual ports and ranges like "3000-3010")
+            let mut ports = Vec::new();
+            for port_str in specific_ports {
+                if let Some(range_ports) = self.parse_port_range(port_str) {
+                    ports.extend(range_ports);
+                }
+            }
+            ports
         } else {
             // Use port range
             (self.start_port..=self.end_port).collect()
+        }
+    }
+
+    /// Parse a port string that can be either a single port or a range (e.g., "3000" or "3000-3010")
+    fn parse_port_range(&self, port_str: &str) -> Option<Vec<u16>> {
+        let port_str = port_str.trim();
+        
+        if port_str.contains('-') {
+            // Handle port range (e.g., "3000-3010")
+            let parts: Vec<&str> = port_str.split('-').collect();
+            if parts.len() == 2 {
+                if let (Ok(start), Ok(end)) = (parts[0].parse::<u16>(), parts[1].parse::<u16>()) {
+                    if start <= end {
+                        return Some((start..=end).collect());
+                    }
+                }
+            }
+            None
+        } else {
+            // Handle single port
+            port_str.parse::<u16>().ok().map(|port| vec![port])
         }
     }
 
@@ -330,9 +357,15 @@ impl Args {
                 return Err("At least one port must be specified".to_string());
             }
             
-            for &port in specific_ports {
-                if port == 0 {
-                    return Err("Port 0 is not valid".to_string());
+            for port_str in specific_ports {
+                if let Some(ports) = self.parse_port_range(port_str) {
+                    for port in ports {
+                        if port == 0 {
+                            return Err("Port 0 is not valid".to_string());
+                        }
+                    }
+                } else {
+                    return Err(format!("Invalid port specification: '{}'", port_str));
                 }
             }
         }
@@ -471,7 +504,7 @@ mod tests {
         let args = Args {
             start_port: 2000,
             end_port: 6000,
-            ports: Some(vec![3000, 8000, 8080]),
+            ports: Some(vec!["3000".to_string(), "8000".to_string(), "8080".to_string()]),
             ignore_ports: None,
             ignore_processes: None,
             console: false,
@@ -482,6 +515,24 @@ mod tests {
         
         let ports = args.get_ports_to_monitor();
         assert_eq!(ports, vec![3000, 8000, 8080]);
+    }
+
+    #[test]
+    fn test_get_ports_to_monitor_with_ranges() {
+        let args = Args {
+            start_port: 2000,
+            end_port: 6000,
+            ports: Some(vec!["3000-3002".to_string(), "8000".to_string(), "8080-8081".to_string()]),
+            ignore_ports: None,
+            ignore_processes: None,
+            console: false,
+            verbose: false,
+            docker: false,
+            show_pid: false,
+        };
+        
+        let ports = args.get_ports_to_monitor();
+        assert_eq!(ports, vec![3000, 3001, 3002, 8000, 8080, 8081]);
     }
 
     #[test]
@@ -559,7 +610,7 @@ mod tests {
         let args = Args {
             start_port: 2000,
             end_port: 6000,
-            ports: Some(vec![3000, 8000, 8080]),
+            ports: Some(vec!["3000".to_string(), "8000".to_string(), "8080".to_string()]),
             ignore_ports: None,
             ignore_processes: None,
             console: false,
