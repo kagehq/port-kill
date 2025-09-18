@@ -10,15 +10,61 @@ Expose Port Kill as MCP tools for Cursor.
 - `audit(suspiciousOnly?, remote?)`
 - `guardStatus(baseUrl?)` (uses dashboard API)
 
+
 ## Quick Install
 
-```bash
-# One-liner (from anywhere)
-curl -fsSL https://raw.githubusercontent.com/kagehq/port-kill/main/install-mcp.sh | bash
+Add the following to your MCP config e.g. `.cursor/mcp.json`
 
-# From port-kill root directory
-./install-mcp.sh
+```json
+{
+  "mcpServers": {
+    "port-kill-mcp": {
+      "command": "npx",
+      "args": ["-y", "https://gitpkg.vercel.app/kagehq/port-kill/mcp?main"]
+    }
+  }
+}
 ```
+
+## Installation From Source
+
+Alternatively, if you don't want to use `npx 'https://gitpkg.vercel.app/kagehq/port-kill/mcp?main'`.
+
+Checkout the repo, build the server & install `port-kill-mcp` globally:
+```bash
+npm install
+npm run build
+npm install -g .
+```
+
+Then add to your config e.g. `.cursor/mcp.json`
+
+```json
+{
+  "mcpServers": {
+    "port-kill-mcp": {
+      "command": "port-kill-mcp"
+    }
+  }
+}
+```
+
+## Usage
+
+Ask your AI to use the tools.
+
+```text
+What process is running on port 3000?
+```
+
+```text
+Kill the process running on port 3000
+```
+
+```text
+Kill all processes using dev ports
+```
+
 
 ## Dev
 
@@ -38,6 +84,9 @@ export PORT_KILL_BIN=/abs/path/to/port-kill-console
 
 # Override working directory for commands (defaults to repo root)
 export PORT_KILL_CWD=/abs/path/for/commands
+
+# Override per-tool timeout in seconds (default 300 = 5 minutes)
+export PORT_KILL_MCP_TOOL_TIMEOUT_SECONDS=60
 ```
 
 
@@ -59,6 +108,7 @@ curl -s -X POST \
 # Override binary and working dir if needed
 PORT_KILL_BIN=/abs/path/to/port-kill-console \
 PORT_KILL_CWD=/abs/path/to/project \
+PORT_KILL_MCP_TOOL_TIMEOUT_SECONDS=60 \
 HTTP_PORT=8787 npm run dev
 ```
 

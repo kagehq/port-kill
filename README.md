@@ -59,35 +59,39 @@ npm install
 npm run dev   # http://localhost:3000
 ```
 
-## MCP (use Port Kill from Cursor)
+## MCP (use Port Kill from Cursor, Claude etc.)
 
-```bash
-# One-liner install
-curl -fsSL https://raw.githubusercontent.com/kagehq/port-kill/main/install-mcp.sh | bash
+Add `npx -y 'https://gitpkg.vercel.app/kagehq/port-kill/mcp?main'` to your MCP config.
 
-# From port-kill root directory
-./install-mcp.sh
-
-# Or manual setup
-cd mcp
-npm install
-npm run dev    # starts the MCP server
+For example for Cursor add to `.cursor/mcp.json`:
 ```
-
-Cursor auto-discovers `.cursor/mcp.json`. Then you can run tools like:
-
-```text
-port-kill.list { ports: "3000,8000", verbose: true }
-port-kill.reset {}
-port-kill.kill { ports: "3000" }
-port-kill.audit { suspiciousOnly: true }
+{
+   "mcpServers": {
+      "port-kill-mcp": {
+         "command": "npx",
+         "args": ["-y", "https://gitpkg.vercel.app/kagehq/port-kill/mcp?main"]
+      }
+   }
+}
 ```
 
 Notes:
-- The server shells out to `./target/release/port-kill-console`. If yours lives elsewhere, set `PORT_KILL_BIN=/absolute/path/to/port-kill-console`.
-- It runs in the repo root by default. Override with `PORT_KILL_CWD=/your/project` if needed.
+- The server shells out to `./target/release/port-kill-console` or `port-kill-console` if it is on the PATH. If yours lives elsewhere, set `PORT_KILL_BIN=/absolute/path/to/port-kill-console`. e.g.
+```
+{
+   "mcpServers": {
+      "port-kill-mcp": {
+         "command": "npx",
+         "args": ["-y", "https://gitpkg.vercel.app/kagehq/port-kill/mcp?main"],
+         "env": {
+            "PORT_KILL_BIN": "/absolute/path/to/port-kill-console"
+         }
+      }
+   }
+}
+```
 
-See [DETAILED.md](DETAILED.md) for more.
+See [mcp/README.md](mcp/README.md) for more information on port-kill-mcp including how to install from source.
 
 ## Features
 

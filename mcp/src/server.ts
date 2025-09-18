@@ -1,26 +1,155 @@
+#!/usr/bin/env node
 // Import MCP SDK using direct paths (package exports not working properly)
 const path = require("node:path");
-const { McpServer } = require(path.join(__dirname, "../node_modules/@modelcontextprotocol/sdk/dist/cjs/server/mcp.js"));
-const { StdioServerTransport } = require(path.join(__dirname, "../node_modules/@modelcontextprotocol/sdk/dist/cjs/server/stdio.js"));
+// have to check potentially up one level for node_modules when installed by npx
+const sdkPkgPath = require.resolve("@modelcontextprotocol/sdk/package.json");
+let sdkDir = path.dirname(sdkPkgPath).replace(path.join("dist", "cjs"), "");
+const fs = require("node:fs");
+// check if exists
+if (!fs.existsSync(path.join(sdkDir, "dist", "cjs", "server", "mcp.js"))) {
+  const altSdkDir = path.join(__dirname, "../node_modules/@modelcontextprotocol/sdk");
+  console.log("SDK not found in", sdkDir, "using", altSdkDir);
+  sdkDir = altSdkDir;
+}
+const { McpServer } = require(path.join(sdkDir, "dist", "cjs", "server", "mcp.js"));
+const { StdioServerTransport } = require(path.join(sdkDir, "dist", "cjs", "server", "stdio.js"));
 const { z } = require("zod");
 const { exec } = require("node:child_process");
-const { promisify } = require("node:util");
+type ChildProc = import("node:child_process").ChildProcess;
+const activeChildProcesses: Set<ChildProc> = new Set();
+type HandlerContext = { ownedChildren: Set<ChildProc> };
+type ToolResult = { content: string };
+const isWindows = process.platform === "win32";
 
-const execAsync = promisify(exec);
-
+let _binPath: string | null = null;
 function binPath() {
+  if (_binPath) return _binPath;
   // Assume workspace root is project root; allow override via env
-  return process.env.PORT_KILL_BIN || "./target/release/port-kill-console";
+  const bin = process.env.PORT_KILL_BIN || "./target/release/port-kill-console";
+  if (!fs.existsSync(path.join(process.cwd(), bin))) {
+    console.error("Binary not found, falling back to port-kill-console", bin);
+    _binPath = "port-kill-console";
+    return "port-kill-console";
+  } else {
+    _binPath = bin;
+  }
+  return _binPath;
 }
 
-async function run(cmd: string) {
-  const { stdout } = await execAsync(cmd, { cwd: process.env.PORT_KILL_CWD || process.cwd(), maxBuffer: 10 * 1024 * 1024 });
-  return stdout.trim();
+function run(cmd: string, ctx?: HandlerContext): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const child = exec(cmd, {
+      cwd: process.env.PORT_KILL_CWD || process.cwd(),
+      maxBuffer: 10 * 1024 * 1024
+    });
+
+    activeChildProcesses.add(child);
+    if (ctx) ctx.ownedChildren.add(child);
+
+    let stdoutBuf = "";
+    let stderrBuf = "";
+
+    if (child.stdout) child.stdout.on("data", (d: any) => { stdoutBuf += String(d); });
+    if (child.stderr) child.stderr.on("data", (d: any) => { stderrBuf += String(d); });
+
+    child.on("error", (err: any) => {
+      activeChildProcesses.delete(child);
+      reject(err);
+    });
+
+    child.on("close", (code: number | null, signal: NodeJS.Signals | null) => {
+      activeChildProcesses.delete(child);
+      if (code === 0) {
+        resolve(stdoutBuf.trim());
+        return;
+      }
+      const reason = signal ? `terminated by signal ${signal}` : `exit code ${code}`;
+      const error = new Error(`Command failed (${reason}): ${stderrBuf || stdoutBuf}`);
+      (error as any).code = code ?? reason;
+      reject(error);
+    });
+  });
 }
+
+// Forward termination signals to any active child processes.
+// Note: SIGKILL cannot be intercepted or forwarded by a Node.js process.
+function forwardSignal(signal: NodeJS.Signals) {
+  for (const child of activeChildProcesses) {
+    try {
+      if (!isWindows && child.pid) {
+        try { process.kill(-child.pid, signal as any); } catch { /* best-effort */ }
+      }
+      child.kill(signal);
+    } catch {
+      // best-effort; ignore
+    }
+  }
+}
+
+process.on("SIGTERM", () => {
+  forwardSignal("SIGTERM");
+  setTimeout(() => process.exit(143), 50);
+});
+
+process.on("SIGINT", () => {
+  forwardSignal("SIGINT");
+  setTimeout(() => process.exit(130), 50);
+});
 
 // Tool handler function
 
-const handler = async (name: string, args: any) => {
+function getToolTimeoutMs(): number {
+  const fromEnv = parseInt(process.env.PORT_KILL_MCP_TOOL_TIMEOUT_SECONDS || "", 10);
+  if (Number.isFinite(fromEnv) && fromEnv > 0) return fromEnv * 1000;
+  return 5 * 60 * 1000; // default 5 minutes
+}
+
+function killInvocationChildren(ctx: HandlerContext, signal: NodeJS.Signals = "SIGTERM") {
+  for (const child of ctx.ownedChildren) {
+    try {
+      if (!isWindows && child.pid) {
+        try { process.kill(-child.pid, signal as any); } catch { /* best-effort */ }
+      }
+      child.kill(signal);
+    } catch {
+      // ignore
+    }
+  }
+}
+
+async function invokeWithTimeout(name: string, args: any): Promise<ToolResult> {
+  const ctx: HandlerContext = { ownedChildren: new Set() };
+  const timeoutMs = getToolTimeoutMs();
+  let settled = false;
+
+  return await new Promise(async (resolve, reject) => {
+    const timer = setTimeout(() => {
+      if (settled) return;
+      killInvocationChildren(ctx, "SIGTERM");
+      settled = true;
+      const err = new Error(`Tool \"${name}\" timed out after ${Math.floor(timeoutMs / 1000)} seconds`);
+      (err as any).code = "ETIMEDOUT";
+      reject(err);
+    }, timeoutMs);
+
+    try {
+      const result = await handler(name, args, ctx);
+      if (!settled) {
+        settled = true;
+        clearTimeout(timer);
+        resolve(result);
+      }
+    } catch (e) {
+      if (!settled) {
+        settled = true;
+        clearTimeout(timer);
+        reject(e);
+      }
+    }
+  });
+}
+
+const handler = async (name: string, args: any, ctx?: HandlerContext): Promise<ToolResult> => {
   switch (name) {
     case "list": {
       const ports = args?.ports ? `--ports ${args.ports}` : "";
@@ -28,26 +157,27 @@ const handler = async (name: string, args: any) => {
       const verbose = args?.verbose ? "--verbose" : "";
       const remote = args?.remote ? `--remote ${args.remote}` : "";
       const cmd = `${binPath()} --console ${ports} ${docker} ${verbose} ${remote} --json`.trim();
-      const out = await run(cmd);
+      const out = await run(cmd, ctx);
       return { content: out };
     }
     case "kill": {
       const remote = args?.remote ? `--remote ${args.remote}` : "";
       const cmd = `${binPath()} --kill-all --ports ${args.ports} ${remote}`.trim();
-      const out = await run(cmd);
+      const out = await run(cmd, ctx);
       return { content: out };
     }
     case "reset": {
       const remote = args?.remote ? `--remote ${args.remote}` : "";
       const cmd = `${binPath()} --reset ${remote}`.trim();
-      const out = await run(cmd);
+      const out = await run(cmd, ctx);
       return { content: out };
     }
     case "audit": {
+      const ports = args?.ports ? `--ports ${args.ports}` : "";
       const remote = args?.remote ? `--remote ${args.remote}` : "";
       const suspicious = args?.suspiciousOnly ? "--suspicious-only" : "";
-      const cmd = `${binPath()} --audit ${suspicious} ${remote} --json`.trim();
-      const out = await run(cmd);
+      const cmd = `${binPath()} --audit ${suspicious} ${remote} ${ports} --json`.trim();
+      const out = await run(cmd, ctx);
       return { content: out };
     }
     case "guardStatus": {
@@ -69,57 +199,58 @@ const server = new McpServer({
 
 // Register each tool individually with proper Zod schemas
 server.registerTool("list", {
-  description: "List processes on ports. Args: ports (comma), docker(bool), verbose(bool), json(bool)",
+  description: "List processes on ports",
   inputSchema: {
-    ports: z.string().optional().describe("e.g. 3000,8000,8080"),
-    docker: z.boolean().optional(),
-    verbose: z.boolean().optional(),
-    remote: z.string().optional().describe("user@host for SSH remote")
+    ports: z.string().describe("Port range in the format '{from}-{to}' (e.g. '3000-3300') or comma-separated list of ports to check (e.g. 3000,8000,8080). Set to an empty string to check all ports in the 2000-6000 range (recommended value is 2000-9999 to check all dev ports)"),
+    docker: z.boolean().describe("Enable docker support (recommended value is true) when enabled processes using ports will be cross referenced with docker to determine if they are running in a container"),
+    verbose: z.boolean().describe("Enable verbose output (recommended value is false)"),
+    remote: z.string().describe("Set to an ssh 'user@host' string to check ports on a remote machine over SSH. Leave as an empty string to run locally (recommended value is an empty string)")
   }
 }, async (args: any) => {
-  const result = await handler("list", args || {});
+  const result = await invokeWithTimeout("list", args || {});
   return { content: [{ type: "text", text: result.content }] };
 });
 
 server.registerTool("kill", {
   description: "Kill processes on given ports. Args: ports (comma)",
   inputSchema: {
-    ports: z.string().describe("Comma-separated list of ports"),
-    remote: z.string().optional().describe("user@host for SSH remote")
+    ports: z.string().describe("Port range in the format '{from}-{to}' (e.g. '3000-3300') or comma-separated list of ports whose processes will be killed (e.g. 3000,8000,8080)"),
+    remote: z.string().describe("Set to an ssh 'user@host' string to kill processes on a remote machine over SSH. Leave as an empty string to run locally (recommended value is an empty string)"),
   }
 }, async (args: any) => {
-  const result = await handler("kill", args || {});
+  const result = await invokeWithTimeout("kill", args || {});
   return { content: [{ type: "text", text: result.content }] };
 });
 
 server.registerTool("reset", {
   description: "Kill common dev ports (3000,5000,8000,5432,3306,6379,27017,8080,9000)",
   inputSchema: {
-    remote: z.string().optional().describe("user@host for SSH remote")
+    remote: z.string().describe("Set to an ssh 'user@host' string to reset ports on a remote machine over SSH. Leave as an empty string to run locally (recommended value is an empty string)"),
   }
 }, async (args: any) => {
-  const result = await handler("reset", args || {});
+  const result = await invokeWithTimeout("reset", args || {});
   return { content: [{ type: "text", text: result.content }] };
 });
 
 server.registerTool("audit", {
-  description: "Run security audit. Returns JSON.",
+  description: "Run security audit. Returns detailed audit results for all processes on all ports.",
   inputSchema: {
-    suspiciousOnly: z.boolean().optional(),
-    remote: z.string().optional().describe("user@host for SSH remote")
+    ports: z.string().describe("Port range in the format '{from}-{to}' (e.g. '3000-3300') or comma-separated list of ports to check (e.g. 3000,8000,8080). Set to an empty string to check all ports in the 2000-6000 range (recommended value is 2000-9999 to check all dev ports)"),
+    suspiciousOnly: z.boolean().describe("Set to true to only show suspicious/unauthorized processes, set to false to show all processes listening on scanned ports (recommended value is false)"),
+    remote: z.string().describe("Set to an ssh 'user@host' string to run the audit on a remote machine over SSH. Leave as an empty string to run locally (recommended value is an empty string)")
   }
 }, async (args: any) => {
-  const result = await handler("audit", args || {});
-  return { content: [{ type: "text", text: result.content }] };
+  const result = await invokeWithTimeout("audit", args || {});
+  return { content: [{ type: "text", text: `Ports scanned: ${args?.ports ?? 'default ports'}` }, { type: "text", text: result.content }] };
 });
 
 server.registerTool("guardStatus", {
   description: "Return Port Guard status if running via dashboard API.",
   inputSchema: {
-    baseUrl: z.string().optional().describe("Dashboard base URL")
+    baseUrl: z.string().describe("Dashboard base URL (default is http://localhost:3000)")
   }
 }, async (args: any) => {
-  const result = await handler("guardStatus", args || {});
+  const result = await invokeWithTimeout("guardStatus", args || {});
   return { content: [{ type: "text", text: result.content }] };
 });
 
@@ -127,7 +258,7 @@ server.registerTool("guardStatus", {
 async function startServer() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("Port Kill MCP server running on stdio");
+  console.error("Port Kill MCP server running on stdio", binPath());
 }
 
 startServer().catch(console.error);
@@ -147,7 +278,7 @@ if (process.env.HTTP_PORT) {
         req.on("end", async () => {
           try {
             const { name, args } = JSON.parse(body || "{}");
-            const result = await (handler as any)(name, args || {});
+            const result = await (invokeWithTimeout as any)(name, args || {});
             res.setHeader("content-type", "application/json");
             res.end(JSON.stringify({ ok: true, result }));
           } catch (e: any) {

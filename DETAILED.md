@@ -305,32 +305,9 @@ done
 
 You can drive Port Kill from Cursor via an MCP server included in `mcp/`.
 
-Setup:
+See [mcp/README.md](mcp/README.md) for details on how to install and use.
 
-```bash
-cd mcp
-npm install
-npm run dev
-```
-
-Cursor reads `.cursor/mcp.json` and starts the server. Available tools:
-
-- `port-kill.list { ports?: string, docker?: boolean, verbose?: boolean, remote?: string }`
-- `port-kill.kill { ports: string, remote?: string }`
-- `port-kill.reset { remote?: string }`
-- `port-kill.audit { suspiciousOnly?: boolean, remote?: string }`
-- `port-kill.guardStatus { baseUrl?: string }` (uses dashboard API)
-
-Examples:
-
-```text
-port-kill.list { ports: "3000,8000", verbose: true }
-port-kill.kill { ports: "3000" }
-port-kill.reset {}
-port-kill.audit { suspiciousOnly: true }
-```
-
-HTTP wrapper (use outside MCP/Cursor)::
+The mcp server can also be used via an HTTP wrapper:
 
 ```bash
 # start server with HTTP wrapper
