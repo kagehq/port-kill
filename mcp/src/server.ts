@@ -15,24 +15,82 @@ const { McpServer } = require(path.join(sdkDir, "dist", "cjs", "server", "mcp.js
 const { StdioServerTransport } = require(path.join(sdkDir, "dist", "cjs", "server", "stdio.js"));
 const { z } = require("zod");
 const { exec } = require("node:child_process");
-const { promisify } = require("node:util");
+type ChildProc = import("node:child_process").ChildProcess;
+const activeChildProcesses: Set<ChildProc> = new Set();
+const isWindows = process.platform === "win32";
 
-const execAsync = promisify(exec);
-
+let _binPath: string | null = null;
 function binPath() {
+  if (_binPath) return _binPath;
   // Assume workspace root is project root; allow override via env
   const bin = process.env.PORT_KILL_BIN || "./target/release/port-kill-console";
   if (!fs.existsSync(path.join(process.cwd(), bin))) {
     console.error("Binary not found, falling back to port-kill-console", bin);
+    _binPath = "port-kill-console";
     return "port-kill-console";
+  } else {
+    _binPath = bin;
   }
-  return bin;
+  return _binPath;
 }
 
-async function run(cmd: string) {
-  const { stdout } = await execAsync(cmd, { cwd: process.env.PORT_KILL_CWD || process.cwd(), maxBuffer: 10 * 1024 * 1024 });
-  return stdout.trim();
+function run(cmd: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const child = exec(cmd, {
+      cwd: process.env.PORT_KILL_CWD || process.cwd(),
+      maxBuffer: 10 * 1024 * 1024
+    });
+
+    activeChildProcesses.add(child);
+
+    let stdoutBuf = "";
+    let stderrBuf = "";
+
+    if (child.stdout) child.stdout.on("data", (d: any) => { stdoutBuf += String(d); });
+    if (child.stderr) child.stderr.on("data", (d: any) => { stderrBuf += String(d); });
+
+    child.on("error", (err: any) => {
+      activeChildProcesses.delete(child);
+      reject(err);
+    });
+
+    child.on("close", (code: number | null, signal: NodeJS.Signals | null) => {
+      activeChildProcesses.delete(child);
+      if (code === 0 || signal) {
+        resolve(stdoutBuf.trim());
+      } else {
+        const error = new Error(`Command failed with exit code ${code}: ${stderrBuf || stdoutBuf}`);
+        (error as any).code = code;
+        reject(error);
+      }
+    });
+  });
 }
+
+// Forward termination signals to any active child processes.
+// Note: SIGKILL cannot be intercepted or forwarded by a Node.js process.
+function forwardSignal(signal: NodeJS.Signals) {
+  for (const child of activeChildProcesses) {
+    try {
+      if (!isWindows && child.pid) {
+        try { process.kill(-child.pid, signal as any); } catch { /* best-effort */ }
+      }
+      child.kill(signal);
+    } catch {
+      // best-effort; ignore
+    }
+  }
+}
+
+process.on("SIGTERM", () => {
+  forwardSignal("SIGTERM");
+  setTimeout(() => process.exit(143), 50);
+});
+
+process.on("SIGINT", () => {
+  forwardSignal("SIGINT");
+  setTimeout(() => process.exit(130), 50);
+});
 
 // Tool handler function
 
@@ -87,9 +145,9 @@ const server = new McpServer({
 server.registerTool("list", {
   description: "List processes on ports. Args: ports (comma), docker(bool), verbose(bool), json(bool)",
   inputSchema: {
-    ports: z.string().describe("e.g. 3000,8000,8080"),
-    docker: z.boolean().describe("Include docker processes"),
-    verbose: z.boolean(),
+    ports: z.string().describe("e.g. 3000,8000,8080, leave blank for all ports"),
+    docker: z.boolean().describe("Enable docker support (recommended)"),
+    verbose: z.boolean().describe("Enable verbose output (only use for detailed logging)"),
     remote: z.string().describe("user@host for SSH remote")
   }
 }, async (args: any) => {
@@ -147,7 +205,7 @@ server.registerTool("guardStatus", {
 async function startServer() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("Port Kill MCP server running on stdio");
+  console.error("Port Kill MCP server running on stdio", binPath());
 }
 
 startServer().catch(console.error);
