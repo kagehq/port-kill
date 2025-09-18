@@ -23,7 +23,7 @@ echo 📦 Creating Windows-specific build configuration...
 (
 echo [package]
 echo name = "port-kill"
-echo version = "0.3.0"
+echo version = "0.3.1"
 echo edition = "2021"
 echo build = "build.rs"
 echo.
