@@ -985,8 +985,27 @@ impl ConsolePortKillApp {
 
     /// Perform security audit
     pub async fn perform_security_audit(&self) -> Result<()> {
-        let mut monitor = self.process_monitor.lock().await;
-        let processes = monitor.scan_processes().await?;
+        // For audit mode, if no specific ports are provided, use a reasonable default range
+        // to avoid scanning 4000+ ports which can cause hanging
+        let ports_to_scan = if self.args.ports.is_some() {
+            // User specified ports, use them
+            self.args.get_ports_to_monitor()
+        } else {
+            // No ports specified, use common development ports for audit mode
+            vec![3000, 3001, 5000, 8000, 8080, 9000]
+        };
+        
+        // Create a temporary process monitor with the limited port set
+        let (update_sender, _update_receiver) = crossbeam_channel::bounded(100);
+        let smart_filter = Self::create_smart_filter(&self.args)?;
+        
+        let mut temp_monitor = if let Some(filter) = smart_filter {
+            ProcessMonitor::new_with_performance(update_sender, ports_to_scan, self.args.docker, self.args.verbose, Some(filter), self.args.performance)?
+        } else {
+            ProcessMonitor::new_with_performance(update_sender, ports_to_scan, self.args.docker, self.args.verbose, None, self.args.performance)?
+        };
+        
+        let processes = temp_monitor.scan_processes().await?;
         
         // Limit audit to only processes that are actually running
         // This prevents hanging when scanning large port ranges
