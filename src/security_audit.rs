@@ -40,9 +40,15 @@ impl SecurityAuditor {
         let mut approved_processes = Vec::new();
         let mut recommendations = Vec::new();
 
-        // Analyze each process
+        // Analyze each process with timeout protection
         for (port, process) in &processes {
-            let analysis = self.analyze_process(*port, process).await?;
+            // Add timeout to prevent hanging on individual process analysis
+            let analysis = tokio::time::timeout(
+                std::time::Duration::from_secs(5),
+                self.analyze_process(*port, process)
+            ).await
+            .map_err(|_| anyhow::anyhow!("Process analysis timeout for port {}", port))?
+            .map_err(|e| anyhow::anyhow!("Process analysis failed for port {}: {}", port, e))?;
             
             match analysis.risk_level {
                 RiskLevel::Low => {
@@ -66,9 +72,18 @@ impl SecurityAuditor {
         // Calculate security score
         let security_score = self.calculate_security_score(&suspicious_processes, processes.len());
 
-        // Perform baseline comparison if baseline file exists
+        // Perform baseline comparison if baseline file exists (with timeout)
         let baseline_comparison = if let Some(baseline_path) = &self.baseline_file {
-            self.compare_with_baseline(baseline_path, &processes).await.ok()
+            tokio::time::timeout(
+                std::time::Duration::from_secs(10),
+                self.compare_with_baseline(baseline_path, &processes)
+            ).await
+            .map_err(|_| {
+                log::warn!("Baseline comparison timeout, skipping");
+                anyhow::anyhow!("Baseline comparison timeout")
+            })
+            .ok()
+            .and_then(|result| result.ok())
         } else {
             None
         };

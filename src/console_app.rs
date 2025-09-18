@@ -970,6 +970,15 @@ impl ConsolePortKillApp {
         let mut monitor = self.process_monitor.lock().await;
         let processes = monitor.scan_processes().await?;
         
+        // Limit audit to only processes that are actually running
+        // This prevents hanging when scanning large port ranges
+        if processes.is_empty() {
+            println!("ℹ️  No processes found to audit");
+            return Ok(());
+        }
+        
+        info!("🔒 Starting security audit on {} active processes", processes.len());
+        
         let auditor = SecurityAuditor::new(
             self.args.get_suspicious_ports(),
             self.args.get_baseline_file_path(),
