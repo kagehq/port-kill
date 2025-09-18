@@ -1,7 +1,18 @@
+#!/usr/bin/env node
 // Import MCP SDK using direct paths (package exports not working properly)
 const path = require("node:path");
-const { McpServer } = require(path.join(__dirname, "../node_modules/@modelcontextprotocol/sdk/dist/cjs/server/mcp.js"));
-const { StdioServerTransport } = require(path.join(__dirname, "../node_modules/@modelcontextprotocol/sdk/dist/cjs/server/stdio.js"));
+// have to check potentially up one level for node_modules when installed by npx
+const sdkPkgPath = require.resolve("@modelcontextprotocol/sdk/package.json");
+let sdkDir = path.dirname(sdkPkgPath).replace(path.join("dist", "cjs"), "");
+const fs = require("node:fs");
+// check if exists
+if (!fs.existsSync(path.join(sdkDir, "dist", "cjs", "server", "mcp.js"))) {
+  const altSdkDir = path.join(__dirname, "../node_modules/@modelcontextprotocol/sdk");
+  console.log("SDK not found in", sdkDir, "using", altSdkDir);
+  sdkDir = altSdkDir;
+}
+const { McpServer } = require(path.join(sdkDir, "dist", "cjs", "server", "mcp.js"));
+const { StdioServerTransport } = require(path.join(sdkDir, "dist", "cjs", "server", "stdio.js"));
 const { z } = require("zod");
 const { exec } = require("node:child_process");
 const { promisify } = require("node:util");
@@ -10,7 +21,12 @@ const execAsync = promisify(exec);
 
 function binPath() {
   // Assume workspace root is project root; allow override via env
-  return process.env.PORT_KILL_BIN || "./target/release/port-kill-console";
+  const bin = process.env.PORT_KILL_BIN || "./target/release/port-kill-console";
+  if (!fs.existsSync(path.join(process.cwd(), bin))) {
+    console.error("Binary not found, falling back to port-kill-console", bin);
+    return "port-kill-console";
+  }
+  return bin;
 }
 
 async function run(cmd: string) {
@@ -71,10 +87,10 @@ const server = new McpServer({
 server.registerTool("list", {
   description: "List processes on ports. Args: ports (comma), docker(bool), verbose(bool), json(bool)",
   inputSchema: {
-    ports: z.string().optional().describe("e.g. 3000,8000,8080"),
-    docker: z.boolean().optional(),
-    verbose: z.boolean().optional(),
-    remote: z.string().optional().describe("user@host for SSH remote")
+    ports: z.string().describe("e.g. 3000,8000,8080"),
+    docker: z.boolean().describe("Include docker processes"),
+    verbose: z.boolean(),
+    remote: z.string().describe("user@host for SSH remote")
   }
 }, async (args: any) => {
   const result = await handler("list", args || {});
@@ -85,7 +101,8 @@ server.registerTool("kill", {
   description: "Kill processes on given ports. Args: ports (comma)",
   inputSchema: {
     ports: z.string().describe("Comma-separated list of ports"),
-    remote: z.string().optional().describe("user@host for SSH remote")
+    remote: z.string().describe("user@host for SSH remote"),
+    required: ["ports","remote"]
   }
 }, async (args: any) => {
   const result = await handler("kill", args || {});
@@ -95,7 +112,8 @@ server.registerTool("kill", {
 server.registerTool("reset", {
   description: "Kill common dev ports (3000,5000,8000,5432,3306,6379,27017,8080,9000)",
   inputSchema: {
-    remote: z.string().optional().describe("user@host for SSH remote")
+    remote: z.string().describe("user@host for SSH remote"),
+    required: ["remote"]
   }
 }, async (args: any) => {
   const result = await handler("reset", args || {});
@@ -105,8 +123,9 @@ server.registerTool("reset", {
 server.registerTool("audit", {
   description: "Run security audit. Returns JSON.",
   inputSchema: {
-    suspiciousOnly: z.boolean().optional(),
-    remote: z.string().optional().describe("user@host for SSH remote")
+    suspiciousOnly: z.boolean(),
+    remote: z.string().describe("user@host for SSH remote"),
+    required: ["suspiciousOnly","remote"]
   }
 }, async (args: any) => {
   const result = await handler("audit", args || {});
@@ -116,7 +135,8 @@ server.registerTool("audit", {
 server.registerTool("guardStatus", {
   description: "Return Port Guard status if running via dashboard API.",
   inputSchema: {
-    baseUrl: z.string().optional().describe("Dashboard base URL")
+    baseUrl: z.string().describe("Dashboard base URL"),
+    required: ["baseUrl"]
   }
 }, async (args: any) => {
   const result = await handler("guardStatus", args || {});

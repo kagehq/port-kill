@@ -4,6 +4,14 @@
   "private": true,
   "type": "commonjs",
   "main": "dist/server.js",
+  "bin": {
+    "port-kill-mcp": "dist/server.js"
+  },
+  "files": [
+    "dist",
+    "package.json",
+    "package-lock.json"
+  ],
   "scripts": {
     "build": "tsc -p .",
     "start": "node dist/server.js",
@@ -15,6 +23,7 @@
     "typescript": "^5.6.3"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.17.0"
+    "@modelcontextprotocol/sdk": "^1.18.0",
+    "zod": "3.24.1"
   }
 }
