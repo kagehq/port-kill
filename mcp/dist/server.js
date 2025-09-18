@@ -209,7 +209,6 @@ server.registerTool("kill", {
     inputSchema: {
         ports: z.string().describe("Comma-separated list of ports whose processes will be killed (e.g. 3000,8000,8080)"),
         remote: z.string().describe("Set to an ssh 'user@host' string to kill processes on a remote machine over SSH. Leave as an empty string to run locally (recommended value is an empty string)"),
-        required: ["ports", "remote"]
     }
 }, async (args) => {
     const result = await invokeWithTimeout("kill", args || {});
@@ -219,7 +218,6 @@ server.registerTool("reset", {
     description: "Kill common dev ports (3000,5000,8000,5432,3306,6379,27017,8080,9000)",
     inputSchema: {
         remote: z.string().describe("Set to an ssh 'user@host' string to reset ports on a remote machine over SSH. Leave as an empty string to run locally (recommended value is an empty string)"),
-        required: ["remote"]
     }
 }, async (args) => {
     const result = await invokeWithTimeout("reset", args || {});
@@ -228,9 +226,8 @@ server.registerTool("reset", {
 server.registerTool("audit", {
     description: "Run security audit. Returns detailed audit results for all processes on all ports.",
     inputSchema: {
-        suspicious_only: z.boolean().describe("Set to true to only show suspicious/unauthorized processes (recommended value is false)"),
-        remote: z.string().describe("Set to an ssh 'user@host' string to run the audit on a remote machine over SSH. Leave as an empty string to run locally (recommended value is an empty string)"),
-        required: ["suspiciousOnly", "remote"]
+        suspiciousOnly: z.boolean().describe("Set to true to only show suspicious/unauthorized processes (recommended value is false)"),
+        remote: z.string().describe("Set to an ssh 'user@host' string to run the audit on a remote machine over SSH. Leave as an empty string to run locally (recommended value is an empty string)")
     }
 }, async (args) => {
     const result = await invokeWithTimeout("audit", args || {});
@@ -239,8 +236,7 @@ server.registerTool("audit", {
 server.registerTool("guardStatus", {
     description: "Return Port Guard status if running via dashboard API.",
     inputSchema: {
-        baseUrl: z.string().describe("Dashboard base URL"),
-        required: ["baseUrl"]
+        baseUrl: z.string().describe("Dashboard base URL")
     }
 }, async (args) => {
     const result = await invokeWithTimeout("guardStatus", args || {});

@@ -84,6 +84,9 @@ export PORT_KILL_BIN=/abs/path/to/port-kill-console
 
 # Override working directory for commands (defaults to repo root)
 export PORT_KILL_CWD=/abs/path/for/commands
+
+# Override per-tool timeout in seconds (default 300 = 5 minutes)
+export PORT_KILL_MCP_TOOL_TIMEOUT_SECONDS=60
 ```
 
 
@@ -105,6 +108,7 @@ curl -s -X POST \
 # Override binary and working dir if needed
 PORT_KILL_BIN=/abs/path/to/port-kill-console \
 PORT_KILL_CWD=/abs/path/to/project \
+PORT_KILL_MCP_TOOL_TIMEOUT_SECONDS=60 \
 HTTP_PORT=8787 npm run dev
 ```
 
