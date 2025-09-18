@@ -2,6 +2,8 @@
 
 This is a more in-depth documentation if you want to really dig in.
 
+Windows users: see the quick start at [WINDOWS.md](WINDOWS.md).
+
 **Works everywhere:**
 - ✅ **macOS**: Native system tray with full functionality
 - ✅ **Linux**: Native system tray with full functionality (requires GTK packages)
@@ -297,6 +299,54 @@ ssh user@server "./port-kill-console --audit --json"
 for server in $(cat server-list.txt); do
   ssh $server "./port-kill-console --audit --json" > audit-$server.json
 done
+```
+
+### MCP Integration
+
+You can drive Port Kill from Cursor via an MCP server included in `mcp/`.
+
+Setup:
+
+```bash
+cd mcp
+npm install
+npm run dev
+```
+
+Cursor reads `.cursor/mcp.json` and starts the server. Available tools:
+
+- `port-kill.list { ports?: string, docker?: boolean, verbose?: boolean, remote?: string }`
+- `port-kill.kill { ports: string, remote?: string }`
+- `port-kill.reset { remote?: string }`
+- `port-kill.audit { suspiciousOnly?: boolean, remote?: string }`
+- `port-kill.guardStatus { baseUrl?: string }` (uses dashboard API)
+
+Examples:
+
+```text
+port-kill.list { ports: "3000,8000", verbose: true }
+port-kill.kill { ports: "3000" }
+port-kill.reset {}
+port-kill.audit { suspiciousOnly: true }
+```
+
+HTTP wrapper (use outside MCP/Cursor)::
+
+```bash
+# start server with HTTP wrapper
+cd mcp
+HTTP_PORT=8787 npm run dev
+
+# call a tool
+curl -s -X POST \
+  -H 'content-type: application/json' \
+  --data '{"name":"reset","args":{}}' \
+  http://localhost:8787/tool
+
+# override binary and working dir
+PORT_KILL_BIN=/abs/path/to/port-kill-console \
+PORT_KILL_CWD=/abs/path/to/project \
+HTTP_PORT=8787 npm run dev
 ```
 
 ### 🚀 **Remote Mode - Instant Staging/Prod Management**
