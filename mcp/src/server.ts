@@ -173,9 +173,10 @@ const handler = async (name: string, args: any, ctx?: HandlerContext): Promise<T
       return { content: out };
     }
     case "audit": {
+      const ports = args?.ports ? `--ports ${args.ports}` : "";
       const remote = args?.remote ? `--remote ${args.remote}` : "";
       const suspicious = args?.suspiciousOnly ? "--suspicious-only" : "";
-      const cmd = `${binPath()} --audit ${suspicious} ${remote} --json`.trim();
+      const cmd = `${binPath()} --audit ${suspicious} ${remote} ${ports} --json`.trim();
       const out = await run(cmd, ctx);
       return { content: out };
     }
@@ -200,7 +201,7 @@ const server = new McpServer({
 server.registerTool("list", {
   description: "List processes on ports",
   inputSchema: {
-    ports: z.string().describe("Comma separated list of ports to check (e.g. 3000,8000,8080). Set to an empty string to check all ports in the 2000-6000 range (recommended value is an empty string)"),
+    ports: z.string().describe("Port range in the format '{from}-{to}' (e.g. '3000-3300') or comma-separated list of ports to check (e.g. 3000,8000,8080). Set to an empty string to check all ports in the 2000-6000 range (recommended value is 2000-9999 to check all dev ports)"),
     docker: z.boolean().describe("Enable docker support (recommended value is true) when enabled processes using ports will be cross referenced with docker to determine if they are running in a container"),
     verbose: z.boolean().describe("Enable verbose output (recommended value is false)"),
     remote: z.string().describe("Set to an ssh 'user@host' string to check ports on a remote machine over SSH. Leave as an empty string to run locally (recommended value is an empty string)")
@@ -213,7 +214,7 @@ server.registerTool("list", {
 server.registerTool("kill", {
   description: "Kill processes on given ports. Args: ports (comma)",
   inputSchema: {
-    ports: z.string().describe("Comma-separated list of ports whose processes will be killed (e.g. 3000,8000,8080)"),
+    ports: z.string().describe("Port range in the format '{from}-{to}' (e.g. '3000-3300') or comma-separated list of ports whose processes will be killed (e.g. 3000,8000,8080)"),
     remote: z.string().describe("Set to an ssh 'user@host' string to kill processes on a remote machine over SSH. Leave as an empty string to run locally (recommended value is an empty string)"),
   }
 }, async (args: any) => {
@@ -234,12 +235,13 @@ server.registerTool("reset", {
 server.registerTool("audit", {
   description: "Run security audit. Returns detailed audit results for all processes on all ports.",
   inputSchema: {
+    ports: z.string().describe("Port range in the format '{from}-{to}' (e.g. '3000-3300') or comma-separated list of ports to check (e.g. 3000,8000,8080). Set to an empty string to check all ports in the 2000-6000 range (recommended value is 2000-9999 to check all dev ports)"),
     suspiciousOnly: z.boolean().describe("Set to true to only show suspicious/unauthorized processes, set to false to show all processes listening on scanned ports (recommended value is false)"),
     remote: z.string().describe("Set to an ssh 'user@host' string to run the audit on a remote machine over SSH. Leave as an empty string to run locally (recommended value is an empty string)")
   }
 }, async (args: any) => {
   const result = await invokeWithTimeout("audit", args || {});
-  return { content: [{ type: "text", text: result.content }] };
+  return { content: [{ type: "text", text: `Ports scanned: ${args?.ports ?? 'default ports'}` }, { type: "text", text: result.content }] };
 });
 
 server.registerTool("guardStatus", {
