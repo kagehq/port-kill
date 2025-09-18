@@ -47,6 +47,15 @@ git clone https://github.com/kagehq/port-kill.git && cd port-kill && ./install.s
 
 # Security audit (JSON)
 ./target/release/port-kill-console --audit --json
+
+# Endpoint monitoring (send data to external endpoint)
+./target/release/port-kill-console --monitor-endpoint https://api.company.com/port-status
+
+# Endpoint monitoring with custom intervals and authentication
+./target/release/port-kill-console --monitor-endpoint https://api.company.com/port-status \
+  --send-interval 60 --scan-interval 5 \
+  --endpoint-auth "Bearer token123" \
+  --endpoint-fields "server=prod-web-01,environment=production,team=platform"
 ```
 
 ## Dashboard (optional)
@@ -270,6 +279,7 @@ run-windows.bat -p 3000,3001,8000,8080              # Windows
 # Verbose mode (overrides log-level)
 ./run.sh --verbose --ports 3000,8000
 ```
+
 
 ## More Detailed Information
 

@@ -168,6 +168,9 @@ mod tests {
             working_directory: None,
             process_group: None,
             project_name: None,
+            cpu_usage: None,
+            memory_usage: None,
+            memory_percentage: None,
         });
 
         processes.insert(8000, ProcessInfo {
@@ -181,6 +184,9 @@ mod tests {
             working_directory: None,
             process_group: None,
             project_name: None,
+            cpu_usage: None,
+            memory_usage: None,
+            memory_percentage: None,
         });
 
         processes.insert(9000, ProcessInfo {
@@ -194,6 +200,9 @@ mod tests {
             working_directory: None,
             process_group: None,
             project_name: None,
+            cpu_usage: None,
+            memory_usage: None,
+            memory_percentage: None,
         });
 
         filter.filter_processes(&mut processes);
@@ -225,6 +234,9 @@ mod tests {
             working_directory: None,
             process_group: Some("Node.js".to_string()),
             project_name: None,
+            cpu_usage: None,
+            memory_usage: None,
+            memory_percentage: None,
         });
 
         processes.insert(8000, ProcessInfo {
@@ -238,6 +250,9 @@ mod tests {
             working_directory: None,
             process_group: Some("Python".to_string()),
             project_name: None,
+            cpu_usage: None,
+            memory_usage: None,
+            memory_percentage: None,
         });
 
         filter.filter_processes(&mut processes);

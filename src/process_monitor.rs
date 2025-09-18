@@ -845,6 +845,16 @@ impl ProcessMonitor {
     pub fn get_filter_stats(&self) -> Option<FilterStats> {
         self.smart_filter.as_ref().map(|filter| filter.get_filter_stats())
     }
+
+    /// Get current processes
+    pub fn get_processes(&self) -> &HashMap<u16, ProcessInfo> {
+        &self.current_processes
+    }
+
+    /// Get ports to monitor
+    pub fn get_ports_to_monitor(&self) -> &Vec<u16> {
+        &self.ports_to_monitor
+    }
     
     /// Enhance process name with better context and descriptions
     fn enhance_process_name(process_info: &ProcessInfo) -> String {

@@ -200,6 +200,38 @@ pub struct Args {
     /// Remote mode: connect to remote host via SSH
     #[arg(long)]
     pub remote: Option<String>,
+
+    /// Endpoint monitoring: send data to external endpoint for monitoring/alerting
+    #[arg(long)]
+    pub monitor_endpoint: Option<String>,
+
+    /// Interval for sending data to endpoint (seconds, default: 30)
+    #[arg(long, default_value = "30")]
+    pub send_interval: u64,
+
+    /// Interval for scanning processes (seconds, default: 2)
+    #[arg(long, default_value = "2")]
+    pub scan_interval: u64,
+
+    /// Authentication for endpoint (e.g., "Bearer token123" or "Basic user:pass")
+    #[arg(long)]
+    pub endpoint_auth: Option<String>,
+
+    /// Custom fields to include in endpoint payload (comma-separated key=value pairs)
+    #[arg(long, value_delimiter = ',')]
+    pub endpoint_fields: Option<Vec<String>>,
+
+    /// Include security audit data in endpoint payload
+    #[arg(long)]
+    pub endpoint_include_audit: bool,
+
+    /// Retry failed endpoint requests (number of retries, default: 3)
+    #[arg(long, default_value = "3")]
+    pub endpoint_retries: u32,
+
+    /// Timeout for endpoint requests (seconds, default: 10)
+    #[arg(long, default_value = "10")]
+    pub endpoint_timeout: u64,
 }
 
 impl Args {
@@ -481,19 +513,70 @@ impl LogLevel {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_get_ports_to_monitor_range() {
-        let args = Args {
-            start_port: 3000,
-            end_port: 3005,
+    // Helper function to create Args with default values
+    fn create_test_args() -> Args {
+        Args {
+            start_port: 2000,
+            end_port: 6000,
             ports: None,
             ignore_ports: None,
             ignore_processes: None,
+            ignore_patterns: None,
+            ignore_groups: None,
+            smart_filter: false,
+            only_groups: None,
             console: false,
             verbose: false,
             docker: false,
             show_pid: false,
-        };
+            log_level: LogLevel::Info,
+            show_history: false,
+            clear_history: false,
+            show_filters: false,
+            performance: false,
+            show_context: false,
+            kill_all: false,
+            kill_group: None,
+            kill_project: None,
+            restart: false,
+            show_tree: false,
+            json: false,
+            reset: false,
+            show_offenders: false,
+            show_patterns: false,
+            show_suggestions: false,
+            show_stats: false,
+            show_root_cause: false,
+            guard_mode: false,
+            guard_ports: "3000,3001,3002,8000,8080,9000".to_string(),
+            auto_resolve: false,
+            reservation_file: "~/.port-kill/reservations.json".to_string(),
+            intercept_commands: false,
+            reserve_port: None,
+            project_name: None,
+            process_name: None,
+            audit: false,
+            security_mode: false,
+            suspicious_ports: "8444,4444,9999,14444,5555,6666,7777".to_string(),
+            baseline_file: None,
+            suspicious_only: false,
+            remote: None,
+            monitor_endpoint: None,
+            send_interval: 30,
+            scan_interval: 2,
+            endpoint_auth: None,
+            endpoint_fields: None,
+            endpoint_include_audit: false,
+            endpoint_retries: 3,
+            endpoint_timeout: 10,
+        }
+    }
+
+    #[test]
+    fn test_get_ports_to_monitor_range() {
+        let mut args = create_test_args();
+        args.start_port = 3000;
+        args.end_port = 3005;
         
         let ports = args.get_ports_to_monitor();
         assert_eq!(ports, vec![3000, 3001, 3002, 3003, 3004, 3005]);
@@ -501,17 +584,8 @@ mod tests {
 
     #[test]
     fn test_get_ports_to_monitor_specific() {
-        let args = Args {
-            start_port: 2000,
-            end_port: 6000,
-            ports: Some(vec!["3000".to_string(), "8000".to_string(), "8080".to_string()]),
-            ignore_ports: None,
-            ignore_processes: None,
-            console: false,
-            verbose: false,
-            docker: false,
-            show_pid: false,
-        };
+        let mut args = create_test_args();
+        args.ports = Some(vec!["3000".to_string(), "8000".to_string(), "8080".to_string()]);
         
         let ports = args.get_ports_to_monitor();
         assert_eq!(ports, vec![3000, 8000, 8080]);
@@ -519,17 +593,8 @@ mod tests {
 
     #[test]
     fn test_get_ports_to_monitor_with_ranges() {
-        let args = Args {
-            start_port: 2000,
-            end_port: 6000,
-            ports: Some(vec!["3000-3002".to_string(), "8000".to_string(), "8080-8081".to_string()]),
-            ignore_ports: None,
-            ignore_processes: None,
-            console: false,
-            verbose: false,
-            docker: false,
-            show_pid: false,
-        };
+        let mut args = create_test_args();
+        args.ports = Some(vec!["3000-3002".to_string(), "8000".to_string(), "8080-8081".to_string()]);
         
         let ports = args.get_ports_to_monitor();
         assert_eq!(ports, vec![3000, 3001, 3002, 8000, 8080, 8081]);
@@ -537,17 +602,8 @@ mod tests {
 
     #[test]
     fn test_get_ignore_ports_set() {
-        let args = Args {
-            start_port: 2000,
-            end_port: 6000,
-            ports: None,
-            ignore_ports: Some(vec![5353, 5000, 7000]),
-            ignore_processes: None,
-            console: false,
-            verbose: false,
-            docker: false,
-            show_pid: false,
-        };
+        let mut args = create_test_args();
+        args.ignore_ports = Some(vec![5353, 5000, 7000]);
         
         let ignore_ports = args.get_ignore_ports_set();
         assert_eq!(ignore_ports, HashSet::from([5353, 5000, 7000]));
@@ -555,17 +611,8 @@ mod tests {
 
     #[test]
     fn test_get_ignore_processes_set() {
-        let args = Args {
-            start_port: 2000,
-            end_port: 6000,
-            ports: None,
-            ignore_ports: None,
-            ignore_processes: Some(vec!["Chrome".to_string(), "ControlCe".to_string()]),
-            console: false,
-            verbose: false,
-            docker: false,
-            show_pid: false,
-        };
+        let mut args = create_test_args();
+        args.ignore_processes = Some(vec!["Chrome".to_string(), "ControlCe".to_string()]);
         
         let ignore_processes = args.get_ignore_processes_set();
         assert_eq!(ignore_processes, HashSet::from([String::from("Chrome"), String::from("ControlCe")]));
@@ -573,136 +620,68 @@ mod tests {
 
     #[test]
     fn test_get_port_description_with_ignores() {
-        let args = Args {
-            start_port: 2000,
-            end_port: 6000,
-            ports: None,
-            ignore_ports: Some(vec![5353, 5000]),
-            ignore_processes: Some(vec!["Chrome".to_string(), "ControlCe".to_string()]),
-            console: false,
-            verbose: false,
-            docker: false,
-            show_pid: false,
-        };
+        let mut args = create_test_args();
+        args.ignore_ports = Some(vec![5353, 5000]);
+        args.ignore_processes = Some(vec!["Chrome".to_string(), "ControlCe".to_string()]);
         
         assert_eq!(args.get_port_description(), "port range: 2000-6000 (ignoring ports: 5353, 5000, ignoring processes: Chrome, ControlCe)");
     }
 
     #[test]
     fn test_get_port_description_range() {
-        let args = Args {
-            start_port: 3000,
-            end_port: 3010,
-            ports: None,
-            ignore_ports: None,
-            ignore_processes: None,
-            console: false,
-            verbose: false,
-            docker: false,
-            show_pid: false,
-        };
+        let mut args = create_test_args();
+        args.start_port = 3000;
+        args.end_port = 3010;
         
         assert_eq!(args.get_port_description(), "port range: 3000-3010");
     }
 
     #[test]
     fn test_get_port_description_specific() {
-        let args = Args {
-            start_port: 2000,
-            end_port: 6000,
-            ports: Some(vec!["3000".to_string(), "8000".to_string(), "8080".to_string()]),
-            ignore_ports: None,
-            ignore_processes: None,
-            console: false,
-            verbose: false,
-            docker: false,
-            show_pid: false,
-        };
+        let mut args = create_test_args();
+        args.ports = Some(vec!["3000".to_string(), "8000".to_string(), "8080".to_string()]);
         
         assert_eq!(args.get_port_description(), "specific ports: 3000, 8000, 8080");
     }
 
     #[test]
     fn test_validation_valid() {
-        let args = Args {
-            start_port: 3000,
-            end_port: 3010,
-            ports: None,
-            ignore_ports: None,
-            ignore_processes: None,
-            console: false,
-            verbose: false,
-            docker: false,
-            show_pid: false,
-        };
+        let mut args = create_test_args();
+        args.start_port = 3000;
+        args.end_port = 3010;
         
         assert!(args.validate().is_ok());
     }
 
     #[test]
     fn test_validation_invalid_range() {
-        let args = Args {
-            start_port: 3010,
-            end_port: 3000,
-            ports: None,
-            ignore_ports: None,
-            ignore_processes: None,
-            console: false,
-            verbose: false,
-            docker: false,
-            show_pid: false,
-        };
+        let mut args = create_test_args();
+        args.start_port = 3010;
+        args.end_port = 3000;
         
         assert!(args.validate().is_err());
     }
 
     #[test]
     fn test_validation_empty_specific_ports() {
-        let args = Args {
-            start_port: 2000,
-            end_port: 6000,
-            ports: Some(vec![]),
-            ignore_ports: None,
-            ignore_processes: None,
-            console: false,
-            verbose: false,
-            docker: false,
-            show_pid: false,
-        };
+        let mut args = create_test_args();
+        args.ports = Some(vec![]);
         
         assert!(args.validate().is_err());
     }
 
     #[test]
     fn test_validation_invalid_ignore_port() {
-        let args = Args {
-            start_port: 2000,
-            end_port: 6000,
-            ports: None,
-            ignore_ports: Some(vec![0]),
-            ignore_processes: None,
-            console: false,
-            verbose: false,
-            docker: false,
-            show_pid: false,
-        };
+        let mut args = create_test_args();
+        args.ignore_ports = Some(vec![0]);
         
         assert!(args.validate().is_err());
     }
 
     #[test]
     fn test_validation_empty_ignore_process() {
-        let args = Args {
-            start_port: 2000,
-            end_port: 6000,
-            ports: None,
-            ignore_ports: None,
-            ignore_processes: Some(vec!["".to_string()]),
-            console: false,
-            verbose: false,
-            docker: false,
-            show_pid: false,
-        };
+        let mut args = create_test_args();
+        args.ignore_processes = Some(vec!["".to_string()]);
         
         assert!(args.validate().is_err());
     }

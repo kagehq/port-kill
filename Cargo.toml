@@ -26,6 +26,7 @@ clap = { version = "4.0", features = ["derive"] }
 regex = "1.0"
 sysinfo = "0.30"
 chrono = { version = "0.4", features = ["serde"] }
+reqwest = { version = "0.11", features = ["json"] }
 
 [build-dependencies]
 embed-resource = "1.8"

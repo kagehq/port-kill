@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "port-kill": {
+      "command": "npm",
+      "args": ["run", "dev"],
+      "cwd": "./mcp",
+      "env": {
+        "PORT_KILL_CWD": "${workspaceRoot}"
+      }
+    }
+  }
+}
+

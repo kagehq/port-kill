@@ -5,6 +5,7 @@ use crate::{
     smart_filter::SmartFilter,
     port_guard::PortGuardDaemon,
     security_audit::SecurityAuditor,
+    endpoint_monitor::EndpointMonitor,
 };
 use anyhow::Result;
 use crossbeam_channel::{bounded, Receiver};
@@ -133,6 +134,11 @@ impl ConsolePortKillApp {
             return self.output_processes_json().await;
         }
         
+        // Check if endpoint monitoring is enabled
+        if self.args.monitor_endpoint.is_some() {
+            return self.run_endpoint_monitoring().await;
+        }
+        
         println!("🚀 Port Kill Console Monitor Started!");
         println!("📡 Monitoring {} every 2 seconds...", self.args.get_port_description());
         
@@ -157,6 +163,34 @@ impl ConsolePortKillApp {
         // Handle updates in the main thread
         self.handle_console_updates().await;
 
+        Ok(())
+    }
+
+    /// Run endpoint monitoring mode
+    async fn run_endpoint_monitoring(&mut self) -> Result<()> {
+        println!("🚀 Port Kill Endpoint Monitor Started!");
+        println!("📡 Monitoring {} every {}s, sending to endpoint every {}s", 
+                 self.args.get_port_description(), 
+                 self.args.scan_interval, 
+                 self.args.send_interval);
+        
+        if let Some(ref endpoint) = self.args.monitor_endpoint {
+            println!("🌐 Endpoint: {}", endpoint);
+        }
+        
+        if self.args.endpoint_include_audit {
+            println!("🔒 Security audit enabled");
+        }
+        
+        println!("💡 Press Ctrl+C to quit");
+        println!("");
+
+        // Create endpoint monitor
+        let mut endpoint_monitor = EndpointMonitor::new(&self.args)?;
+        
+        // Run the endpoint monitor
+        endpoint_monitor.run(&self.args).await?;
+        
         Ok(())
     }
     

@@ -37,6 +37,7 @@ Windows users: see the quick start at [WINDOWS.md](WINDOWS.md).
 - **Smart Root Cause Analysis**: Intelligent analysis of process conflicts, workflow patterns, and actionable recommendations
 - **Port Guard Mode**: Proactive port conflict prevention with background daemon and auto-resolution
 - **Security Audit Mode**: Comprehensive security analysis with suspicious port detection and risk assessment
+- **Endpoint Monitoring**: Send real-time data to external endpoints for monitoring, alerting, and automation
 
 
 
@@ -58,8 +59,6 @@ Windows users: see the quick start at [WINDOWS.md](WINDOWS.md).
 ## Dashboard
 
 A web dashboard is available in the `dashboard/` directory, providing a rich graphical interface for monitoring and managing processes. The dashboard runs independently as a Nuxt.js application and communicates with the Port Kill binary via HTTP API.
-
-![Port Kill Dashboard](dashboard/assets/img/portkill-dashboard.png)
 
 **Features:**
 - Real-time process monitoring with auto-refresh
@@ -787,6 +786,125 @@ Comprehensive security analysis with suspicious port detection:
 for server in $(cat server-list.txt); do
   ssh $server "./port-kill-console --audit --json" > audit-$server.json
 done
+```
+
+#### **Endpoint Monitoring Mode**
+
+Send real-time data to external endpoints for monitoring, alerting, and automation:
+
+```bash
+./target/release/port-kill-console --monitor-endpoint https://api.company.com/port-status
+```
+
+**Key Features:**
+- **Dual Intervals**: Scan processes every 2s, send data every 30s (configurable)
+- **Authentication Support**: Bearer tokens, API keys, basic auth
+- **Custom Fields**: Add server metadata (environment, team, etc.)
+- **Security Integration**: Include security audit data in payloads
+- **Retry Logic**: Automatic retry with exponential backoff
+- **Error Handling**: Graceful failure handling with logging
+
+**Example Usage:**
+```bash
+# Basic endpoint monitoring
+./port-kill-console --monitor-endpoint https://api.company.com/port-status
+
+# Custom intervals: scan every 5s, send every 60s
+./port-kill-console --monitor-endpoint https://api.company.com/port-status \
+  --scan-interval 5 --send-interval 60
+
+# With authentication
+./port-kill-console --monitor-endpoint https://api.company.com/port-status \
+  --endpoint-auth "Bearer your-api-token"
+
+# With custom server metadata
+./port-kill-console --monitor-endpoint https://api.company.com/port-status \
+  --endpoint-fields "server=prod-web-01,environment=production,team=platform"
+
+# Include security audit data
+./port-kill-console --monitor-endpoint https://api.company.com/port-status \
+  --endpoint-include-audit --suspicious-ports "8444,4444,9999"
+
+# Production monitoring with retry logic
+./port-kill-console --monitor-endpoint https://api.company.com/port-status \
+  --endpoint-retries 5 --endpoint-timeout 30 \
+  --endpoint-fields "server=prod-web-01,environment=production"
+```
+
+**Data Payload Format:**
+```json
+{
+  "timestamp": "2025-01-18T20:15:00Z",
+  "server": "prod-web-01",
+  "environment": "production",
+  "team": "platform",
+  "ports": [
+    {
+      "port": 3000,
+      "status": "occupied",
+      "process": "nginx",
+      "pid": 1234,
+      "container": "web-container"
+    },
+    {
+      "port": 8080,
+      "status": "free"
+    }
+  ],
+  "security_audit": {
+    "suspicious_ports": [8444],
+    "risk_score": 7.5,
+    "unauthorized_processes": ["unknown-binary"],
+    "baseline_violations": []
+  },
+  "summary": {
+    "total_ports": 10,
+    "occupied_ports": 3,
+    "free_ports": 7,
+    "suspicious_ports": 1
+  },
+  "custom_fields": {
+    "server": "prod-web-01",
+    "environment": "production",
+    "team": "platform"
+  }
+}
+```
+
+**n8n Integration Example:**
+```javascript
+// n8n workflow trigger
+if (data.ports.some(p => p.port === 3000 && p.status === 'occupied')) {
+  // Critical port occupied - send SMS
+  await sendSMS('+1234567890', 'ALERT: Port 3000 occupied on prod-web-01');
+  
+  // Also send to Slack
+  await sendSlack('#alerts', {
+    text: '🚨 Port Conflict Detected',
+    attachments: [{
+      color: 'danger',
+      fields: [
+        { title: 'Server', value: data.server, short: true },
+        { title: 'Port', value: '3000', short: true },
+        { title: 'Process', value: data.ports.find(p => p.port === 3000).process, short: true }
+      ]
+    }]
+  });
+}
+
+// Security alert
+if (data.security_audit && data.security_audit.risk_score > 7) {
+  await sendSlack('#security', {
+    text: '🚨 High Security Risk Detected',
+    attachments: [{
+      color: 'danger',
+      fields: [
+        { title: 'Risk Score', value: data.security_audit.risk_score.toString(), short: true },
+        { title: 'Suspicious Ports', value: data.security_audit.suspicious_ports.join(', '), short: true }
+      ]
+    }]
+  });
+}
 ```
 
 #### Verbose Mode
