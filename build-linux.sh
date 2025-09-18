@@ -16,7 +16,7 @@ echo "📦 Creating Linux-specific build configuration..."
 cat > Cargo.linux.tmp.toml << 'EOF'
 [package]
 name = "port-kill"
-version = "0.2.2"
+version = "0.3.0"
 edition = "2021"
 
 [[bin]]
@@ -46,6 +46,10 @@ chrono = { version = "0.4", features = ["serde"] }
 # Linux-specific tray support
 libappindicator = "0.7"
 gtk = "0.15"
+
+[features]
+default = []
+embed_icon = []
 EOF
 
 # Create a temporary lib.rs that excludes macOS-specific modules
@@ -58,6 +62,8 @@ pub mod types;
 pub mod cli;
 pub mod smart_filter;
 pub mod system_monitor;
+pub mod port_guard;
+pub mod security_audit;
 
 // Exclude macOS-specific modules for Linux build
 // pub mod app;
