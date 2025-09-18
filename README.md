@@ -27,8 +27,14 @@ git clone https://github.com/kagehq/port-kill.git && cd port-kill && ./install.s
 ## Quick start (CLI)
 
 ```bash
-# See what’s using common dev ports
+# See what's using common dev ports
 ./target/release/port-kill-console --console --ports 3000,8000,8080
+
+# Scan port ranges (new!)
+./target/release/port-kill-console --console --json --ports '6000-9999'
+
+# Mixed individual ports and ranges
+./target/release/port-kill-console --console --ports '3000,6000-6002,8000'
 
 # Free up the usual suspects
 ./target/release/port-kill-console --reset
@@ -59,7 +65,7 @@ npm run dev   # http://localhost:3000
 # One-liner install
 curl -fsSL https://raw.githubusercontent.com/kagehq/port-kill/main/install-mcp.sh | bash
 
- From port-kill root directory
+# From port-kill root directory
 ./install-mcp.sh
 
 # Or manual setup
@@ -97,6 +103,8 @@ See [DETAILED.md](DETAILED.md) for more.
 
 ```bash
 --ports 3000,8000,8080          # specific ports
+--ports '6000-9999'             # port ranges (new!)
+--ports '3000,6000-6002,8000'   # mixed individual ports and ranges
 --start-port 3000 --end-port 9000
 --ignore-ports 5353,5000,7000
 --ignore-processes Chrome,rapportd
