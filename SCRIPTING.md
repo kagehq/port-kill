@@ -35,7 +35,6 @@ onPort(3000, callback)
 ### Port Guarding (NEW!)
 - `guardPort(port)` - Automatically kill any process that binds to this port
 - `guardPort(port, allowedName)` - Only allow a specific process name on this port, kill everything else
-- `killOnPort(port)` - Alternative syntax for `guardPort(port)` - kill any process on this port
 
 ### File-Based Process Management (NEW!)
 - `killFile("filename.ext")` - Kill all processes that have a specific file open
@@ -79,7 +78,7 @@ killPort(8080)
 // Guard multiple ports with different policies
 guardPort(3000)                    // Kill any process on port 3000
 guardPort(8080, "nginx")           // Only allow nginx on port 8080
-killOnPort(9000)                   // Kill any process on port 9000
+guardPort(9000)                    // Kill any process on port 9000
 ```
 
 ### 4. File-Based Process Management
@@ -174,7 +173,7 @@ log("Port guard activated. Only 'my-dev-server' is allowed on port 3000.")
 log("Starting multi-port guard system")
 guardPort(3000)                    // Kill any process on port 3000
 guardPort(8080, "nginx")           // Only allow nginx on port 8080
-killOnPort(9000)                   // Kill any process on port 9000
+guardPort(9000)                    // Kill any process on port 9000
 log("Multi-port guard activated")
 ```
 

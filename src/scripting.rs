@@ -105,8 +105,6 @@ impl ScriptEngine {
                     self.parse_wait_command(command).await?;
                 } else if command.starts_with("guardPort(") {
                     self.parse_guard_port_command(command).await?;
-                } else if command.starts_with("killOnPort(") {
-                    self.parse_kill_on_port_command(command).await?;
                 } else if command.starts_with("killFile(") {
                     self.parse_kill_file_command(command).await?;
                 } else if command.starts_with("guardFile(") {
@@ -238,16 +236,6 @@ impl ScriptEngine {
         Ok(())
     }
 
-    /// Parse killOnPort command
-    async fn parse_kill_on_port_command(&mut self, line: &str) -> Result<()> {
-        if let Some(port_str) = self.extract_port_from_killonport(line) {
-            if let Ok(port) = port_str.parse::<u16>() {
-                println!("🔪 Will kill any process that binds to port {}", port);
-                self.port_guards.insert(port, GuardConfig::KillAll);
-            }
-        }
-        Ok(())
-    }
 
     /// Parse killFile command
     async fn parse_kill_file_command(&mut self, line: &str) -> Result<()> {
@@ -417,16 +405,6 @@ impl ScriptEngine {
         None
     }
 
-    /// Extract port from killOnPort command
-    fn extract_port_from_killonport<'a>(&self, line: &'a str) -> Option<&'a str> {
-        // Simple parsing: killOnPort(3000)
-        if let Some(start) = line.find('(') {
-            if let Some(end) = line[start+1..].find(')') {
-                return Some(&line[start+1..start+1+end]);
-            }
-        }
-        None
-    }
 
     /// Extract file path from killFile command
     fn extract_file_path_from_killfile<'a>(&self, line: &'a str) -> Option<&'a str> {

@@ -255,6 +255,7 @@ run-windows.bat -p 3000,3001,8000,8080              # Windows
 
 # Console mode for full-screen mode users (recommended)
 ./run.sh --console --log-level warn --ports 3000,8000,8080
+```
 
 #### Log Level Control
 ```bash
