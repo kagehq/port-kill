@@ -280,7 +280,15 @@ run-windows.bat -p 3000,3001,8000,8080              # Windows
 Port-kill now supports **programmable port management** through scripting:
 
 ```bash
-# Port Guarding - Auto-kill unauthorized processes!
+# Three Clear Commands for Different Use Cases:
+
+# 1. kill(pid) - Kill process by PID (one-time action)
+./port-kill-console --script "kill(1234)"
+
+# 2. clearPort(port) - Kill all processes on a specific port (one-time action)
+./port-kill-console --script "clearPort(3000)"
+
+# 3. guardPort(port) - Ongoing protection (kill any process that tries to bind to this port)
 ./port-kill-console --script "guardPort(3000)" --ports 3000
 ./port-kill-console --script "guardPort(3000, 'my-dev-server')" --ports 3000
 
@@ -290,7 +298,7 @@ Port-kill now supports **programmable port management** through scripting:
 ./port-kill-console --script "guardFile('.env')"
 
 # Advanced example
-./port-kill-console --script "log('Starting'); killPort(3000); onPort(8080, callback)" --ports 3000,8080
+./port-kill-console --script "log('Starting'); clearPort(3000); onPort(8080, callback)" --ports 3000,8080
 ```
 
 See [SCRIPTING.md](SCRIPTING.md) for complete documentation and examples.

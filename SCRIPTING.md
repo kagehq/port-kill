@@ -33,8 +33,8 @@ onPort(3000, callback)
 - `listPorts()` - List all monitored ports
 
 ### Port Guarding (NEW!)
-- `guardPort(port)` - Automatically kill any process that binds to this port
-- `guardPort(port, allowedName)` - Only allow a specific process name on this port, kill everything else
+- `guardPort(port)` - Automatically kill any process that binds to this port (ongoing protection)
+- `guardPort(port, allowedName)` - Only allow a specific process name on this port, kill everything else (ongoing protection)
 
 ### File-Based Process Management (NEW!)
 - `killFile("filename.ext")` - Kill all processes that have a specific file open
@@ -44,8 +44,8 @@ onPort(3000, callback)
 - `listFileProcesses("filename.ext")` - List all processes that have a specific file open
 
 ### Process Management
-- `kill(pid)` - Kill process by PID
-- `killPort(port)` - Kill all processes on a specific port
+- `kill(pid)` - Kill process by PID (one-time action)
+- `clearPort(port)` - Kill all processes on a specific port (one-time action)
 - `getProcess(port)` - Get process information for a port
 
 ### Utility Commands
@@ -66,11 +66,11 @@ guardPort(3000, "my-react-app")
 ### 2. Port Cleanup
 ```javascript
 // Clean up common development ports
-killPort(3000)
-killPort(3001)
-killPort(5000)
-killPort(8000)
-killPort(8080)
+clearPort(3000)
+clearPort(3001)
+clearPort(5000)
+clearPort(8000)
+clearPort(8080)
 ```
 
 ### 3. Multi-Port Guard System
@@ -130,7 +130,7 @@ log("Starting advanced port management script")
 listPorts()
 wait(2)
 onPort(3000, callback)
-killPort(8080)
+clearPort(8080)
 getProcess(5000)
 log("Script setup complete - monitoring active")
 ```
@@ -139,12 +139,12 @@ log("Script setup complete - monitoring active")
 ```javascript
 // examples/port-cleanup.js
 log("Starting port cleanup script")
-killPort(3000)
-killPort(3001)
-killPort(5000)
-killPort(8000)
-killPort(8080)
-killPort(9000)
+clearPort(3000)
+clearPort(3001)
+clearPort(5000)
+clearPort(8000)
+clearPort(8080)
+clearPort(9000)
 log("Port cleanup completed")
 onPort(3000, callback)
 onPort(8080, callback)

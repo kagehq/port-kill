@@ -95,8 +95,8 @@ impl ScriptEngine {
                     self.parse_kill_command(command).await?;
                 } else if command.starts_with("listPorts(") {
                     self.parse_list_ports_command(command).await?;
-                } else if command.starts_with("killPort(") {
-                    self.parse_kill_port_command(command).await?;
+                } else if command.starts_with("clearPort(") {
+                    self.parse_clear_port_command(command).await?;
                 } else if command.starts_with("getProcess(") {
                     self.parse_get_process_command(command).await?;
                 } else if command.starts_with("log(") {
@@ -150,11 +150,15 @@ impl ScriptEngine {
 
     /// Parse kill command
     async fn parse_kill_command(&mut self, line: &str) -> Result<()> {
-        // Simple parsing: kill(pid) or kill(port)
+        // Simple parsing: kill(pid)
         if let Some(pid_str) = self.extract_pid_from_kill(line) {
-            if let Ok(pid) = pid_str.parse::<u32>() {
+            if let Ok(pid) = pid_str.parse::<i32>() {
                 println!("🔪 Killing process with PID: {}", pid);
-                // TODO: Implement actual kill functionality
+                if let Err(e) = crate::process_monitor::kill_single_process(pid, &self.args) {
+                    println!("❌ Failed to kill process PID {}: {}", pid, e);
+                } else {
+                    println!("✅ Successfully killed process PID {}", pid);
+                }
             }
         }
         Ok(())
@@ -170,18 +174,16 @@ impl ScriptEngine {
         Ok(())
     }
 
-    /// Parse killPort command
-    async fn parse_kill_port_command(&mut self, line: &str) -> Result<()> {
-        if let Some(port_str) = self.extract_port_from_killport(line) {
+    /// Parse clearPort command
+    async fn parse_clear_port_command(&mut self, line: &str) -> Result<()> {
+        if let Some(port_str) = self.extract_port_from_clearport(line) {
             if let Ok(port) = port_str.parse::<u16>() {
-                println!("🔪 Killing all processes on port {}", port);
-                // TODO: Implement actual port killing functionality
-                // For now, we'll use the existing kill_all_processes with specific port
+                println!("🧹 Clearing all processes on port {}", port);
                 let ports_to_kill = vec![port];
                 if let Err(e) = crate::process_monitor::kill_all_processes(&ports_to_kill, &self.args) {
-                    println!("❌ Failed to kill processes on port {}: {}", port, e);
+                    println!("❌ Failed to clear processes on port {}: {}", port, e);
                 } else {
-                    println!("✅ Successfully killed processes on port {}", port);
+                    println!("✅ Successfully cleared processes on port {}", port);
                 }
             }
         }
@@ -332,9 +334,9 @@ impl ScriptEngine {
         None
     }
 
-    /// Extract port from killPort command
-    fn extract_port_from_killport<'a>(&self, line: &'a str) -> Option<&'a str> {
-        // Simple parsing: killPort(3000)
+    /// Extract port from clearPort command
+    fn extract_port_from_clearport<'a>(&self, line: &'a str) -> Option<&'a str> {
+        // Simple parsing: clearPort(3000)
         if let Some(start) = line.find('(') {
             if let Some(end) = line[start+1..].find(')') {
                 return Some(&line[start+1..start+1+end]);
@@ -641,7 +643,7 @@ mod tests {
         
         assert_eq!(engine.extract_pid_from_kill("kill(1234)"), Some("1234"));
         assert_eq!(engine.extract_pid_from_kill("kill(5678)"), Some("5678"));
-        assert_eq!(engine.extract_port_from_killport("killPort(3000)"), Some("3000"));
+        assert_eq!(engine.extract_port_from_clearport("clearPort(3000)"), Some("3000"));
         assert_eq!(engine.extract_port_from_getprocess("getProcess(8080)"), Some("8080"));
         assert_eq!(engine.extract_message_from_log("log(\"Hello World\")"), Some("Hello World"));
         assert_eq!(engine.extract_seconds_from_wait("wait(5)"), Some("5"));

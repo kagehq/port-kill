@@ -4,12 +4,12 @@
 log("Starting port cleanup script")
 
 // Clean up common development ports
-killPort(3000)
-killPort(3001)
-killPort(5000)
-killPort(8000)
-killPort(8080)
-killPort(9000)
+clearPort(3000)
+clearPort(3001)
+clearPort(5000)
+clearPort(8000)
+clearPort(8080)
+clearPort(9000)
 
 log("Port cleanup completed")
 
