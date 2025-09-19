@@ -66,6 +66,59 @@ Kill all processes using dev ports
 ```
 
 
+## Tools Extended
+
+### 1. **`list`** - List Processes on Ports
+**Purpose**: List all processes running on specified ports with detailed information
+
+**Example Usage**:
+```text
+"What processes are running on port 3000?"
+"List all processes on development ports"
+"Show me what's running on ports 3000, 8000, and 8080"
+```
+
+### 2. **`kill`** - Kill Processes on Ports
+**Purpose**: Kill all processes running on specified ports
+
+**Example Usage**:
+```text
+"Kill the process running on port 3000"
+"Kill all processes on ports 3000, 8000, and 8080"
+"Free up port 5432"
+```
+
+### 3. **`reset`** - Reset Common Dev Ports
+**Purpose**: Kill processes on common development ports (3000, 5000, 8000, 5432, 3306, 6379, 27017, 8080, 9000)
+
+**Example Usage**:
+```text
+"Reset all development ports"
+"Kill all processes using common dev ports"
+"Clean up my development environment"
+```
+
+### 4. **`audit`** - Security Audit
+**Purpose**: Run security audit on processes and ports to identify suspicious or unauthorized processes
+
+**Example Usage**:
+```text
+"Run a security audit on all ports"
+"Check for suspicious processes on development ports"
+"Audit port 3000 for security issues"
+```
+
+### 5. **`guardStatus`** - Port Guard Status
+**Purpose**: Check the status of Port Guard if running via dashboard API
+
+**Example Usage**:
+```text
+"Check the port guard status"
+"What's the current guard configuration?"
+"Show me the dashboard guard status"
+```
+
+
 ## Dev
 
 ```bash
