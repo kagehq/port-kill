@@ -43,10 +43,15 @@ powershell -NoProfile -Command "Invoke-WebRequest 'https://github.com/%REPO%/rel
 )
 
 echo(
+echo(Adding to PATH...
+powershell -NoProfile -Command "if (-not (Test-Path 'env:PATH' -PathType Container)) { [Environment]::SetEnvironmentVariable('PATH', '%INSTALL_DIR%', 'User') } else { $currentPath = [Environment]::GetEnvironmentVariable('PATH', 'User'); if ($currentPath -notlike '*%INSTALL_DIR%*') { [Environment]::SetEnvironmentVariable('PATH', $currentPath + ';%INSTALL_DIR%', 'User') } }"
+
+echo(
 echo(Installation complete!
 echo(
 echo(Usage:
 echo(  System tray:    port-kill --ports 3000,8000
 echo(  Console mode:   port-kill-console --console --ports 3000,8000
 echo(
-echo(Add to PATH (User): %INSTALL_DIR%
+echo(Note: You may need to restart your terminal for PATH changes to take effect.
+echo(Installation directory: %INSTALL_DIR%
