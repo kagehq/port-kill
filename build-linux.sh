@@ -16,7 +16,7 @@ echo "📦 Creating Linux-specific build configuration..."
 cat > Cargo.linux.tmp.toml << 'EOF'
 [package]
 name = "port-kill"
-version = "0.4.0"
+version = "0.3.4"
 edition = "2021"
 
 [[bin]]
