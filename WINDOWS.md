@@ -20,9 +20,13 @@ cd port-kill
 cargo build --release
 ```
 
-The console binary will be at:
-- If using installer: typically `C:\Users\<you>\AppData\Local\port-kill\port-kill-console.exe`
-- If building: `target\release\port-kill-console.exe`
+The binaries will be at:
+- If using installer: typically `C:\Users\<you>\AppData\Local\port-kill\`
+  - `port-kill.exe` (tray app, can also run in console mode)
+  - `port-kill-console.exe` (console-only app, if available)
+- If building: `target\release\`
+  - `port-kill.exe` (tray app)
+  - `port-kill-console.exe` (console app)
 
 ## 2) Add to PATH (so you can run from anywhere)
 
@@ -39,8 +43,27 @@ Option B — copy the binary into a folder already on PATH (your choice).
 
 ## 3) Use the console app (recommended on Windows)
 
+**Option A: Use the main binary in console mode (recommended)**
 ```powershell
-# See what’s using common dev ports
+# See what's using common dev ports
+port-kill.exe --console --ports 3000,8000,8080
+
+# Free up the usual suspects
+port-kill.exe --reset
+
+# Kill specific ports
+port-kill.exe --kill-all --ports 3000
+
+# JSON output (great for tooling)
+port-kill.exe --console --ports 3000,8000 --json
+
+# Verbose details (command line, cwd)
+port-kill.exe --console --ports 3000,8000 --verbose
+```
+
+**Option B: Use the dedicated console binary (if available)**
+```powershell
+# See what's using common dev ports
 port-kill-console.exe --console --ports 3000,8000,8080
 
 # Free up the usual suspects
@@ -68,10 +91,12 @@ This is harmless. The console app has the same functionality and is the recommen
 
 ## 5) Troubleshooting
 
-- “Command not found” after install: add the install folder to your PATH (see step 2) or open a new shell.
-- Access denied / can’t kill a process: run PowerShell/CMD “as Administrator”.
-- SmartScreen or AV blocks the exe: open file Properties and “Unblock”, or allow it in your AV.
-- Docker processes not showing: ensure Docker Desktop is running and `docker` is on PATH.
+- **"Command not found" after install**: add the install folder to your PATH (see step 2) or open a new shell.
+- **"port-kill-console.exe not recognized"**: use `port-kill.exe --console` instead. The main binary works in both tray and console modes.
+- **Only one binary installed**: this is normal. Use `port-kill.exe --console` for console operations.
+- **Access denied / can't kill a process**: run PowerShell/CMD "as Administrator".
+- **SmartScreen or AV blocks the exe**: open file Properties and "Unblock", or allow it in your AV.
+- **Docker processes not showing**: ensure Docker Desktop is running and `docker` is on PATH.
 
 ## 6) Optional: MCP / HTTP control (automation)
 
@@ -80,7 +105,7 @@ You can drive Port Kill via MCP (Cursor) or plain HTTP:
 ```powershell
 # MCP + HTTP wrapper (from repo root)
 cd mcp
-$env:PORT_KILL_BIN = "C:\path\to\port-kill-console.exe"    # set if not on PATH
+$env:PORT_KILL_BIN = "C:\path\to\port-kill.exe"    # set if not on PATH
 $env:HTTP_PORT = "8787"
 npm run dev    # then POST http://localhost:8787/tool with { name, args }
 ```
