@@ -16,7 +16,7 @@ echo "📦 Creating Linux-specific build configuration..."
 cat > Cargo.linux.tmp.toml << 'EOF'
 [package]
 name = "port-kill"
-version = "0.3.2"
+version = "0.4.0"
 edition = "2021"
 
 [[bin]]
@@ -67,6 +67,7 @@ pub mod port_guard;
 pub mod security_audit;
 pub mod endpoint_monitor;
 pub mod scripting;
+pub mod file_monitor;
 
 // Exclude macOS-specific modules for Linux build
 // pub mod app;

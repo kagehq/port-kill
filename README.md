@@ -50,12 +50,6 @@ git clone https://github.com/kagehq/port-kill.git && cd port-kill && ./install.s
 
 # Endpoint monitoring (send data to external endpoint)
 ./target/release/port-kill-console --monitor-endpoint https://api.company.com/port-status
-
-# Endpoint monitoring with custom intervals and authentication
-./target/release/port-kill-console --monitor-endpoint https://api.company.com/port-status \
-  --send-interval 60 --scan-interval 5 \
-  --endpoint-auth "Bearer token123" \
-  --endpoint-fields "server=prod-web-01,environment=production,team=platform"
 ```
 
 ## Dashboard (optional)
@@ -289,13 +283,14 @@ Port-kill now supports **programmable port management** through scripting:
 ./port-kill-console --script "guardPort(3000)" --ports 3000
 ./port-kill-console --script "guardPort(3000, 'my-dev-server')" --ports 3000
 
+# File-Based Process Management - Kill processes with specific files open!
+./port-kill-console --script "killFile('package-lock.json')"
+./port-kill-console --script "killFileExt('.lock')"
+./port-kill-console --script "guardFile('.env')"
+
 # Advanced example
 ./port-kill-console --script "log('Starting'); killPort(3000); onPort(8080, callback)" --ports 3000,8080
 ```
-
-**Available commands**: `guardPort()`, `killOnPort()`, `onPort()`, `killPort()`, `listPorts()`, `log()`, `wait()`, and more!
-
-**NEW: Port Guarding** - Automatically kill any process that tries to use your ports, or whitelist specific processes!
 
 See [SCRIPTING.md](SCRIPTING.md) for complete documentation and examples.
 

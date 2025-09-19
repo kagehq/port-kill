@@ -37,6 +37,13 @@ onPort(3000, callback)
 - `guardPort(port, allowedName)` - Only allow a specific process name on this port, kill everything else
 - `killOnPort(port)` - Alternative syntax for `guardPort(port)` - kill any process on this port
 
+### File-Based Process Management (NEW!)
+- `killFile("filename.ext")` - Kill all processes that have a specific file open
+- `killFileExt(".extension")` - Kill all processes that have files with a specific extension open
+- `guardFile("filename.ext")` - Guard a file - kill any process that opens it
+- `guardFile("filename.ext", "allowedProcess")` - Only allow a specific process to open the file
+- `listFileProcesses("filename.ext")` - List all processes that have a specific file open
+
 ### Process Management
 - `kill(pid)` - Kill process by PID
 - `killPort(port)` - Kill all processes on a specific port
@@ -75,14 +82,32 @@ guardPort(8080, "nginx")           // Only allow nginx on port 8080
 killOnPort(9000)                   // Kill any process on port 9000
 ```
 
-### 4. Resource Monitoring
+### 4. File-Based Process Management
+```javascript
+// Kill processes with problematic files open
+killFile("package-lock.json")      // Kill processes with package-lock.json open
+killFileExt(".lock")               // Kill processes with any .lock files open
+guardFile(".env")                  // Guard .env file - kill any process that opens it
+guardFile("config.json", "npm")    // Only allow npm to open config.json
+```
+
+### 5. Development Environment Protection
+```javascript
+// Comprehensive development environment guard
+guardFile("package.json")          // Protect package.json
+guardFile("package-lock.json")     // Protect package-lock.json
+killFileExt(".lock")               // Clear all lock files
+guardPort(3000)                    // Guard development port
+```
+
+### 6. Resource Monitoring
 ```javascript
 // Monitor high-memory processes
 onPort(8080, callback)
 // In callback: if (process.memory > 500MB) kill(process.pid)
 ```
 
-### 5. Security Monitoring
+### 7. Security Monitoring
 ```javascript
 // Monitor suspicious ports
 onPort(4444, callback)
@@ -151,6 +176,37 @@ guardPort(3000)                    // Kill any process on port 3000
 guardPort(8080, "nginx")           // Only allow nginx on port 8080
 killOnPort(9000)                   // Kill any process on port 9000
 log("Multi-port guard activated")
+```
+
+### File-Based Process Management
+```javascript
+// examples/file-cleanup.js
+log("Starting file cleanup script...")
+killFileExt(".lock")               // Kill processes with lock files
+killFileExt(".log")                // Kill processes with log files
+killFile("package-lock.json")      // Kill processes with specific files
+killFile("yarn.lock")
+log("File cleanup completed")
+```
+
+### File Guarding
+```javascript
+// examples/file-guard-simple.js
+log("Starting simple file guard for package.json")
+guardFile("package.json")          // Guard package.json
+log("File guard activated")
+```
+
+### Development Environment Guard
+```javascript
+// examples/development-guard.js
+log("Starting development environment guard...")
+guardFile("package.json")          // Protect package.json
+guardFile("package-lock.json")     // Protect package-lock.json
+guardFile(".env")                  // Protect .env
+killFileExt(".lock")               // Clear lock files
+guardPort(3000)                    // Guard development port
+log("Development environment guard activated")
 ```
 
 ## Script Syntax

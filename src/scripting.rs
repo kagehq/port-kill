@@ -2,6 +2,7 @@ use crate::{
     process_monitor::ProcessMonitor,
     types::ProcessInfo,
     cli::Args,
+    file_monitor::FileMonitor,
 };
 use anyhow::Result;
 use std::sync::Arc;
@@ -19,10 +20,12 @@ enum GuardConfig {
 /// Scripting engine for port-kill
 pub struct ScriptEngine {
     process_monitor: Arc<Mutex<ProcessMonitor>>,
+    file_monitor: FileMonitor,
     args: Args,
     port_handlers: HashMap<u16, Vec<Box<dyn Fn(ProcessInfo) + Send + Sync>>>,
     last_processes: HashMap<u16, ProcessInfo>, // Track last known processes to detect changes
     port_guards: HashMap<u16, GuardConfig>,    // Port guard configurations
+    file_guards: HashMap<String, GuardConfig>, // File guard configurations
 }
 
 impl ScriptEngine {
@@ -30,10 +33,12 @@ impl ScriptEngine {
     pub fn new(process_monitor: Arc<Mutex<ProcessMonitor>>, args: Args) -> Self {
         Self {
             process_monitor,
+            file_monitor: FileMonitor::new(),
             args,
             port_handlers: HashMap::new(),
             last_processes: HashMap::new(),
             port_guards: HashMap::new(),
+            file_guards: HashMap::new(),
         }
     }
 
@@ -102,6 +107,14 @@ impl ScriptEngine {
                     self.parse_guard_port_command(command).await?;
                 } else if command.starts_with("killOnPort(") {
                     self.parse_kill_on_port_command(command).await?;
+                } else if command.starts_with("killFile(") {
+                    self.parse_kill_file_command(command).await?;
+                } else if command.starts_with("guardFile(") {
+                    self.parse_guard_file_command(command).await?;
+                } else if command.starts_with("killFileExt(") {
+                    self.parse_kill_file_ext_command(command).await?;
+                } else if command.starts_with("listFileProcesses(") {
+                    self.parse_list_file_processes_command(command).await?;
                 } else {
                     println!("⚠️  Unknown command: {}", command);
                 }
@@ -236,6 +249,79 @@ impl ScriptEngine {
         Ok(())
     }
 
+    /// Parse killFile command
+    async fn parse_kill_file_command(&mut self, line: &str) -> Result<()> {
+        if let Some(file_path) = self.extract_file_path_from_killfile(line) {
+            println!("🔪 Killing all processes with file '{}' open", file_path);
+            if let Ok(processes) = self.file_monitor.find_processes_with_file(&file_path) {
+                for process in processes {
+                    println!("  Killing process: {} (PID: {})", process.name, process.pid);
+                    if let Err(e) = self.process_monitor.lock().await.kill_process(process.pid).await {
+                        println!("❌ Failed to kill process {}: {}", process.pid, e);
+                    } else {
+                        println!("✅ Successfully killed process {}", process.pid);
+                    }
+                }
+            } else {
+                println!("⚠️  No processes found with file '{}' open", file_path);
+            }
+        }
+        Ok(())
+    }
+
+    /// Parse guardFile command
+    async fn parse_guard_file_command(&mut self, line: &str) -> Result<()> {
+        if let Some((file_path, allowed_name)) = self.extract_guard_file_params(line) {
+            if let Some(name) = allowed_name {
+                println!("🛡️  Guarding file '{}' - only allowing '{}'", file_path, name);
+                self.file_guards.insert(file_path.to_string(), GuardConfig::AllowOnly(name.to_string()));
+            } else {
+                println!("🛡️  Guarding file '{}' - killing all processes that open it", file_path);
+                self.file_guards.insert(file_path.to_string(), GuardConfig::KillAll);
+            }
+        }
+        Ok(())
+    }
+
+    /// Parse killFileExt command
+    async fn parse_kill_file_ext_command(&mut self, line: &str) -> Result<()> {
+        if let Some(extension) = self.extract_extension_from_killfileext(line) {
+            println!("🔪 Killing all processes with '{}' files open", extension);
+            if let Ok(processes) = self.file_monitor.find_processes_with_extension(&extension) {
+                for process in processes {
+                    println!("  Killing process: {} (PID: {})", process.name, process.pid);
+                    if let Err(e) = self.process_monitor.lock().await.kill_process(process.pid).await {
+                        println!("❌ Failed to kill process {}: {}", process.pid, e);
+                    } else {
+                        println!("✅ Successfully killed process {}", process.pid);
+                    }
+                }
+            } else {
+                println!("⚠️  No processes found with '{}' files open", extension);
+            }
+        }
+        Ok(())
+    }
+
+    /// Parse listFileProcesses command
+    async fn parse_list_file_processes_command(&mut self, line: &str) -> Result<()> {
+        if let Some(file_path) = self.extract_file_path_from_listfileprocesses(line) {
+            println!("📋 Listing processes with file '{}' open:", file_path);
+            if let Ok(processes) = self.file_monitor.find_processes_with_file(&file_path) {
+                if processes.is_empty() {
+                    println!("  No processes found with file '{}' open", file_path);
+                } else {
+                    for process in processes {
+                        println!("  • {} (PID: {})", process.name, process.pid);
+                    }
+                }
+            } else {
+                println!("❌ Failed to check processes for file '{}'", file_path);
+            }
+        }
+        Ok(())
+    }
+
     /// Extract port number from onPort command
     fn extract_port_from_onport<'a>(&self, line: &'a str) -> Option<&'a str> {
         // Simple regex-like parsing: onPort(3000, ...)
@@ -337,6 +423,90 @@ impl ScriptEngine {
         if let Some(start) = line.find('(') {
             if let Some(end) = line[start+1..].find(')') {
                 return Some(&line[start+1..start+1+end]);
+            }
+        }
+        None
+    }
+
+    /// Extract file path from killFile command
+    fn extract_file_path_from_killfile<'a>(&self, line: &'a str) -> Option<&'a str> {
+        // Simple parsing: killFile("filename.ext")
+        if let Some(start) = line.find('(') {
+            if let Some(end) = line[start+1..].find(')') {
+                let content = &line[start+1..start+1+end];
+                // Remove quotes if present
+                if content.starts_with('"') && content.ends_with('"') {
+                    return Some(&content[1..content.len()-1]);
+                }
+                return Some(content);
+            }
+        }
+        None
+    }
+
+    /// Extract guardFile parameters
+    fn extract_guard_file_params<'a>(&self, line: &'a str) -> Option<(&'a str, Option<&'a str>)> {
+        // Simple parsing: guardFile("filename.ext") or guardFile("filename.ext", "allowed-process")
+        if let Some(start) = line.find('(') {
+            if let Some(end) = line[start+1..].find(')') {
+                let content = &line[start+1..start+1+end];
+                if let Some(comma_pos) = content.find(',') {
+                    let file_path = content[..comma_pos].trim();
+                    let name_str = content[comma_pos+1..].trim();
+                    // Remove quotes if present
+                    let name = if name_str.starts_with('"') && name_str.ends_with('"') {
+                        Some(&name_str[1..name_str.len()-1])
+                    } else {
+                        Some(name_str)
+                    };
+                    // Remove quotes from file path if present
+                    let file_path = if file_path.starts_with('"') && file_path.ends_with('"') {
+                        &file_path[1..file_path.len()-1]
+                    } else {
+                        file_path
+                    };
+                    return Some((file_path, name));
+                } else {
+                    // Remove quotes from file path if present
+                    let file_path = if content.starts_with('"') && content.ends_with('"') {
+                        &content[1..content.len()-1]
+                    } else {
+                        content
+                    };
+                    return Some((file_path, None));
+                }
+            }
+        }
+        None
+    }
+
+    /// Extract extension from killFileExt command
+    fn extract_extension_from_killfileext<'a>(&self, line: &'a str) -> Option<&'a str> {
+        // Simple parsing: killFileExt(".lock")
+        if let Some(start) = line.find('(') {
+            if let Some(end) = line[start+1..].find(')') {
+                let content = &line[start+1..start+1+end];
+                // Remove quotes if present
+                if content.starts_with('"') && content.ends_with('"') {
+                    return Some(&content[1..content.len()-1]);
+                }
+                return Some(content);
+            }
+        }
+        None
+    }
+
+    /// Extract file path from listFileProcesses command
+    fn extract_file_path_from_listfileprocesses<'a>(&self, line: &'a str) -> Option<&'a str> {
+        // Simple parsing: listFileProcesses("filename.ext")
+        if let Some(start) = line.find('(') {
+            if let Some(end) = line[start+1..].find(')') {
+                let content = &line[start+1..start+1+end];
+                // Remove quotes if present
+                if content.starts_with('"') && content.ends_with('"') {
+                    return Some(&content[1..content.len()-1]);
+                }
+                return Some(content);
             }
         }
         None
