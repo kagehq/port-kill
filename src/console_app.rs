@@ -22,6 +22,16 @@ pub struct ConsolePortKillApp {
 }
 
 impl ConsolePortKillApp {
+    /// Get a reference to the process monitor
+    pub fn process_monitor(&self) -> Arc<Mutex<ProcessMonitor>> {
+        self.process_monitor.clone()
+    }
+
+    /// Get a reference to the args
+    pub fn args(&self) -> &Args {
+        &self.args
+    }
+
     pub fn new(args: Args) -> Result<Self> {
         // Create channels for communication
         let (update_sender, update_receiver) = bounded(100);

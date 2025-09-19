@@ -232,6 +232,18 @@ pub struct Args {
     /// Timeout for endpoint requests (seconds, default: 10)
     #[arg(long, default_value = "10")]
     pub endpoint_timeout: u64,
+
+    /// Execute inline script
+    #[arg(long)]
+    pub script: Option<String>,
+
+    /// Execute script file
+    #[arg(long)]
+    pub script_file: Option<String>,
+
+    /// Scripting language (js, python)
+    #[arg(long, default_value = "js")]
+    pub script_lang: String,
 }
 
 impl Args {
@@ -569,6 +581,9 @@ mod tests {
             endpoint_include_audit: false,
             endpoint_retries: 3,
             endpoint_timeout: 10,
+            script: None,
+            script_file: None,
+            script_lang: "js".to_string(),
         }
     }
 

@@ -1,6 +1,6 @@
 use anyhow::Result;
 use log::info;
-use port_kill::{console_app::ConsolePortKillApp, cli::Args};
+use port_kill::{console_app::ConsolePortKillApp, cli::Args, scripting::{ScriptEngine, load_script_file}};
 use clap::Parser;
 
 #[tokio::main]
@@ -147,6 +147,23 @@ async fn main() -> Result<()> {
     if args.show_tree {
         let app = ConsolePortKillApp::new(args)?;
         app.show_process_tree().await?;
+        return Ok(());
+    }
+    
+    // Handle scripting commands
+    if let Some(ref script) = args.script {
+        let script_content = script.clone();
+        let app = ConsolePortKillApp::new(args)?;
+        let mut engine = ScriptEngine::new(app.process_monitor(), app.args().clone());
+        engine.execute(&script_content).await?;
+        return Ok(());
+    }
+    
+    if let Some(ref script_file) = args.script_file {
+        let script_content = load_script_file(script_file)?;
+        let app = ConsolePortKillApp::new(args)?;
+        let mut engine = ScriptEngine::new(app.process_monitor(), app.args().clone());
+        engine.execute(&script_content).await?;
         return Ok(());
     }
 
