@@ -23,7 +23,7 @@ echo 📦 Creating Windows-specific build configuration...
 (
 echo [package]
 echo name = "port-kill"
-echo version = "0.3.1"
+echo version = "0.3.2"
 echo edition = "2021"
 echo build = "build.rs"
 echo.
@@ -75,6 +75,7 @@ echo pub mod system_monitor;
 echo pub mod port_guard;
 echo pub mod security_audit;
 echo pub mod endpoint_monitor;
+echo pub mod scripting;
 ) > src/lib.windows.tmp.rs
 
 REM Backup current files
