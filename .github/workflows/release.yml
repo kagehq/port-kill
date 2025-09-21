@@ -1,8 +1,9 @@
 name: Build and Release
 
-on:
-  release:
-    types: [published]
+# DISABLED: Manual releases only
+# on:
+#   release:
+#     types: [published]
 
 jobs:
   build-macos:

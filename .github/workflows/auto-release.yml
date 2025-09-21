@@ -1,9 +1,10 @@
 name: Auto Release
 
-on:
-  push:
-    tags:
-      - 'v*'
+# DISABLED: Manual releases only
+# on:
+#   push:
+#     tags:
+#       - 'v*'
 
 permissions:
   contents: write
