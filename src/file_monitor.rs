@@ -204,7 +204,7 @@ impl FileMonitor {
             // Try PowerShell approach first
             let ps_command = format!(
                 "Get-Process | Where-Object {{ $_.Modules.FileName -like '*{}*' }} | Select-Object Id,ProcessName",
-                file_path.display()
+                _file_path.display()
             );
 
             let output = Command::new("powershell")
@@ -221,7 +221,7 @@ impl FileMonitor {
         #[cfg(target_os = "windows")]
         {
             if let Ok(output) = Command::new("handle")
-                .arg(file_path)
+                .arg(_file_path)
                 .output()
             {
                 if output.status.success() {
