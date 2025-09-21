@@ -1,10 +1,9 @@
 name: Auto Release
 
-# DISABLED: This conflicts with manual release creation
-# on:
-#   push:
-#     tags:
-#       - 'v*'
+on:
+  push:
+    tags:
+      - 'v*'
 
 permissions:
   contents: write
