@@ -15,7 +15,7 @@ use crate::types::{
 pub struct SecurityAuditor {
     suspicious_ports: Vec<u16>,
     baseline_file: Option<String>,
-    suspicious_only: bool,
+    _suspicious_only: bool,
 }
 
 impl SecurityAuditor {
@@ -28,7 +28,7 @@ impl SecurityAuditor {
         Self {
             suspicious_ports,
             baseline_file,
-            suspicious_only,
+            _suspicious_only: suspicious_only,
         }
     }
 

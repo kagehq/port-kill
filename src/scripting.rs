@@ -23,7 +23,7 @@ pub struct ScriptEngine {
     file_monitor: FileMonitor,
     args: Args,
     port_handlers: HashMap<u16, Vec<Box<dyn Fn(ProcessInfo) + Send + Sync>>>,
-    last_processes: HashMap<u16, ProcessInfo>, // Track last known processes to detect changes
+    _last_processes: HashMap<u16, ProcessInfo>, // Track last known processes to detect changes
     port_guards: HashMap<u16, GuardConfig>,    // Port guard configurations
     file_guards: HashMap<String, GuardConfig>, // File guard configurations
 }
@@ -36,7 +36,7 @@ impl ScriptEngine {
             file_monitor: FileMonitor::new(),
             args,
             port_handlers: HashMap::new(),
-            last_processes: HashMap::new(),
+            _last_processes: HashMap::new(),
             port_guards: HashMap::new(),
             file_guards: HashMap::new(),
         }

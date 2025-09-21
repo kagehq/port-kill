@@ -196,7 +196,8 @@ impl FileMonitor {
         Ok(processes)
     }
 
-    fn find_processes_with_file_handle_tool(&self, file_path: &Path) -> Result<Vec<ProcessInfo>> {
+    #[allow(dead_code)]
+    fn find_processes_with_file_handle_tool(&self, _file_path: &Path) -> Result<Vec<ProcessInfo>> {
         // Try to use handle.exe on Windows, or PowerShell
         #[cfg(target_os = "windows")]
         {
@@ -232,16 +233,19 @@ impl FileMonitor {
         Ok(vec![])
     }
 
+    #[allow(dead_code)]
     fn find_processes_with_extension_handle_tool(&self, _extension: &str) -> Result<Vec<ProcessInfo>> {
         // For now, return empty - this would need more sophisticated implementation
         Ok(vec![])
     }
 
+    #[allow(dead_code)]
     fn find_processes_with_pattern_handle_tool(&self, _pattern: &str) -> Result<Vec<ProcessInfo>> {
         // For now, return empty - this would need more sophisticated implementation
         Ok(vec![])
     }
 
+    #[allow(dead_code)]
     fn get_process_files_handle_tool(&self, _pid: u32) -> Result<Vec<String>> {
         // For now, return empty - this would need more sophisticated implementation
         Ok(vec![])

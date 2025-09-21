@@ -56,7 +56,7 @@ pub struct EndpointMonitor {
     custom_fields: HashMap<String, String>,
     include_audit: bool,
     retries: u32,
-    timeout: Duration,
+    _timeout: Duration,
     process_monitor: ProcessMonitor,
     security_auditor: Option<SecurityAuditor>,
 }
@@ -130,7 +130,7 @@ impl EndpointMonitor {
             custom_fields,
             include_audit: args.endpoint_include_audit,
             retries: args.endpoint_retries,
-            timeout: Duration::from_secs(args.endpoint_timeout),
+            _timeout: Duration::from_secs(args.endpoint_timeout),
             process_monitor,
             security_auditor,
         })
