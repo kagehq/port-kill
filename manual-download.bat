@@ -24,22 +24,22 @@ echo Creating installation directory...
 if not exist "%INSTALL_DIR%" mkdir "%INSTALL_DIR%"
 
 echo.
-echo Downloading port-kill-windows.exe...
-powershell -NoProfile -Command "Invoke-WebRequest 'https://github.com/%REPO%/releases/download/%LATEST_TAG%/port-kill-windows.exe' -OutFile '%INSTALL_DIR%\port-kill.exe'"
+echo Downloading port-kill...
+powershell -NoProfile -Command "Invoke-WebRequest 'https://github.com/%REPO%/releases/download/%LATEST_TAG%/port-kill' -OutFile '%INSTALL_DIR%\port-kill.exe'"
 if %errorlevel% neq 0 (
-    echo ❌ Failed to download port-kill-windows.exe
+    echo ❌ Failed to download port-kill
     exit /b 1
 )
-echo ✅ Downloaded port-kill-windows.exe
+echo ✅ Downloaded port-kill
 
 echo.
-echo Downloading port-kill-console-windows.exe...
-powershell -NoProfile -Command "Invoke-WebRequest 'https://github.com/%REPO%/releases/download/%LATEST_TAG%/port-kill-console-windows.exe' -OutFile '%INSTALL_DIR%\port-kill-console.exe'"
+echo Downloading port-kill-console...
+powershell -NoProfile -Command "Invoke-WebRequest 'https://github.com/%REPO%/releases/download/%LATEST_TAG%/port-kill-console' -OutFile '%INSTALL_DIR%\port-kill-console.exe'"
 if %errorlevel% neq 0 (
-    echo ❌ Failed to download port-kill-console-windows.exe
+    echo ❌ Failed to download port-kill-console
     exit /b 1
 )
-echo ✅ Downloaded port-kill-console-windows.exe
+echo ✅ Downloaded port-kill-console
 
 echo.
 echo Adding to PATH...

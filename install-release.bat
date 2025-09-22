@@ -30,15 +30,15 @@ rem ---- Ensure install dir
 if not exist "%INSTALL_DIR%" mkdir "%INSTALL_DIR%"
 
 echo(Installing to: %INSTALL_DIR%
-echo(Downloading port-kill-windows.exe...
-powershell -NoProfile -Command "Invoke-WebRequest 'https://github.com/%REPO%/releases/download/%LATEST_TAG%/port-kill-windows.exe' -OutFile '%INSTALL_DIR%\port-kill.exe'" || (
-  echo(Download failed (port-kill.exe)
+echo(Downloading port-kill...
+powershell -NoProfile -Command "Invoke-WebRequest 'https://github.com/%REPO%/releases/download/%LATEST_TAG%/port-kill' -OutFile '%INSTALL_DIR%\port-kill.exe'" || (
+  echo(Download failed (port-kill)
   exit /b 1
 )
 
-echo(Downloading port-kill-console-windows.exe...
-powershell -NoProfile -Command "Invoke-WebRequest 'https://github.com/%REPO%/releases/download/%LATEST_TAG%/port-kill-console-windows.exe' -OutFile '%INSTALL_DIR%\port-kill-console.exe'" || (
-  echo(Download failed (port-kill-console.exe)
+echo(Downloading port-kill-console...
+powershell -NoProfile -Command "Invoke-WebRequest 'https://github.com/%REPO%/releases/download/%LATEST_TAG%/port-kill-console' -OutFile '%INSTALL_DIR%\port-kill-console.exe'" || (
+  echo(Download failed (port-kill-console)
   exit /b 1
 )
 

@@ -23,11 +23,11 @@ echo ✅ Latest release: %LATEST_TAG%
 echo.
 
 echo 2. Testing download URLs...
-echo Testing port-kill-windows.exe download...
-powershell -NoProfile -Command "try { $response = Invoke-WebRequest -Uri 'https://github.com/%REPO%/releases/download/%LATEST_TAG%/port-kill-windows.exe' -Method Head; Write-Host '✅ port-kill-windows.exe: OK (Size: ' $response.Headers.'Content-Length' ' bytes)' } catch { Write-Host '❌ port-kill-windows.exe: FAILED -' $_.Exception.Message }"
+echo Testing port-kill download...
+powershell -NoProfile -Command "try { $response = Invoke-WebRequest -Uri 'https://github.com/%REPO%/releases/download/%LATEST_TAG%/port-kill' -Method Head; Write-Host '✅ port-kill: OK (Size: ' $response.Headers.'Content-Length' ' bytes)' } catch { Write-Host '❌ port-kill: FAILED -' $_.Exception.Message }"
 
-echo Testing port-kill-console-windows.exe download...
-powershell -NoProfile -Command "try { $response = Invoke-WebRequest -Uri 'https://github.com/%REPO%/releases/download/%LATEST_TAG%/port-kill-console-windows.exe' -Method Head; Write-Host '✅ port-kill-console-windows.exe: OK (Size: ' $response.Headers.'Content-Length' ' bytes)' } catch { Write-Host '❌ port-kill-console-windows.exe: FAILED -' $_.Exception.Message }"
+echo Testing port-kill-console download...
+powershell -NoProfile -Command "try { $response = Invoke-WebRequest -Uri 'https://github.com/%REPO%/releases/download/%LATEST_TAG%/port-kill-console' -Method Head; Write-Host '✅ port-kill-console: OK (Size: ' $response.Headers.'Content-Length' ' bytes)' } catch { Write-Host '❌ port-kill-console: FAILED -' $_.Exception.Message }"
 
 echo.
 echo 3. Checking installation directory...
@@ -65,5 +65,6 @@ if not exist "%INSTALL_DIR%" (
 echo.
 echo 🔄 After installation, restart your terminal and try:
 echo    port-kill-console --console --ports 3000,8000
+
 echo.
 echo 📞 If issues persist, please share this diagnostic output with support.
