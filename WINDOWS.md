@@ -4,11 +4,19 @@ A short, practical guide to install and use Port Kill on Windows.
 
 ## 1) Install
 
-PowerShell (recommended):
+PowerShell or CMD (simple):
 
 ```powershell
-# Download + run installer when releases are available
-powershell -Command "Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/kagehq/port-kill/main/install-release.bat' -OutFile 'install-release.bat'" && .\install-release.bat
+curl.exe -L "https://raw.githubusercontent.com/kagehq/port-kill/main/install-release.bat" -o install-release.bat
+.\install-release.bat
+```
+
+Alternative (PowerShell with cache-bypass):
+
+```powershell
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+Invoke-WebRequest -UseBasicParsing -Headers @{Pragma='no-cache'; 'Cache-Control'='no-cache'} -Uri "https://raw.githubusercontent.com/kagehq/port-kill/main/install-release.bat" -OutFile "install-release.bat"
+.\install-release.bat
 ```
 
 Want to build from source?
@@ -18,6 +26,17 @@ Want to build from source?
 git clone https://github.com/kagehq/port-kill.git
 cd port-kill
 ./build-windows.bat
+```
+
+Manual fallback (direct download of release assets):
+
+```powershell
+$tag = (Invoke-RestMethod "https://api.github.com/repos/kagehq/port-kill/releases/latest").tag_name
+$dir = "$env:USERPROFILE\AppData\Local\port-kill"; New-Item -ItemType Directory -Force -Path $dir | Out-Null
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+Invoke-WebRequest -UseBasicParsing -Uri "https://github.com/kagehq/port-kill/releases/download/$tag/port-kill" -OutFile "$dir\port-kill.exe"
+Invoke-WebRequest -UseBasicParsing -Uri "https://github.com/kagehq/port-kill/releases/download/$tag/port-kill-console" -OutFile "$dir\port-kill-console.exe"
+[Environment]::SetEnvironmentVariable('PATH', ([Environment]::GetEnvironmentVariable('PATH','User') + ";$dir"), 'User')
 ```
 
 The binaries will be at:
@@ -99,6 +118,13 @@ This is harmless. The console app has the same functionality and is the recommen
 - **Access denied / can't kill a process**: run PowerShell/CMD "as Administrator".
 - **SmartScreen or AV blocks the exe**: open file Properties and "Unblock", or allow it in your AV.
 - **Docker processes not showing**: ensure Docker Desktop is running and `docker` is on PATH.
+
+Diagnostic tool (collects environment and URL checks):
+
+```powershell
+Invoke-WebRequest -UseBasicParsing -Uri "https://raw.githubusercontent.com/kagehq/port-kill/main/diagnose-installation.bat" -OutFile "diagnose-installation.bat"
+.\diagnose-installation.bat
+```
 
 ## 6) Scripting
 

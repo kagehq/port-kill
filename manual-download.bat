@@ -6,26 +6,15 @@ echo ==============================
 echo.
 
 set "REPO=kagehq/port-kill"
-set "API=https://api.github.com/repos/%REPO%/releases/latest"
+set "BASE_URL=https://github.com/%REPO%/releases/latest/download"
 set "INSTALL_DIR=%USERPROFILE%\AppData\Local\port-kill"
-
-echo Getting latest release information...
-for /f "usebackq delims=" %%i in (`powershell -NoProfile -Command "(Invoke-RestMethod '%API%').tag_name"`) do set "LATEST_TAG=%%i"
-
-if not defined LATEST_TAG (
-    echo ❌ ERROR: Cannot get latest release information
-    exit /b 1
-)
-
-echo ✅ Latest release: %LATEST_TAG%
-echo.
 
 echo Creating installation directory...
 if not exist "%INSTALL_DIR%" mkdir "%INSTALL_DIR%"
 
 echo.
 echo Downloading port-kill...
-powershell -NoProfile -Command "Invoke-WebRequest 'https://github.com/%REPO%/releases/download/%LATEST_TAG%/port-kill' -OutFile '%INSTALL_DIR%\port-kill.exe'"
+powershell -NoProfile -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -UseBasicParsing '%BASE_URL%/port-kill' -OutFile '%INSTALL_DIR%\port-kill.exe'"
 if %errorlevel% neq 0 (
     echo ❌ Failed to download port-kill
     exit /b 1
@@ -34,7 +23,7 @@ echo ✅ Downloaded port-kill
 
 echo.
 echo Downloading port-kill-console...
-powershell -NoProfile -Command "Invoke-WebRequest 'https://github.com/%REPO%/releases/download/%LATEST_TAG%/port-kill-console' -OutFile '%INSTALL_DIR%\port-kill-console.exe'"
+powershell -NoProfile -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -UseBasicParsing '%BASE_URL%/port-kill-console' -OutFile '%INSTALL_DIR%\port-kill-console.exe'"
 if %errorlevel% neq 0 (
     echo ❌ Failed to download port-kill-console
     exit /b 1

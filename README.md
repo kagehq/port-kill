@@ -17,11 +17,18 @@ Join our Discord community for discussions, support, and updates:
 # macOS/Linux (when releases are available)
 curl -fsSL https://raw.githubusercontent.com/kagehq/port-kill/main/install-release.sh | bash
 
-# Windows (PowerShell)
-Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/kagehq/port-kill/main/install-release.bat' -OutFile 'install-release.bat'; .\install-release.bat
+# Windows (PowerShell or CMD)
+curl.exe -L "https://raw.githubusercontent.com/kagehq/port-kill/main/install-release.bat" -o install-release.bat
+.\install-release.bat
 
 # From source
 git clone https://github.com/kagehq/port-kill.git && cd port-kill && ./install.sh --all
+```
+
+Tip: If Windows install still fails, download and run the diagnostic tool:
+
+```powershell
+Invoke-WebRequest -UseBasicParsing -Uri "https://raw.githubusercontent.com/kagehq/port-kill/main/diagnose-installation.bat" -OutFile "diagnose-installation.bat"; .\diagnose-installation.bat
 ```
 
 ## Quick start (CLI)

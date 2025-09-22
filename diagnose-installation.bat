@@ -6,28 +6,25 @@ echo =====================================
 echo.
 
 set "REPO=kagehq/port-kill"
-set "API=https://api.github.com/repos/%REPO%/releases/latest"
+set "BASE_URL=https://github.com/%REPO%/releases/latest/download"
 set "INSTALL_DIR=%USERPROFILE%\AppData\Local\port-kill"
 
-echo 1. Checking GitHub API connectivity...
-for /f "usebackq delims=" %%i in (`powershell -NoProfile -Command "(Invoke-RestMethod '%API%').tag_name"`) do set "LATEST_TAG=%%i"
-
-if not defined LATEST_TAG (
-    echo ❌ ERROR: Cannot connect to GitHub API
-    echo    This might be a network or firewall issue
-    echo    Please check your internet connection
+echo 1. Checking GitHub connectivity...
+for /f "usebackq delims=" %%i in (`powershell -NoProfile -Command "try { Invoke-WebRequest -UseBasicParsing 'https://github.com' -Method Head | Out-Null; 'OK' } catch { 'FAIL' }"`) do set "NET_STATUS=%%i"
+if /I "%NET_STATUS%" NEQ "OK" (
+    echo ❌ ERROR: Cannot reach GitHub. Please check your internet or proxy settings.
     exit /b 1
 )
 
-echo ✅ Latest release: %LATEST_TAG%
-echo.
+echo ✅ Network OK
 
-echo 2. Testing download URLs...
+echo.
+echo 2. Testing download URLs (latest release)...
 echo Testing port-kill download...
-powershell -NoProfile -Command "try { $response = Invoke-WebRequest -Uri 'https://github.com/%REPO%/releases/download/%LATEST_TAG%/port-kill' -Method Head; Write-Host '✅ port-kill: OK (Size: ' $response.Headers.'Content-Length' ' bytes)' } catch { Write-Host '❌ port-kill: FAILED -' $_.Exception.Message }"
+powershell -NoProfile -Command "try { $r = Invoke-WebRequest -UseBasicParsing -Uri '%BASE_URL%/port-kill' -Method Head; Write-Host '✅ port-kill: OK (Size:' $r.Headers.'Content-Length' 'bytes)' } catch { Write-Host '❌ port-kill: FAILED -' $_.Exception.Message }"
 
 echo Testing port-kill-console download...
-powershell -NoProfile -Command "try { $response = Invoke-WebRequest -Uri 'https://github.com/%REPO%/releases/download/%LATEST_TAG%/port-kill-console' -Method Head; Write-Host '✅ port-kill-console: OK (Size: ' $response.Headers.'Content-Length' ' bytes)' } catch { Write-Host '❌ port-kill-console: FAILED -' $_.Exception.Message }"
+powershell -NoProfile -Command "try { $r = Invoke-WebRequest -UseBasicParsing -Uri '%BASE_URL%/port-kill-console' -Method Head; Write-Host '✅ port-kill-console: OK (Size:' $r.Headers.'Content-Length' 'bytes)' } catch { Write-Host '❌ port-kill-console: FAILED -' $_.Exception.Message }"
 
 echo.
 echo 3. Checking installation directory...
@@ -53,14 +50,9 @@ if %errorlevel% equ 0 (
 
 echo.
 echo 5. Recommendations:
-echo.
-if not exist "%INSTALL_DIR%" (
-    echo 📥 Run the installation script:
-    echo    powershell -Command "Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/kagehq/port-kill/main/install-release.bat' -OutFile 'install-release.bat'" ^&^& .\install-release.bat
-) else (
-    echo 🔄 Re-run the installation script to fix PATH:
-    echo    powershell -Command "Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/kagehq/port-kill/main/install-release.bat' -OutFile 'install-release.bat'" ^&^& .\install-release.bat
-)
+
+echo 📥 Download and run installer (bypass cache):
+echo    powershell -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -UseBasicParsing -Headers @{Pragma='no-cache'; 'Cache-Control'='no-cache'} -Uri 'https://raw.githubusercontent.com/kagehq/port-kill/main/install-release.bat' -OutFile 'install-release.bat'" ^&^& .\install-release.bat
 
 echo.
 echo 🔄 After installation, restart your terminal and try:
