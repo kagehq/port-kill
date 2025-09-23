@@ -5,6 +5,9 @@ on:
     tags:
       - 'v*.*.*'
 
+permissions:
+  contents: write
+
 jobs:
   build-and-release:
     name: Build (${{ matrix.os }}) and upload assets
@@ -52,6 +55,7 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           draft: false
+          generate_release_notes: true
           files: |
             ${{ env.ASSET_MAIN }}
             ${{ env.ASSET_CONSOLE }}
