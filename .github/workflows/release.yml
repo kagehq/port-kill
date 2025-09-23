@@ -9,8 +9,22 @@ permissions:
   contents: write
 
 jobs:
-  build-and-release:
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create (or update) release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          draft: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-and-upload:
     name: Build (${{ matrix.os }}) and upload assets
+    needs: create-release
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -39,10 +53,8 @@ jobs:
         shell: bash
         run: |
           mkdir -p release
-          # Source binaries
           SRC_MAIN="target/release/port-kill${{ matrix.exe_ext }}"
           SRC_CONSOLE="target/release/port-kill-console${{ matrix.exe_ext }}"
-          # Dest assets with OS suffix
           DEST_MAIN="release/port-kill-${{ matrix.target }}${{ matrix.exe_ext }}"
           DEST_CONSOLE="release/port-kill-console-${{ matrix.target }}${{ matrix.exe_ext }}"
           cp "$SRC_MAIN" "$DEST_MAIN"
@@ -55,7 +67,6 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           draft: false
-          generate_release_notes: true
           files: |
             ${{ env.ASSET_MAIN }}
             ${{ env.ASSET_CONSOLE }}
