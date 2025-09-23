@@ -1,0 +1,59 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  build-and-release:
+    name: Build (${{ matrix.os }}) and upload assets
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux
+            exe_ext: ''
+          - os: macos-latest
+            target: macos
+            exe_ext: ''
+          - os: windows-latest
+            target: windows
+            exe_ext: '.exe'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build release
+        run: cargo build --release
+
+      - name: Prepare assets
+        shell: bash
+        run: |
+          mkdir -p release
+          # Source binaries
+          SRC_MAIN="target/release/port-kill${{ matrix.exe_ext }}"
+          SRC_CONSOLE="target/release/port-kill-console${{ matrix.exe_ext }}"
+          # Dest assets with OS suffix
+          DEST_MAIN="release/port-kill-${{ matrix.target }}${{ matrix.exe_ext }}"
+          DEST_CONSOLE="release/port-kill-console-${{ matrix.target }}${{ matrix.exe_ext }}"
+          cp "$SRC_MAIN" "$DEST_MAIN"
+          cp "$SRC_CONSOLE" "$DEST_CONSOLE"
+          echo "ASSET_MAIN=$DEST_MAIN" >> $GITHUB_ENV
+          echo "ASSET_CONSOLE=$DEST_CONSOLE" >> $GITHUB_ENV
+
+      - name: Upload assets to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          draft: false
+          files: |
+            ${{ env.ASSET_MAIN }}
+            ${{ env.ASSET_CONSOLE }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
