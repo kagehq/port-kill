@@ -14,7 +14,7 @@ if not exist "%INSTALL_DIR%" mkdir "%INSTALL_DIR%"
 
 echo.
 echo Downloading port-kill...
-powershell -NoProfile -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -UseBasicParsing '%BASE_URL%/port-kill' -OutFile '%INSTALL_DIR%\port-kill.exe'"
+powershell -NoProfile -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -UseBasicParsing '%BASE_URL%/port-kill-windows.exe' -OutFile '%INSTALL_DIR%\port-kill.exe'"
 if %errorlevel% neq 0 (
     echo ❌ Failed to download port-kill
     exit /b 1
@@ -23,7 +23,7 @@ echo ✅ Downloaded port-kill
 
 echo.
 echo Downloading port-kill-console...
-powershell -NoProfile -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -UseBasicParsing '%BASE_URL%/port-kill-console' -OutFile '%INSTALL_DIR%\port-kill-console.exe'"
+powershell -NoProfile -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -UseBasicParsing '%BASE_URL%/port-kill-console-windows.exe' -OutFile '%INSTALL_DIR%\port-kill-console.exe'"
 if %errorlevel% neq 0 (
     echo ❌ Failed to download port-kill-console
     exit /b 1

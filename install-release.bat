@@ -18,13 +18,13 @@ if not exist "%INSTALL_DIR%" mkdir "%INSTALL_DIR%"
 echo(Installing to: %INSTALL_DIR%
 
 echo(Downloading port-kill...
-powershell -NoProfile -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -UseBasicParsing '%BASE_URL%/port-kill' -OutFile '%INSTALL_DIR%\port-kill.exe'" || (
+powershell -NoProfile -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -UseBasicParsing '%BASE_URL%/port-kill-windows.exe' -OutFile '%INSTALL_DIR%\port-kill.exe'" || (
   echo(Download failed (port-kill)
   exit /b 1
 )
 
 echo(Downloading port-kill-console...
-powershell -NoProfile -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -UseBasicParsing '%BASE_URL%/port-kill-console' -OutFile '%INSTALL_DIR%\port-kill-console.exe'" || (
+powershell -NoProfile -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -UseBasicParsing '%BASE_URL%/port-kill-console-windows.exe' -OutFile '%INSTALL_DIR%\port-kill-console.exe'" || (
   echo(Download failed (port-kill-console)
   exit /b 1
 )
@@ -36,9 +36,11 @@ powershell -NoProfile -Command "if (-not (Test-Path 'env:PATH' -PathType Contain
 echo(
 echo(Installation complete!
 echo(
-echo(Usage:
-echo(  System tray:    port-kill --ports 3000,8000
-echo(  Console mode:   port-kill-console --console --ports 3000,8000
+echo(Quick start:
+echo(  port-kill --list
+echo(  port-kill 3000
+echo(  port-kill --guard 3000
+
 echo(
 echo(Note: You may need to restart your terminal for PATH changes to take effect.
 echo(Installation directory: %INSTALL_DIR%
