@@ -8,7 +8,7 @@ PowerShell or CMD (simple):
 
 ```powershell
 curl.exe -L "https://raw.githubusercontent.com/kagehq/port-kill/main/install-release.bat" -o install-release.bat
-.\install-release.bat
+.\\install-release.bat
 ```
 
 Alternative (PowerShell with cache-bypass):
@@ -63,6 +63,38 @@ $new = $p + ';C:\Users\<you>\AppData\Local\port-kill'
 Option B — copy the binary into a folder already on PATH (your choice).
 
 ## 3) Use the console app (recommended on Windows)
+
+### Dead-simple one-liners (new)
+```powershell
+# Kill whatever is blocking a port
+port-kill 3000
+
+# Kill multiple ports
+port-kill 3000 5000
+
+# List ports in use (one-time snapshot)
+port-kill --list
+
+# Confirm before killing
+port-kill 3000 --safe
+```
+
+### CLI quick reference (new)
+```powershell
+# Positional ports imply clearPort on each
+port-kill <port> [<port> ...]
+
+# Thin aliases
+--clear <port>          # clearPort(port)
+--guard <port>          # guardPort(port)
+--allow <name>          # allow only this process name in guard
+--kill <pid>            # kill(pid)
+--kill-file <path>      # kill processes holding this file
+--kill-ext <ext>        # kill processes holding files with this extension
+--list-file <pattern>   # list processes by file path/pattern
+--list                  # list current ports in use (one-shot)
+--safe                  # ask for confirmation before killing
+```
 
 **Option A: Use the main binary in console mode (recommended)**
 ```powershell

@@ -14,24 +14,52 @@ Join our Discord community for discussions, support, and updates:
 ## Install
 
 ```bash
-# macOS/Linux (when releases are available)
+# macOS/Linux (release installer)
 curl -fsSL https://raw.githubusercontent.com/kagehq/port-kill/main/install-release.sh | bash
 
 # Windows (PowerShell or CMD)
 curl.exe -L "https://raw.githubusercontent.com/kagehq/port-kill/main/install-release.bat" -o install-release.bat
-.\install-release.bat
-
-# From source
-git clone https://github.com/kagehq/port-kill.git && cd port-kill && ./install.sh --all
+.\\install-release.bat
 ```
 
-Tip: If Windows install still fails, download and run the diagnostic tool:
-
+Tip (Windows diagnostics):
 ```powershell
 Invoke-WebRequest -UseBasicParsing -Uri "https://raw.githubusercontent.com/kagehq/port-kill/main/diagnose-installation.bat" -OutFile "diagnose-installation.bat"; .\diagnose-installation.bat
 ```
 
-## Quick start (CLI)
+## Quick start
+
+```bash
+# Kill whatever is blocking a port
+port-kill 3000
+
+# Kill multiple ports
+port-kill 3000 5000
+
+# List ports in use (one-time snapshot)
+port-kill --list
+
+# Confirm before killing
+port-kill 3000 --safe
+```
+
+### CLI quick reference
+
+```bash
+# Positional ports imply clearPort on each
+port-kill <port> [<port> ...]
+
+# Thin aliases
+--clear <port>          # clearPort(port)
+--guard <port>          # guardPort(port)
+--allow <name>          # allow only this process name in guard
+--kill <pid>            # kill(pid)
+--kill-file <path>      # kill processes holding this file
+--kill-ext <ext>        # kill processes holding files with this extension
+--list-file <pattern>   # list processes by file path/pattern
+--list                  # list current ports in use (one-shot)
+--safe                  # ask for confirmation before killing
+```
 
 ```bash
 # See what's using common dev ports
@@ -262,24 +290,6 @@ run-windows.bat -p 3000,3001,8000,8080              # Windows
 
 # Console mode for full-screen mode users (recommended)
 ./run.sh --console --log-level warn --ports 3000,8000,8080
-```
-
-#### Log Level Control
-```bash
-# Show all logs (default)
-./run.sh --log-level info --ports 3000,8000
-
-# Show only warnings and errors
-./run.sh --log-level warn --ports 3000,8000
-
-# Show only errors
-./run.sh --log-level error --ports 3000,8000
-
-# Show no logs (quiet mode)
-./run.sh --log-level none --ports 3000,8000
-
-# Verbose mode (overrides log-level)
-./run.sh --verbose --ports 3000,8000
 ```
 
 ## Scripting

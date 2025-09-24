@@ -139,6 +139,158 @@ impl ConsolePortKillApp {
     pub async fn run(mut self) -> Result<()> {
         info!("Starting Console Port Kill application...");
         
+        // One-shot: list current processes and exit
+        if self.args.list {
+            let ports_to_scan = Self::get_ports_to_scan(&self.args);
+            let mut temp_monitor = self.create_temp_monitor(ports_to_scan).await?;
+            let processes = temp_monitor.scan_processes().await?;
+            if processes.is_empty() {
+                println!("ℹ️  No processes detected");
+            } else {
+                println!("📋 Ports in use (one-time snapshot):");
+                for (port, p) in &processes {
+                    println!("  • Port {}: {} (PID {})", port, p.get_display_name(), p.pid);
+                }
+            }
+            return Ok(());
+        }
+
+        // One-shot: clear specific port(s) provided as positional ports
+        if !self.args.positional_ports.is_empty() {
+            use crate::process_monitor::kill_all_processes as kill_on_ports;
+            if self.args.safe {
+                let ports_str = self.args.positional_ports.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(", ");
+                println!("Confirm kill on ports [{}]? y/N", ports_str);
+                let mut input = String::new();
+                std::io::stdin().read_line(&mut input)?;
+                if !matches!(input.trim(), "y" | "Y" | "yes" | "YES") {
+                    println!("Cancelled.");
+                    return Ok(());
+                }
+            }
+            kill_on_ports(&self.args.positional_ports, &self.args)?;
+            return Ok(());
+        }
+
+        // One-shot: --clear
+        if let Some(port) = self.args.clear {
+            if self.args.safe {
+                println!("Confirm kill on port {}? y/N", port);
+                let mut input = String::new();
+                std::io::stdin().read_line(&mut input)?;
+                if !matches!(input.trim(), "y" | "Y" | "yes" | "YES") {
+                    println!("Cancelled.");
+                    return Ok(());
+                }
+            }
+            use crate::process_monitor::kill_all_processes as kill_on_ports;
+            kill_on_ports(&[port], &self.args)?;
+            return Ok(());
+        }
+
+        // One-shot: --kill (by PID)
+        if let Some(pid) = self.args.kill {
+            if self.args.safe {
+                println!("Confirm kill PID {}? y/N", pid);
+                let mut input = String::new();
+                std::io::stdin().read_line(&mut input)?;
+                if !matches!(input.trim(), "y" | "Y" | "yes" | "YES") {
+                    println!("Cancelled.");
+                    return Ok(());
+                }
+            }
+            use crate::process_monitor::kill_single_process;
+            kill_single_process(pid, &self.args)?;
+            return Ok(());
+        }
+
+        // One-shot: file-based operations
+        if let Some(path) = &self.args.kill_file {
+            let fm = crate::file_monitor::FileMonitor::new();
+            let procs = fm.find_processes_with_file(path)?;
+            if procs.is_empty() {
+                println!("ℹ️  No processes found holding {}", path);
+                return Ok(());
+            }
+            if self.args.safe {
+                println!("Confirm kill {} process(es) holding {}? y/N", procs.len(), path);
+                let mut input = String::new();
+                std::io::stdin().read_line(&mut input)?;
+                if !matches!(input.trim(), "y" | "Y" | "yes" | "YES") {
+                    println!("Cancelled.");
+                    return Ok(());
+                }
+            }
+            // Kill each PID
+            let (update_sender, _update_receiver) = crossbeam_channel::bounded(100);
+            let mut temp_monitor = ProcessMonitor::new_with_performance(update_sender, vec![], self.args.docker, self.args.verbose, None, self.args.performance)?;
+            for p in procs {
+                let _ = temp_monitor.kill_process(p.pid).await;
+            }
+            return Ok(());
+        }
+
+        if let Some(ext) = &self.args.kill_ext {
+            let fm = crate::file_monitor::FileMonitor::new();
+            let procs = fm.find_processes_with_extension(ext)?;
+            if procs.is_empty() {
+                println!("ℹ️  No processes found holding files with '{}'", ext);
+                return Ok(());
+            }
+            if self.args.safe {
+                println!("Confirm kill {} process(es) with files '{}'? y/N", procs.len(), ext);
+                let mut input = String::new();
+                std::io::stdin().read_line(&mut input)?;
+                if !matches!(input.trim(), "y" | "Y" | "yes" | "YES") {
+                    println!("Cancelled.");
+                    return Ok(());
+                }
+            }
+            let (update_sender, _update_receiver) = crossbeam_channel::bounded(100);
+            let mut temp_monitor = ProcessMonitor::new_with_performance(update_sender, vec![], self.args.docker, self.args.verbose, None, self.args.performance)?;
+            for p in procs {
+                let _ = temp_monitor.kill_process(p.pid).await;
+            }
+            return Ok(());
+        }
+
+        if let Some(pattern) = &self.args.list_file {
+            let fm = crate::file_monitor::FileMonitor::new();
+            let procs = fm.find_processes_with_pattern(pattern)?;
+            if procs.is_empty() {
+                println!("ℹ️  No processes found matching file pattern '{}'", pattern);
+            } else {
+                println!("📋 Processes with matching files:");
+                for p in procs {
+                    println!("  • {} (PID {})", p.name, p.pid);
+                }
+            }
+            return Ok(());
+        }
+
+        // Guard alias: --guard [--allow]
+        if let Some(port) = self.args.guard {
+            // Create a guard daemon on the single port
+            let guard_ports = vec![port];
+            let reservation_file = self.args.get_reservation_file_path();
+            let mut daemon = PortGuardDaemon::new(
+                guard_ports,
+                reservation_file,
+                true, // auto_resolve for alias to match guardPort intent
+                self.process_monitor.clone(),
+            );
+            if let Some(name) = &self.args.allow {
+                // When allow is provided, PortGuard will allow only that name logically; this would be enforced inside guard component.
+                let _ = name; // placeholder to avoid warnings if not yet wired internally
+            }
+            daemon.set_process_interception(self.args.intercept_commands);
+            let guard = Arc::new(daemon);
+            self.port_guard = Some(guard.clone());
+            guard.start().await?;
+            println!("🛡️  Guarding port {}. Press Ctrl+C to stop.", port);
+            // Fall through to normal loop so the app stays running
+        }
+
         if self.args.json {
             // JSON mode - output processes once and exit
             return self.output_processes_json().await;

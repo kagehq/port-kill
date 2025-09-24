@@ -244,6 +244,48 @@ pub struct Args {
     /// Scripting language (js, python)
     #[arg(long, default_value = "js")]
     pub script_lang: String,
+
+    // ===== Convenience one-liners (new, thin aliases) =====
+
+    /// One-shot: clear whatever is on this port (alias of clearPort)
+    #[arg(long)]
+    pub clear: Option<u16>,
+
+    /// One-shot: guard this port (alias of guardPort). Implies monitoring this port.
+    #[arg(long)]
+    pub guard: Option<u16>,
+
+    /// Optional allowed process name when using --guard
+    #[arg(long)]
+    pub allow: Option<String>,
+
+    /// One-shot: kill process by PID (alias of kill(pid))
+    #[arg(long)]
+    pub kill: Option<i32>,
+
+    /// One-shot: kill whatever has this file open
+    #[arg(long)]
+    pub kill_file: Option<String>,
+
+    /// One-shot: kill processes holding files with this extension (e.g., .lock)
+    #[arg(long)]
+    pub kill_ext: Option<String>,
+
+    /// One-shot: list processes by file path or pattern
+    #[arg(long)]
+    pub list_file: Option<String>,
+
+    /// One-shot: list current ports in use (human-readable) and exit
+    #[arg(long)]
+    pub list: bool,
+
+    /// Ask for confirmation before killing
+    #[arg(long)]
+    pub safe: bool,
+
+    /// Positional ports imply clearPort on each (e.g., `port-kill 3000 5000`)
+    #[arg(value_parser, value_name = "PORTS")]
+    pub positional_ports: Vec<u16>,
 }
 
 impl Args {
@@ -584,6 +626,16 @@ mod tests {
             script: None,
             script_file: None,
             script_lang: "js".to_string(),
+            clear: None,
+            guard: None,
+            allow: None,
+            kill: None,
+            kill_file: None,
+            kill_ext: None,
+            list_file: None,
+            list: false,
+            safe: false,
+            positional_ports: vec![],
         }
     }
 

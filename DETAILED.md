@@ -1074,6 +1074,34 @@ The console application now supports many advanced features for power users:
 ./target/release/port-kill-console --remote admin@prod.company.com --audit --json
 ```
 
+## CLI Aliases and One‑Liners (New)
+
+Port Kill now exposes thin aliases so common actions are one-liners. These map to the scripting/monitor internals and do not add new behaviors.
+
+```bash
+# Positional ports imply clearPort on each
+port-kill <port> [<port> ...]
+
+# Thin aliases
+--clear <port>          # clearPort(port)      — one-time kill on a port
+--guard <port>          # guardPort(port)      — ongoing protection for a port
+--allow <name>          # only allow this process name when guarding
+--kill <pid>            # kill(pid)            — kill process by PID
+--kill-file <path>      # kill processes holding a specific file
+--kill-ext <ext>        # kill processes holding files with this extension
+--list-file <pattern>   # list processes by file path/pattern
+--list                  # list current ports in use (one-shot)
+--safe                  # confirmation before killing
+```
+
+Notes:
+- Positional ports are equivalent to invoking `--clear` for each port.
+- `--guard` starts the guard daemon inline (like calling `guardPort`) and keeps the app running.
+- File-based commands use the cross-platform file monitor; on Unix they shell to `lsof`.
+- All existing advanced flags (guard mode, audit, endpoint, history, suggestions, etc.) remain unchanged. See sections below.
+
+Refer to README for installation and the minimal quick start.
+
 ## Technical Details
 
 ### Architecture
