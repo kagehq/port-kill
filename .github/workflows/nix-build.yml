@@ -1,10 +1,11 @@
-name: Nix Build
+name: Nix Build (Disabled)
 
 on:
-  push:
-    branches: [ main, master ]
-  pull_request:
-    branches: [ main, master ]
+  # Disabled due to macOS Nix installation issues on GitHub Actions
+  # push:
+  #   branches: [ main, master ]
+  # pull_request:
+  #   branches: [ main, master ]
   workflow_dispatch:
 
 permissions:
