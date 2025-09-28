@@ -36,7 +36,7 @@ jobs:
         run: nix --version
 
       - name: Build with Nix
-        run: nix build .#packages.x86_64-linux.port-kill-linux --show-trace
+        run: nix build .#default --show-trace
 
       - name: Test binaries
         run: |
@@ -73,31 +73,16 @@ jobs:
       - name: Show Nix version
         run: nix --version
 
-      - name: Build with Nix (Intel)
-        run: nix build .#packages.x86_64-darwin.port-kill-macos-intel --show-trace
+      - name: Build with Nix
+        run: nix build .#default --show-trace
 
-      - name: Build with Nix (ARM64)
-        run: nix build .#packages.aarch64-darwin.port-kill-macos-arm64 --show-trace
-
-      - name: Test Intel binaries
+      - name: Test binaries
         run: |
           ./result/bin/port-kill --help
           ./result/bin/port-kill-console --help
 
-      - name: Test ARM64 binaries
-        run: |
-          nix build .#packages.aarch64-darwin.port-kill-macos-arm64 --show-trace
-          ./result/bin/port-kill --help
-          ./result/bin/port-kill-console --help
-
-      - name: Upload Intel artifacts
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: port-kill-macos-intel
-          path: result/bin/*
-
-      - name: Upload ARM64 artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: port-kill-macos-arm64
+          name: port-kill-macos
           path: result/bin/*

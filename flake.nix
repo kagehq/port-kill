@@ -13,9 +13,6 @@
         overlays = [ (import rust-overlay) ];
         pkgs = import nixpkgs { inherit overlays system; };
         
-        # Rust toolchain with specific version
-        rust-toolchain = pkgs.rust-bin.stable.latest.default;
-
         # Platform-specific dependencies
         linux-deps = with pkgs; [
           pkg-config
@@ -36,19 +33,10 @@
           # Windows dependencies are minimal for Rust
         ];
 
-        # Common build dependencies
-        common-deps = with pkgs; [
-          rust-toolchain
-          cargo
-          rustc
-          pkg-config
-        ];
-
         # Development dependencies
         dev-deps = with pkgs; [
-          rust-toolchain
-          cargo
           rustc
+          cargo
           rust-analyzer
           clippy
           rustfmt
@@ -88,111 +76,31 @@
           CARGO_TARGET_DIR = "./target";
         };
 
-        # Packages for different platforms
-        packages = {
-          # Linux x86_64
-          port-kill-linux = pkgs.rustPlatform.buildRustPackage {
-            pname = "port-kill";
-            version = "0.4.6";
-            src = ./.;
-            
-            cargoLock = {
-              lockFile = ./Cargo.lock;
-            };
-
-            buildInputs = linux-deps;
-            
-            nativeBuildInputs = with pkgs; [
-              pkg-config
-            ];
-
-            meta = with pkgs.lib; {
-              description = "A CLI tool to help you find and free ports blocking your dev work";
-              homepage = "https://github.com/kagehq/port-kill";
-              license = licenses.mit;
-              maintainers = [ ];
-              platforms = platforms.linux;
-            };
+        # Single package for current platform
+        packages.default = pkgs.rustPlatform.buildRustPackage {
+          pname = "port-kill";
+          version = "0.4.6";
+          src = ./.;
+          
+          cargoLock = {
+            lockFile = ./Cargo.lock;
           };
 
-          # macOS x86_64 (Intel)
-          port-kill-macos-intel = pkgs.rustPlatform.buildRustPackage {
-            pname = "port-kill";
-            version = "0.4.6";
-            src = ./.;
-            
-            cargoLock = {
-              lockFile = ./Cargo.lock;
-            };
+          buildInputs = if pkgs.stdenv.isLinux then linux-deps
+                      else if pkgs.stdenv.isDarwin then macos-deps
+                      else if pkgs.stdenv.isWindows then windows-deps
+                      else [];
 
-            buildInputs = macos-deps;
-
-            meta = with pkgs.lib; {
-              description = "A CLI tool to help you find and free ports blocking your dev work";
-              homepage = "https://github.com/kagehq/port-kill";
-              license = licenses.mit;
-              maintainers = [ ];
-              platforms = [ "x86_64-darwin" ];
-            };
-          };
-
-          # macOS aarch64 (Apple Silicon)
-          port-kill-macos-arm64 = pkgs.rustPlatform.buildRustPackage {
-            pname = "port-kill";
-            version = "0.4.6";
-            src = ./.;
-            
-            cargoLock = {
-              lockFile = ./Cargo.lock;
-            };
-
-            buildInputs = macos-deps;
-
-            meta = with pkgs.lib; {
-              description = "A CLI tool to help you find and free ports blocking your dev work";
-              homepage = "https://github.com/kagehq/port-kill";
-              license = licenses.mit;
-              maintainers = [ ];
-              platforms = [ "aarch64-darwin" ];
-            };
-          };
-
-          # Windows x86_64 (experimental - use traditional build for production)
-          port-kill-windows = pkgs.rustPlatform.buildRustPackage {
-            pname = "port-kill";
-            version = "0.4.6";
-            src = ./.;
-            
-            cargoLock = {
-              lockFile = ./Cargo.lock;
-            };
-
-            buildInputs = windows-deps;
-
-            meta = with pkgs.lib; {
-              description = "A CLI tool to help you find and free ports blocking your dev work";
-              homepage = "https://github.com/kagehq/port-kill";
-              license = licenses.mit;
-              maintainers = [ ];
-              platforms = [ "x86_64-windows" ];
-            };
+          meta = with pkgs.lib; {
+            description = "A CLI tool to help you find and free ports blocking your dev work";
+            homepage = "https://github.com/kagehq/port-kill";
+            license = licenses.mit;
+            maintainers = [ ];
+            platforms = platforms.all;
           };
         };
-
-        # Default package (current platform)
-        defaultPackage = if pkgs.stdenv.isLinux then self.packages.${system}.port-kill-linux
-                        else if pkgs.stdenv.isDarwin then 
-                          if pkgs.stdenv.isAarch64 then self.packages.${system}.port-kill-macos-arm64
-                          else self.packages.${system}.port-kill-macos-intel
-                        else if pkgs.stdenv.isWindows then self.packages.${system}.port-kill-windows
-                        else self.packages.${system}.port-kill-linux;
 
         # Checks for CI
-        checks = {
-          build-linux = self.packages.${system}.port-kill-linux;
-          build-macos-intel = self.packages.${system}.port-kill-macos-intel;
-          build-macos-arm64 = self.packages.${system}.port-kill-macos-arm64;
-          build-windows = self.packages.${system}.port-kill-windows;
-        };
+        checks.default = self.packages.${system}.default;
       });
 }
