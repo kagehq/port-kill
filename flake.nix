@@ -197,7 +197,7 @@
             };
           };
 
-          # Windows x86_64
+          # Windows x86_64 (experimental - use traditional build for production)
           port-kill-windows = pkgs.rustPlatform.buildRustPackage {
             pname = "port-kill";
             version = "0.4.6";

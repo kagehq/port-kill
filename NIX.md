@@ -58,7 +58,9 @@ nix build .#packages.x86_64-linux.port-kill-linux .#packages.x86_64-darwin.port-
 | `port-kill-linux` | Linux | x86_64 | Linux binary |
 | `port-kill-macos-intel` | macOS | x86_64 | Intel Mac binary |
 | `port-kill-macos-arm64` | macOS | aarch64 | Apple Silicon binary |
-| `port-kill-windows` | Windows | x86_64 | Windows binary |
+| `port-kill-windows` | Windows | x86_64 | Windows binary (experimental) |
+
+**Note**: Windows Nix support is experimental and complex. For production Windows builds, use the traditional `cargo build` or GitHub Actions workflow instead.
 
 ## Development Workflow
 
