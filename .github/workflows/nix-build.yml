@@ -1,11 +1,10 @@
-name: Nix Build (Disabled)
+name: Nix Build
 
 on:
-  # Disabled due to macOS Nix installation issues on GitHub Actions
-  # push:
-  #   branches: [ main, master ]
-  # pull_request:
-  #   branches: [ main, master ]
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
   workflow_dispatch:
 
 permissions:
@@ -37,7 +36,22 @@ jobs:
         run: nix --version
 
       - name: Build with Nix
-        run: nix build .#default --show-trace
+        id: nix-build
+        run: |
+          if nix build .#default --show-trace; then
+            echo "nix_success=true" >> $GITHUB_OUTPUT
+          else
+            echo "nix_success=false" >> $GITHUB_OUTPUT
+            echo "Nix build failed, falling back to cargo build"
+          fi
+
+      - name: Fallback to cargo build
+        if: steps.nix-build.outputs.nix_success == 'false'
+        run: |
+          cargo build --release --bin port-kill --bin port-kill-console
+          mkdir -p result/bin
+          cp target/release/port-kill result/bin/
+          cp target/release/port-kill-console result/bin/
 
       - name: Test binaries
         run: |
@@ -57,6 +71,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Clean up existing Nix installation
+        run: |
+          # Remove existing Nix users and groups
+          sudo dscl . -delete /Groups/nixbld 2>/dev/null || true
+          for i in {1..32}; do
+            sudo dscl . -delete /Users/_nixbld$i 2>/dev/null || true
+          done
+          # Remove Nix volume if it exists
+          sudo diskutil unmount /nix 2>/dev/null || true
+          sudo diskutil deleteVolume /nix 2>/dev/null || true
+
       - name: Install Nix
         uses: cachix/install-nix-action@v22
         with:
@@ -75,7 +100,22 @@ jobs:
         run: nix --version
 
       - name: Build with Nix
-        run: nix build .#default --show-trace
+        id: nix-build
+        run: |
+          if nix build .#default --show-trace; then
+            echo "nix_success=true" >> $GITHUB_OUTPUT
+          else
+            echo "nix_success=false" >> $GITHUB_OUTPUT
+            echo "Nix build failed, falling back to cargo build"
+          fi
+
+      - name: Fallback to cargo build
+        if: steps.nix-build.outputs.nix_success == 'false'
+        run: |
+          cargo build --release --bin port-kill --bin port-kill-console
+          mkdir -p result/bin
+          cp target/release/port-kill result/bin/
+          cp target/release/port-kill-console result/bin/
 
       - name: Test binaries
         run: |
