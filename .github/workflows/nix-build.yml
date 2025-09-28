@@ -11,21 +11,9 @@ permissions:
   contents: write
 
 jobs:
-  nix-build:
-    name: Build with Nix (${{ matrix.system }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-            system: x86_64-linux
-          - os: macos-latest
-            system: x86_64-darwin
-          - os: macos-latest
-            system: aarch64-darwin
-          # Note: Windows Nix support is experimental and complex
-          # Using traditional build for Windows instead
-
+  nix-build-linux:
+    name: Build with Nix (Linux)
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -39,7 +27,6 @@ jobs:
             sandbox = false
 
       - name: Install cachix
-        if: matrix.system != 'x86_64-windows'
         uses: cachix/cachix-action@v12
         with:
           name: nixpkgs
@@ -49,45 +36,68 @@ jobs:
         run: nix --version
 
       - name: Build with Nix
-        run: |
-          case "${{ matrix.system }}" in
-            x86_64-linux)
-              nix build .#packages.${{ matrix.system }}.port-kill-linux --show-trace
-              ;;
-            x86_64-darwin)
-              nix build .#packages.${{ matrix.system }}.port-kill-macos-intel --show-trace
-              ;;
-            aarch64-darwin)
-              nix build .#packages.${{ matrix.system }}.port-kill-macos-arm64 --show-trace
-              ;;
-            x86_64-windows)
-              nix build .#packages.${{ matrix.system }}.port-kill-windows --show-trace
-              ;;
-          esac
+        run: nix build .#packages.x86_64-linux.port-kill-linux --show-trace
 
       - name: Test binaries
         run: |
-          case "${{ matrix.system }}" in
-            x86_64-linux)
-              ./result/bin/port-kill --help
-              ./result/bin/port-kill-console --help
-              ;;
-            x86_64-darwin)
-              ./result/bin/port-kill --help
-              ./result/bin/port-kill-console --help
-              ;;
-            aarch64-darwin)
-              ./result/bin/port-kill --help
-              ./result/bin/port-kill-console --help
-              ;;
-            x86_64-windows)
-              ./result/bin/port-kill.exe --help
-              ./result/bin/port-kill-console.exe --help
-              ;;
-          esac
+          ./result/bin/port-kill --help
+          ./result/bin/port-kill-console --help
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: port-kill-${{ matrix.system }}
+          name: port-kill-linux
+          path: result/bin/*
+
+  nix-build-macos:
+    name: Build with Nix (macOS)
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v22
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            sandbox = false
+
+      - name: Install cachix
+        uses: cachix/cachix-action@v12
+        with:
+          name: nixpkgs
+          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+
+      - name: Show Nix version
+        run: nix --version
+
+      - name: Build with Nix (Intel)
+        run: nix build .#packages.x86_64-darwin.port-kill-macos-intel --show-trace
+
+      - name: Build with Nix (ARM64)
+        run: nix build .#packages.aarch64-darwin.port-kill-macos-arm64 --show-trace
+
+      - name: Test Intel binaries
+        run: |
+          ./result/bin/port-kill --help
+          ./result/bin/port-kill-console --help
+
+      - name: Test ARM64 binaries
+        run: |
+          nix build .#packages.aarch64-darwin.port-kill-macos-arm64 --show-trace
+          ./result/bin/port-kill --help
+          ./result/bin/port-kill-console --help
+
+      - name: Upload Intel artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: port-kill-macos-intel
+          path: result/bin/*
+
+      - name: Upload ARM64 artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: port-kill-macos-arm64
           path: result/bin/*
