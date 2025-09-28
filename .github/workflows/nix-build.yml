@@ -1,10 +1,11 @@
-name: Nix Build
+name: Nix Build (Disabled)
 
 on:
-  push:
-    branches: [ main, master ]
-  pull_request:
-    branches: [ main, master ]
+  # Disabled due to persistent Nix build issues
+  # push:
+  #   branches: [ main, master ]
+  # pull_request:
+  #   branches: [ main, master ]
   workflow_dispatch:
 
 permissions:
