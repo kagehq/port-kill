@@ -12,44 +12,18 @@
       let
         overlays = [ (import rust-overlay) ];
         pkgs = import nixpkgs { inherit overlays system; };
-        
-        # Platform-specific dependencies
-        linux-deps = with pkgs; [
-          pkg-config
-          gtk3
-          libappindicator-gtk3
-          atk
-          gdk-pixbuf
-          cairo
-          pango
-          libxdo
-        ];
-
-        macos-deps = with pkgs; [
-          # macOS dependencies are handled by the system
-        ];
-
-        windows-deps = with pkgs; [
-          # Windows dependencies are minimal for Rust
-        ];
-
-        # Development dependencies
-        dev-deps = with pkgs; [
-          rustc
-          cargo
-          rust-analyzer
-          clippy
-          rustfmt
-          pkg-config
-        ] ++ (if pkgs.stdenv.isLinux then linux-deps else [])
-          ++ (if pkgs.stdenv.isDarwin then macos-deps else [])
-          ++ (if pkgs.stdenv.isWindows then windows-deps else []);
-
       in
       {
         # Development shell
         devShells.default = pkgs.mkShell {
-          buildInputs = dev-deps;
+          buildInputs = with pkgs; [
+            rustc
+            cargo
+            rust-analyzer
+            clippy
+            rustfmt
+            pkg-config
+          ];
           
           shellHook = ''
             echo "🦀 Port Kill Development Environment"
@@ -63,32 +37,22 @@
             echo "  cargo clippy         - Run linter"
             echo "  cargo fmt            - Format code"
             echo ""
-            echo "Platform-specific builds:"
-            echo "  cargo build --target x86_64-unknown-linux-gnu"
-            echo "  cargo build --target x86_64-pc-windows-gnu"
-            echo "  cargo build --target x86_64-apple-darwin"
-            echo "  cargo build --target aarch64-apple-darwin"
-            echo ""
           '';
 
-          # Set environment variables for reproducible builds
           RUST_BACKTRACE = "1";
           CARGO_TARGET_DIR = "./target";
         };
 
-        # Simple build script
+        # Simple build
         packages.default = pkgs.stdenv.mkDerivation {
           pname = "port-kill";
-          version = "0.4.6";
+          version = "0.3.11";
           src = ./.;
           
           nativeBuildInputs = with pkgs; [
             rustc
             cargo
-            pkg-config
-          ] ++ (if pkgs.stdenv.isLinux then linux-deps else [])
-            ++ (if pkgs.stdenv.isDarwin then macos-deps else [])
-            ++ (if pkgs.stdenv.isWindows then windows-deps else []);
+          ];
 
           buildPhase = ''
             cargo build --release --bin port-kill --bin port-kill-console
@@ -109,7 +73,6 @@
           };
         };
 
-        # Checks for CI
         checks.default = self.packages.${system}.default;
       });
 }
