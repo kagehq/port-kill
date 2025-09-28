@@ -14,9 +14,7 @@
         pkgs = import nixpkgs { inherit overlays system; };
         
         # Rust toolchain with specific version
-        rust-toolchain = pkgs.rust-bin.stable.latest.default.override {
-          targets = [ "x86_64-unknown-linux-gnu" "x86_64-pc-windows-gnu" "x86_64-apple-darwin" "aarch64-apple-darwin" ];
-        };
+        rust-toolchain = pkgs.rust-bin.stable.latest.default;
 
         # Platform-specific dependencies
         linux-deps = with pkgs; [
@@ -106,19 +104,7 @@
             
             nativeBuildInputs = with pkgs; [
               pkg-config
-              rust-toolchain
             ];
-
-            # Build both binaries
-            buildPhase = ''
-              cargo build --release --bin port-kill --bin port-kill-console
-            '';
-
-            installPhase = ''
-              mkdir -p $out/bin
-              cp target/release/port-kill $out/bin/
-              cp target/release/port-kill-console $out/bin/
-            '';
 
             meta = with pkgs.lib; {
               description = "A CLI tool to help you find and free ports blocking your dev work";
@@ -139,24 +125,7 @@
               lockFile = ./Cargo.lock;
             };
 
-            # Cross-compile for Intel Mac
-            target = "x86_64-apple-darwin";
-            
             buildInputs = macos-deps;
-            
-            nativeBuildInputs = with pkgs; [
-              rust-toolchain
-            ];
-
-            buildPhase = ''
-              cargo build --release --target x86_64-apple-darwin --bin port-kill --bin port-kill-console
-            '';
-
-            installPhase = ''
-              mkdir -p $out/bin
-              cp target/x86_64-apple-darwin/release/port-kill $out/bin/
-              cp target/x86_64-apple-darwin/release/port-kill-console $out/bin/
-            '';
 
             meta = with pkgs.lib; {
               description = "A CLI tool to help you find and free ports blocking your dev work";
@@ -177,24 +146,7 @@
               lockFile = ./Cargo.lock;
             };
 
-            # Cross-compile for Apple Silicon Mac
-            target = "aarch64-apple-darwin";
-            
             buildInputs = macos-deps;
-            
-            nativeBuildInputs = with pkgs; [
-              rust-toolchain
-            ];
-
-            buildPhase = ''
-              cargo build --release --target aarch64-apple-darwin --bin port-kill --bin port-kill-console
-            '';
-
-            installPhase = ''
-              mkdir -p $out/bin
-              cp target/aarch64-apple-darwin/release/port-kill $out/bin/
-              cp target/aarch64-apple-darwin/release/port-kill-console $out/bin/
-            '';
 
             meta = with pkgs.lib; {
               description = "A CLI tool to help you find and free ports blocking your dev work";
@@ -215,24 +167,7 @@
               lockFile = ./Cargo.lock;
             };
 
-            # Cross-compile for Windows
-            target = "x86_64-pc-windows-gnu";
-            
             buildInputs = windows-deps;
-            
-            nativeBuildInputs = with pkgs; [
-              rust-toolchain
-            ];
-
-            buildPhase = ''
-              cargo build --release --target x86_64-pc-windows-gnu --bin port-kill --bin port-kill-console
-            '';
-
-            installPhase = ''
-              mkdir -p $out/bin
-              cp target/x86_64-pc-windows-gnu/release/port-kill.exe $out/bin/
-              cp target/x86_64-pc-windows-gnu/release/port-kill-console.exe $out/bin/
-            '';
 
             meta = with pkgs.lib; {
               description = "A CLI tool to help you find and free ports blocking your dev work";
