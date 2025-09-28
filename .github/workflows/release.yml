@@ -53,9 +53,11 @@ jobs:
 
       - name: Install cross-compilation target (Intel Mac)
         if: matrix.target == 'macos-intel'
+        shell: bash
         run: rustup target add x86_64-apple-darwin
 
       - name: Build release
+        shell: bash
         run: |
           if [[ "${{ matrix.target }}" == "macos-intel" ]]; then
             cargo build --release --target x86_64-apple-darwin
