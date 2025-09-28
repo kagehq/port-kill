@@ -12,16 +12,28 @@ echo "🚀 Port Kill Release Installer"
 echo "=============================="
 echo ""
 
-# Detect platform
+# Detect platform and architecture
 PLATFORM=""
 BINARY_NAME=""
 CONSOLE_BINARY_NAME=""
 
 if [[ "$OSTYPE" == "darwin"* ]]; then
     PLATFORM="macos"
-    BINARY_NAME="port-kill-macos"
-    CONSOLE_BINARY_NAME="port-kill-console-macos"
-    echo "✅ Detected platform: macOS"
+    # Detect CPU architecture for macOS
+    ARCH=$(uname -m)
+    if [[ "$ARCH" == "arm64" ]]; then
+        BINARY_NAME="port-kill-macos"
+        CONSOLE_BINARY_NAME="port-kill-console-macos"
+        echo "✅ Detected platform: macOS (Apple Silicon)"
+    elif [[ "$ARCH" == "x86_64" ]]; then
+        BINARY_NAME="port-kill-macos-intel"
+        CONSOLE_BINARY_NAME="port-kill-console-macos-intel"
+        echo "✅ Detected platform: macOS (Intel)"
+    else
+        echo "❌ Unsupported macOS architecture: $ARCH"
+        echo "   Please download manually from: https://github.com/$REPO/releases"
+        exit 1
+    fi
 elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
     PLATFORM="linux"
     BINARY_NAME="port-kill-linux"

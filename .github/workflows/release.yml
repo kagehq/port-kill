@@ -35,6 +35,11 @@ jobs:
           - os: macos-latest
             target: macos
             exe_ext: ''
+            arch: arm64
+          - os: macos-latest
+            target: macos-intel
+            exe_ext: ''
+            arch: x86_64
           - os: windows-latest
             target: windows
             exe_ext: '.exe'
@@ -46,15 +51,29 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install cross-compilation target (Intel Mac)
+        if: matrix.target == 'macos-intel'
+        run: rustup target add x86_64-apple-darwin
+
       - name: Build release
-        run: cargo build --release
+        run: |
+          if [[ "${{ matrix.target }}" == "macos-intel" ]]; then
+            cargo build --release --target x86_64-apple-darwin
+          else
+            cargo build --release
+          fi
 
       - name: Prepare assets
         shell: bash
         run: |
           mkdir -p release
-          SRC_MAIN="target/release/port-kill${{ matrix.exe_ext }}"
-          SRC_CONSOLE="target/release/port-kill-console${{ matrix.exe_ext }}"
+          if [[ "${{ matrix.target }}" == "macos-intel" ]]; then
+            SRC_MAIN="target/x86_64-apple-darwin/release/port-kill${{ matrix.exe_ext }}"
+            SRC_CONSOLE="target/x86_64-apple-darwin/release/port-kill-console${{ matrix.exe_ext }}"
+          else
+            SRC_MAIN="target/release/port-kill${{ matrix.exe_ext }}"
+            SRC_CONSOLE="target/release/port-kill-console${{ matrix.exe_ext }}"
+          fi
           DEST_MAIN="release/port-kill-${{ matrix.target }}${{ matrix.exe_ext }}"
           DEST_CONSOLE="release/port-kill-console-${{ matrix.target }}${{ matrix.exe_ext }}"
           cp "$SRC_MAIN" "$DEST_MAIN"
