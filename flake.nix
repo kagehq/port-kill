@@ -76,20 +76,29 @@
           CARGO_TARGET_DIR = "./target";
         };
 
-        # Single package for current platform
-        packages.default = pkgs.rustPlatform.buildRustPackage {
+        # Simple build script
+        packages.default = pkgs.stdenv.mkDerivation {
           pname = "port-kill";
           version = "0.4.6";
           src = ./.;
           
-          cargoLock = {
-            lockFile = ./Cargo.lock;
-          };
+          nativeBuildInputs = with pkgs; [
+            rustc
+            cargo
+            pkg-config
+          ] ++ (if pkgs.stdenv.isLinux then linux-deps else [])
+            ++ (if pkgs.stdenv.isDarwin then macos-deps else [])
+            ++ (if pkgs.stdenv.isWindows then windows-deps else []);
 
-          buildInputs = if pkgs.stdenv.isLinux then linux-deps
-                      else if pkgs.stdenv.isDarwin then macos-deps
-                      else if pkgs.stdenv.isWindows then windows-deps
-                      else [];
+          buildPhase = ''
+            cargo build --release --bin port-kill --bin port-kill-console
+          '';
+
+          installPhase = ''
+            mkdir -p $out/bin
+            cp target/release/port-kill $out/bin/
+            cp target/release/port-kill-console $out/bin/
+          '';
 
           meta = with pkgs.lib; {
             description = "A CLI tool to help you find and free ports blocking your dev work";
