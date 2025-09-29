@@ -10,7 +10,58 @@ use clap::Parser;
 #[cfg(target_os = "macos")]
 fn main() -> Result<()> {
     // Parse command-line arguments
-    let args = Args::parse();
+    let mut args = Args::parse();
+    
+    // Handle preset functionality
+    if args.list_presets {
+        match Args::list_available_presets() {
+            Ok(presets_list) => {
+                println!("{}", presets_list);
+                return Ok(());
+            }
+            Err(e) => {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+    }
+    
+    // Save preset
+    if let Some(name) = args.save_preset.clone() {
+        let desc = args.preset_desc.clone().unwrap_or_else(|| "User-defined preset".to_string());
+        let preset = args.build_preset_from_args(name.clone(), desc);
+        let mut mgr = port_kill::preset_manager::PresetManager::new();
+        if let Err(e) = mgr.load_presets() { eprintln!("Error: {}", e); std::process::exit(1); }
+        mgr.add_preset(preset);
+        if let Err(e) = mgr.save_presets() { eprintln!("Error: {}", e); std::process::exit(1); }
+        println!("✅ Saved preset '{}'.", name);
+        return Ok(());
+    }
+
+    // Delete preset
+    if let Some(name) = args.delete_preset.clone() {
+        let mut mgr = port_kill::preset_manager::PresetManager::new();
+        if let Err(e) = mgr.load_presets() { eprintln!("Error: {}", e); std::process::exit(1); }
+        match mgr.remove_preset(&name) {
+            Some(_) => {
+                if let Err(e) = mgr.save_presets() { eprintln!("Error: {}", e); std::process::exit(1); }
+                println!("🗑️  Deleted preset '{}'.", name);
+            }
+            None => {
+                eprintln!("Preset '{}' not found.", name);
+                std::process::exit(1);
+            }
+        }
+        return Ok(());
+    }
+
+    // Apply preset if specified
+    if let Some(preset_name) = args.preset.clone() {
+        if let Err(e) = args.load_preset(&preset_name) {
+            eprintln!("Error: {}", e);
+            std::process::exit(1);
+        }
+    }
     
     // Validate arguments
     if let Err(e) = args.validate() {
@@ -54,7 +105,29 @@ use clap::Parser;
 #[tokio::main]
 async fn main() -> Result<()> {
     // Parse command-line arguments
-    let args = Args::parse();
+    let mut args = Args::parse();
+    
+    // Handle preset functionality
+    if args.list_presets {
+        match Args::list_available_presets() {
+            Ok(presets_list) => {
+                println!("{}", presets_list);
+                return Ok(());
+            }
+            Err(e) => {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+    }
+    
+    // Apply preset if specified
+    if let Some(preset_name) = args.preset.clone() {
+        if let Err(e) = args.load_preset(&preset_name) {
+            eprintln!("Error: {}", e);
+            std::process::exit(1);
+        }
+    }
     
     // Validate arguments
     if let Err(e) = args.validate() {
@@ -98,7 +171,29 @@ use clap::Parser;
 #[tokio::main]
 async fn main() -> Result<()> {
     // Parse command-line arguments
-    let args = Args::parse();
+    let mut args = Args::parse();
+    
+    // Handle preset functionality
+    if args.list_presets {
+        match Args::list_available_presets() {
+            Ok(presets_list) => {
+                println!("{}", presets_list);
+                return Ok(());
+            }
+            Err(e) => {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+    }
+    
+    // Apply preset if specified
+    if let Some(preset_name) = args.preset.clone() {
+        if let Err(e) = args.load_preset(&preset_name) {
+            eprintln!("Error: {}", e);
+            std::process::exit(1);
+        }
+    }
     
     // Validate arguments
     if let Err(e) = args.validate() {

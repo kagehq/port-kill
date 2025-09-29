@@ -141,6 +141,38 @@ See [mcp/README.md](mcp/README.md) for more information on port-kill-mcp includi
 - Remote Mode over SSH
 - Works with Docker; console mode works everywhere
 
+## Presets
+
+Port Kill supports named presets so you can avoid long `--ports` lists and reuse common configurations.
+
+Usage:
+
+```bash
+# List available presets
+port-kill --list-presets
+port-kill-console --list-presets
+
+# Run with a preset
+port-kill --preset dev --console           # macOS app entry also supports console
+port-kill-console --preset dev             # pure console binary (all platforms)
+
+# Other examples
+port-kill-console --preset system --list   # one-time snapshot with the system preset
+port-kill --preset full --json             # JSON output using the full-range preset
+
+# Save a preset from current flags
+port-kill --save-preset dev-mine --preset-desc "My dev" --ports 3000,4321,5000,8000,8080,9000
+port-kill-console --save-preset dev-mine --preset-desc "My dev" --ports 3000,4321,5000,8000,8080,9000
+
+# Delete a preset
+port-kill --delete-preset dev-mine
+port-kill-console --delete-preset dev-mine
+```
+
+Custom presets:
+
+- User-defined presets live at `~/.port-kill/presets.json` and override built-ins when names match
+
 ## Common flags
 
 ```bash

@@ -1,5 +1,6 @@
 use clap::Parser;
 use std::collections::HashSet;
+use crate::preset_manager::{PresetManager, PortPreset};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
 pub enum LogLevel {
@@ -286,6 +287,26 @@ pub struct Args {
     /// Positional ports imply clearPort on each (e.g., `port-kill 3000 5000`)
     #[arg(value_parser, value_name = "PORTS")]
     pub positional_ports: Vec<u16>,
+
+    /// Use a preset configuration (e.g., 'dev', 'system', 'database', 'web', 'react', 'node', 'python', 'full', 'minimal')
+    #[arg(long, value_name = "PRESET")]
+    pub preset: Option<String>,
+
+    /// List available presets and exit
+    #[arg(long)]
+    pub list_presets: bool,
+
+    /// Save a preset with the given name using current CLI options
+    #[arg(long, value_name = "NAME")]
+    pub save_preset: Option<String>,
+
+    /// Optional description when using --save-preset
+    #[arg(long, value_name = "TEXT")]
+    pub preset_desc: Option<String>,
+
+    /// Delete a user-defined preset by name
+    #[arg(long, value_name = "NAME")]
+    pub delete_preset: Option<String>,
 }
 
 impl Args {
@@ -534,6 +555,79 @@ impl Args {
     pub fn get_remote_host(&self) -> Option<String> {
         self.remote.clone()
     }
+
+    /// Apply preset configuration to these args
+    pub fn apply_preset(&mut self, preset: &PortPreset) {
+        // Override ports with preset ports
+        self.ports = Some(preset.ports.iter().map(|p| p.to_string()).collect());
+        
+        // Apply ignore settings from preset
+        if let Some(ref ignore_ports) = preset.ignore_ports {
+            self.ignore_ports = Some(ignore_ports.clone());
+        }
+        
+        if let Some(ref ignore_processes) = preset.ignore_processes {
+            self.ignore_processes = Some(ignore_processes.clone());
+        }
+        
+        if let Some(ref ignore_patterns) = preset.ignore_patterns {
+            self.ignore_patterns = Some(ignore_patterns.clone());
+        }
+        
+        if let Some(ref ignore_groups) = preset.ignore_groups {
+            self.ignore_groups = Some(ignore_groups.clone());
+        }
+        
+        if let Some(ref only_groups) = preset.only_groups {
+            self.only_groups = Some(only_groups.clone());
+        }
+        
+        // Apply other preset settings
+        self.smart_filter = preset.smart_filter;
+        self.docker = preset.docker;
+        self.show_pid = preset.show_pid;
+        self.performance = preset.performance;
+        self.show_context = preset.show_context;
+    }
+
+    /// Load and apply preset by name
+    pub fn load_preset(&mut self, preset_name: &str) -> Result<(), String> {
+        let mut manager = PresetManager::new();
+        manager.load_presets().map_err(|e| format!("Failed to load presets: {}", e))?;
+        
+        if let Some(preset) = manager.get_preset(preset_name) {
+            self.apply_preset(preset);
+            Ok(())
+        } else {
+            Err(format!("Preset '{}' not found. Use --list-presets to see available presets.", preset_name))
+        }
+    }
+
+    /// List available presets
+    pub fn list_available_presets() -> Result<String, String> {
+        let mut manager = PresetManager::new();
+        manager.load_presets().map_err(|e| format!("Failed to load presets: {}", e))?;
+        Ok(manager.list_presets())
+    }
+
+    /// Build a PortPreset from current arguments
+    pub fn build_preset_from_args(&self, name: String, description: String) -> PortPreset {
+        PortPreset {
+            name,
+            description,
+            ports: self.get_ports_to_monitor(),
+            ignore_ports: self.ignore_ports.clone(),
+            ignore_processes: self.ignore_processes.clone(),
+            ignore_patterns: self.ignore_patterns.clone(),
+            ignore_groups: self.ignore_groups.clone(),
+            only_groups: self.only_groups.clone(),
+            smart_filter: self.smart_filter,
+            docker: self.docker,
+            show_pid: self.show_pid,
+            performance: self.performance,
+            show_context: self.show_context,
+        }
+    }
 }
 
 impl LogLevel {
@@ -636,6 +730,8 @@ mod tests {
             list: false,
             safe: false,
             positional_ports: vec![],
+            preset: None,
+            list_presets: false,
         }
     }
 
