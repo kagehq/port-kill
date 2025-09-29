@@ -548,6 +548,50 @@ run-windows.bat --ports 3000,8000,8080,5000         # Windows
 run-windows.bat -p 3000,3001,8000,8080              # Windows
 ```
 
+### Presets
+
+Use named presets to avoid long `--ports` lists and reuse common configurations across runs.
+
+Usage:
+
+```bash
+# List available presets
+port-kill --list-presets
+port-kill-console --list-presets
+
+# Run with a preset
+port-kill --preset dev --console           # macOS app entry also supports console
+port-kill-console --preset dev             # pure console binary (all platforms)
+
+# Other examples
+port-kill-console --preset system --list   # one-time snapshot
+port-kill --preset full --json             # JSON output using a wide range
+
+# Save a preset from current flags
+port-kill --save-preset dev-mine --preset-desc "My dev" --ports 3000,4321,5000,8000,8080,9000
+port-kill-console --save-preset dev-mine --preset-desc "My dev" --ports 3000,4321,5000,8000,8080,9000
+
+# Delete a preset
+port-kill --delete-preset dev-mine
+port-kill-console --delete-preset dev-mine
+```
+
+Built-in presets:
+
+- dev: Common dev ports (3000, 3001, 3002, 4321, 5000, 8000, 8080, 9000); sensible ignores
+- system: Typical system/daemon ports with smart filtering
+- database: MySQL/PostgreSQL/Redis/MongoDB/etc.
+- web: Web servers and proxies (80, 443, 8080, 8443, etc.)
+- react, node, python: Framework/language-focused dev ports
+- full: 2000–8000 with smart filtering (broad scan)
+- minimal: Essentials only (3000, 8080, 4321)
+
+Custom presets:
+
+- User-defined presets live at `~/.port-kill/presets.json`
+- User presets override built-ins of the same name
+- Use `--list-presets` to see effective presets on this machine
+
 #### Console Mode
 ```bash
 # Run in console mode for debugging
