@@ -1,6 +1,6 @@
 [package]
 name = "port-kill"
-version = "0.3.12"
+version = "0.3.13"
 edition = "2021"
 authors = ["Kage <info@kagehq.com>"]
 description = "A CLI tool to helps you find and free ports blocking your dev works"
