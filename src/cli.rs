@@ -563,23 +563,23 @@ impl Args {
         
         // Apply ignore settings from preset
         if let Some(ref ignore_ports) = preset.ignore_ports {
-            self.ignore_ports = Some(ignore_ports.clone() as Vec<u16>);
+            self.ignore_ports = Some(Vec::from(ignore_ports.as_slice()));
         }
         
         if let Some(ref ignore_processes) = preset.ignore_processes {
-            self.ignore_processes = Some(ignore_processes.clone() as Vec<String>);
+            self.ignore_processes = Some(Vec::from(ignore_processes.as_slice()));
         }
         
         if let Some(ref ignore_patterns) = preset.ignore_patterns {
-            self.ignore_patterns = Some(ignore_patterns.clone() as Vec<String>);
+            self.ignore_patterns = Some(Vec::from(ignore_patterns.as_slice()));
         }
         
         if let Some(ref ignore_groups) = preset.ignore_groups {
-            self.ignore_groups = Some(ignore_groups.clone() as Vec<String>);
+            self.ignore_groups = Some(Vec::from(ignore_groups.as_slice()));
         }
         
         if let Some(ref only_groups) = preset.only_groups {
-            self.only_groups = Some(only_groups.clone() as Vec<String>);
+            self.only_groups = Some(Vec::from(only_groups.as_slice()));
         }
         
         // Apply other preset settings
