@@ -563,23 +563,23 @@ impl Args {
         
         // Apply ignore settings from preset
         if let Some(ref ignore_ports) = preset.ignore_ports {
-            self.ignore_ports = Some(ignore_ports.clone());
+            self.ignore_ports = Some(ignore_ports.clone() as Vec<u16>);
         }
         
         if let Some(ref ignore_processes) = preset.ignore_processes {
-            self.ignore_processes = Some(ignore_processes.clone());
+            self.ignore_processes = Some(ignore_processes.clone() as Vec<String>);
         }
         
         if let Some(ref ignore_patterns) = preset.ignore_patterns {
-            self.ignore_patterns = Some(ignore_patterns.clone());
+            self.ignore_patterns = Some(ignore_patterns.clone() as Vec<String>);
         }
         
         if let Some(ref ignore_groups) = preset.ignore_groups {
-            self.ignore_groups = Some(ignore_groups.clone());
+            self.ignore_groups = Some(ignore_groups.clone() as Vec<String>);
         }
         
         if let Some(ref only_groups) = preset.only_groups {
-            self.only_groups = Some(only_groups.clone());
+            self.only_groups = Some(only_groups.clone() as Vec<String>);
         }
         
         // Apply other preset settings
