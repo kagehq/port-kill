@@ -89,7 +89,7 @@ port-kill <port> [<port> ...]
 
 ## Dashboard
 
-![Port Kill Dashboard](dashboard/assets/img/portkill-dashboard.png)
+![Port Kill Dashboard](assets/portkill-dashboard.png)
 
 Check the [Kill Suite](https://kagehq.com) website
 
