@@ -1,6 +1,6 @@
 # Port Kill
 
-Port Kill helps you find and free ports blocking your dev work. It works on macOS, Linux, and Windows, locally or over SSH with a simple CLI, status bar and an optional dashboard.
+Port Kill helps you find and free ports blocking your dev work. It works on macOS, Linux, and Windows, locally or over SSH with a simple CLI, status bar.
 
 ![Port Kill Status Bar Icon](image-short.png)
 
@@ -87,15 +87,11 @@ port-kill <port> [<port> ...]
 ./target/release/port-kill-console --monitor-endpoint https://api.company.com/port-status
 ```
 
-## Dashboard (optional)
+## Dashboard
 
 ![Port Kill Dashboard](dashboard/assets/img/portkill-dashboard.png)
 
-```bash
-cd dashboard
-npm install
-npm run dev   # http://localhost:3000
-```
+Check the [Kill Suite](https://kagehq.com) website
 
 ## MCP (use Port Kill from Cursor, Claude etc.)
 

@@ -58,7 +58,7 @@ Windows users: see the quick start at [WINDOWS.md](WINDOWS.md).
 
 ## Dashboard
 
-A web dashboard is available in the `dashboard/` directory, providing a rich graphical interface for monitoring and managing processes. The dashboard runs independently as a Nuxt.js application and communicates with the Port Kill binary via HTTP API.
+A web dashboard is available on the [Kill Suite](https://kagehq.com) website, providing a rich graphical interface for monitoring and managing processes. The dashboard runs independently as a Nuxt.js application and communicates with the Port Kill binary via HTTP API.
 
 **Features:**
 - Real-time process monitoring with auto-refresh
@@ -76,83 +76,6 @@ A web dashboard is available in the `dashboard/` directory, providing a rich gra
 - Process tree visualization
 - **Remote Mode**: SSH-based remote server management
 - **Remote Connection Status**: Visual indicators for remote connections
-
-**Quick Start:**
-```bash
-cd dashboard
-npm install
-npm run dev
-```
-
-The dashboard will be available at `http://localhost:3002` and automatically connects to the Port Kill binary running on the same system.
-
-**Remote Dashboard Configuration:**
-
-**Method 1: Environment Variables**
-```bash
-# Set environment variables for remote mode
-export REMOTE_MODE=true
-export REMOTE_HOST=user@staging.company.com
-
-# Start the dashboard with remote mode
-cd dashboard && npm run dev
-```
-
-**Method 2: Settings Panel (Recommended)**
-1. Start the dashboard: `cd dashboard && npm run dev`
-2. Open any page (Overview, Processes, or Advanced)
-3. Click the **Settings** button in the top-right corner
-4. Toggle **Remote Mode (SSH)** checkbox
-5. Enter your remote host (e.g., `user@staging.company.com`)
-6. Click **Save Settings**
-
-The dashboard will automatically use remote mode when configured, allowing you to manage remote servers through the web interface.
-
-### Dashboard API Endpoints
-
-The dashboard provides a REST API for programmatic access to process monitoring and management:
-
-**Process Management:**
-- `GET /api/processes` - Get all processes with filtering options
-- `DELETE /api/processes/{pid}` - Kill a specific process by PID
-- `POST /api/processes/kill-all` - Kill all processes
-- `POST /api/processes/kill-group` - Kill processes by group
-- `POST /api/processes/kill-project` - Kill processes by project
-- `POST /api/processes/restart` - Restart processes
-- `GET /api/processes/tree` - Get process tree view
-
-**History Management:**
-- `GET /api/history` - Get process kill history
-- `POST /api/history/clear` - Clear process history
-- `GET /api/history/offenders` - Get frequent offenders analysis
-- `GET /api/history/stats` - Get history statistics
-- `GET /api/history/suggestions` - Get ignore suggestions
-- `GET /api/history/root-cause` - Get smart root cause analysis
-
-**Port Guard Management:**
-- `GET /api/guard/status` - Get Port Guard daemon status
-
-**Security Audit:**
-- `GET /api/security/audit` - Perform comprehensive security audit with suspicious port detection
-
-**System Information:**
-- `GET /api/system/resources` - Get system resource usage
-- `GET /api/filters` - Get filter information
-
-**Example API Usage:**
-```bash
-# Get all processes
-curl "http://localhost:3002/api/processes?ports=3000,8000&performance=true"
-
-# Kill all processes
-curl -X POST "http://localhost:3002/api/processes/kill-all?ports=3000,8000"
-
-# Get process history
-curl "http://localhost:3002/api/history"
-
-# Get system resources
-curl "http://localhost:3002/api/system/resources"
-```
 
 ### Unified Quick Start
 
@@ -174,27 +97,10 @@ Run the CLI:
 run-windows.bat            # Windows
 ```
 
-Install dashboard deps only (Nuxt):
-```bash
-./install.sh --dashboard
-cd dashboard && npm run dev  # http://localhost:3002
-```
-
-Full setup (CLI build + dashboard deps):
+Full setup (CLI build):
 ```bash
 ./install.sh --all
 ```
-
-Build dashboard for deployment:
-```bash
-cd dashboard
-npm run build     # Nitro server output: .output/
-# or static build
-npm run generate  # Static output: dist/
-```
-
-Serve the dashboard from the Rust binary (optional):
-- Build a static dashboard (`npm run generate`) and serve `dist/` with a static-files handler in your Rust app, or run the Nitro output alongside the binary.
 
 ## Status Bar Icon
 
