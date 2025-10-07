@@ -43,19 +43,27 @@ pub async fn doctor() -> DoctorReport {
             }
         }
         
-        // Check disk space
-        if let Ok(statvfs) = nix::sys::statvfs::statvfs(home.as_str()) {
-            let total_space = (statvfs.blocks() as u64) * (statvfs.fragment_size() as u64);
-            let free_space = (statvfs.blocks_available() as u64) * (statvfs.fragment_size() as u64);
-            let used_percent = ((total_space - free_space) as f64 / total_space as f64) * 100.0;
-            
-            notes.push(format!("Disk usage: {:.1}% used", used_percent));
-            
-            if used_percent > 90.0 {
-                warnings.push("Disk usage is above 90% - consider cleaning caches".to_string());
-            } else if used_percent > 80.0 {
-                warnings.push("Disk usage is above 80% - monitor cache sizes".to_string());
+        // Check disk space (Unix only)
+        #[cfg(not(target_os = "windows"))]
+        {
+            if let Ok(statvfs) = nix::sys::statvfs::statvfs(home.as_str()) {
+                let total_space = (statvfs.blocks() as u64) * (statvfs.fragment_size() as u64);
+                let free_space = (statvfs.blocks_available() as u64) * (statvfs.fragment_size() as u64);
+                let used_percent = ((total_space - free_space) as f64 / total_space as f64) * 100.0;
+                
+                notes.push(format!("Disk usage: {:.1}% used", used_percent));
+                
+                if used_percent > 90.0 {
+                    warnings.push("Disk usage is above 90% - consider cleaning caches".to_string());
+                } else if used_percent > 80.0 {
+                    warnings.push("Disk usage is above 80% - monitor cache sizes".to_string());
+                }
             }
+        }
+        
+        #[cfg(target_os = "windows")]
+        {
+            notes.push("Disk usage: Check manually on Windows".to_string());
         }
         
         // Check for large cache directories
