@@ -49,6 +49,7 @@ echo clap = { version = "4.0", features = ["derive"] }
 echo regex = "1.0"
 echo sysinfo = "0.30"
 echo chrono = { version = "0.4", features = ["serde"] }
+echo walkdir = "2.5"
 echo reqwest = { version = "0.11", features = ["json"] }
 echo.
 echo # Windows-specific tray support
@@ -77,6 +78,7 @@ echo pub mod security_audit;
 echo pub mod endpoint_monitor;
 echo pub mod scripting;
 echo pub mod file_monitor;
+echo pub mod cache;
 ) > src/lib.windows.tmp.rs
 
 REM Backup current files
