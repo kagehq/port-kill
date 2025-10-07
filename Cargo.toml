@@ -1,9 +1,9 @@
 [package]
 name = "port-kill"
-version = "0.4.9"
+version = "0.5.0"
 edition = "2021"
 authors = ["Kage <info@kagehq.com>"]
-description = "A CLI tool to helps you find and free ports blocking your dev works"
+description = "A CLI tool to help you find and free ports blocking your dev work, plus manage development caches"
 license = "FSL-1.1-MIT"
 repository = "https://github.com/kagehq/port-kill"
 build = "build.rs"
