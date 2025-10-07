@@ -29,7 +29,7 @@ path = "src/main_console.rs"
 
 [dependencies]
 # Core dependencies (platform-agnostic)
-nix = { version = "0.27", features = ["signal", "process"] }
+nix = { version = "0.27", features = ["signal", "process", "fs"] }
 crossbeam-channel = "0.5"
 tokio = { version = "1.0", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
@@ -42,6 +42,7 @@ clap = { version = "4.0", features = ["derive"] }
 regex = "1.0"
 sysinfo = "0.30"
 chrono = { version = "0.4", features = ["serde"] }
+walkdir = "2.5"
 reqwest = { version = "0.11", features = ["json"] }
 
 # Linux-specific tray support
