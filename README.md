@@ -1,6 +1,6 @@
 # Port Kill
 
-Port Kill helps you find and free ports blocking your dev work. It works on macOS, Linux, and Windows, locally or over SSH with a simple CLI, status bar.
+Port Kill helps you find and free ports blocking your dev work, plus manage development caches. It works on macOS, Linux, and Windows, locally or over SSH with a simple CLI, status bar.
 
 ![Port Kill Status Bar Icon](image-short.png)
 
@@ -41,6 +41,11 @@ port-kill --list
 
 # Confirm before killing
 port-kill 3000 --safe
+
+# Cache management (NEW!)
+port-kill cache --list
+port-kill cache --clean --safe-delete
+port-kill cache --doctor
 ```
 
 ### CLI quick reference
@@ -87,6 +92,92 @@ port-kill <port> [<port> ...]
 ./target/release/port-kill-console --monitor-endpoint https://api.company.com/port-status
 ```
 
+## Cache Management
+
+Port Kill now includes comprehensive cache management for development environments:
+
+### Cache Commands
+
+```bash
+# List all detected caches
+./target/release/port-kill-console cache --list
+
+# List with JSON output
+./target/release/port-kill-console cache --list --json
+
+# Clean caches safely (with backup)
+./target/release/port-kill-console cache --clean --safe-delete
+
+# System diagnostics
+./target/release/port-kill-console cache --doctor --json
+
+# Restore last backup
+./target/release/port-kill-console cache --restore-last
+```
+
+### Language-Specific Cache Management
+
+```bash
+# Rust caches (target/, ~/.cargo)
+./target/release/port-kill-console cache --list --lang rust
+
+# JavaScript/TypeScript caches (node_modules, .next, .vite, etc.)
+./target/release/port-kill-console cache --list --lang js
+
+# Python caches (__pycache__, .venv, .pytest_cache)
+./target/release/port-kill-console cache --list --lang py
+
+# Java caches (.gradle, build, ~/.m2)
+./target/release/port-kill-console cache --list --lang java
+```
+
+### NPX Package Analysis
+
+```bash
+# Analyze NPX packages with per-package details
+./target/release/port-kill-console cache --npx --list --json
+
+# Clean stale NPX packages (older than 30 days)
+./target/release/port-kill-console cache --npx --clean --stale-days 30
+
+# Dry run to see what would be cleaned
+./target/release/port-kill-console cache --npx --dry-run --stale-days 14
+```
+
+### JavaScript Package Manager Caches
+
+```bash
+# npm, pnpm, yarn caches
+./target/release/port-kill-console cache --js-pm --list --json
+
+# Clean JS package manager caches
+./target/release/port-kill-console cache --js-pm --clean --safe-delete
+```
+
+### Specialized Integrations
+
+```bash
+# Hugging Face cache
+./target/release/port-kill-console cache --hf --list
+
+# PyTorch cache
+./target/release/port-kill-console cache --torch --list
+
+# Vercel cache (requires VERCEL_TOKEN env var)
+VERCEL_TOKEN=your_token ./target/release/port-kill-console cache --vercel --clean
+
+# Cloudflare cache (requires CLOUDFLARE_TOKEN env var)
+CLOUDFLARE_TOKEN=your_token ./target/release/port-kill-console cache --cloudflare --clean
+```
+
+### Safe Operations
+
+All cache operations are safe by default:
+- **Safe delete**: Creates timestamped backups before deletion
+- **Restore capability**: `--restore-last` to undo the last cleanup
+- **Dry run**: `--dry-run` to preview changes without executing
+- **Force override**: `--force` to skip confirmations (use with caution)
+
 ## Dashboard
 
 ![Port Kill Dashboard](assets/portkill-dashboard.png)
@@ -96,6 +187,21 @@ Check the [Kill Suite](https://kagehq.com) website
 ## MCP (use Port Kill from Cursor, Claude etc.)
 
 Add `npx -y 'https://gitpkg.vercel.app/kagehq/port-kill/mcp?main'` to your MCP config.
+
+### Available Tools
+
+**Port Management:**
+- `list` - List processes on ports
+- `kill` - Kill processes on ports  
+- `reset` - Reset common dev ports
+- `audit` - Security audit
+- `guardStatus` - Port guard status
+
+**Cache Management (NEW!):**
+- `cacheList` - List all detected caches
+- `cacheClean` - Clean caches with safe backup
+- `cacheRestore` - Restore last cache backup
+- `cacheDoctor` - System diagnostics
 
 For example for Cursor add to `.cursor/mcp.json`:
 ```

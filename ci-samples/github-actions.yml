@@ -1,0 +1,123 @@
+name: Cache Management
+
+on:
+  schedule:
+    # Run daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      cache_type:
+        description: 'Type of cache to clean'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+        - all
+        - rust
+        - js
+        - python
+        - java
+        - npx
+        - js-pm
+
+jobs:
+  cache-cleanup:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        components: rustfmt, clippy
+        
+    - name: Build port-kill
+      run: |
+        cargo build --release
+        
+    - name: Cache Analysis
+      id: cache-analysis
+      run: |
+        echo "=== Cache Analysis ==="
+        ./target/release/port-kill-console cache --list --json > cache-analysis.json
+        echo "cache_size=$(jq -r '.summary.totalSizeBytes' cache-analysis.json)" >> $GITHUB_OUTPUT
+        echo "cache_entries=$(jq -r '.summary.count' cache-analysis.json)" >> $GITHUB_OUTPUT
+        echo "stale_entries=$(jq -r '.summary.staleCount' cache-analysis.json)" >> $GITHUB_OUTPUT
+        
+    - name: Clean Caches
+      if: steps.cache-analysis.outputs.cache_size > 1000000000  # 1GB threshold
+      run: |
+        echo "=== Cleaning Caches ==="
+        case "${{ github.event.inputs.cache_type || 'all' }}" in
+          "all")
+            ./target/release/port-kill-console cache --clean --safe-delete
+            ;;
+          "rust")
+            ./target/release/port-kill-console cache --lang rust --clean --safe-delete
+            ;;
+          "js")
+            ./target/release/port-kill-console cache --lang js --clean --safe-delete
+            ;;
+          "python")
+            ./target/release/port-kill-console cache --lang py --clean --safe-delete
+            ;;
+          "java")
+            ./target/release/port-kill-console cache --lang java --clean --safe-delete
+            ;;
+          "npx")
+            ./target/release/port-kill-console cache --npx --clean --safe-delete --stale-days 30
+            ;;
+          "js-pm")
+            ./target/release/port-kill-console cache --js-pm --clean --safe-delete
+            ;;
+        esac
+        
+    - name: System Diagnostics
+      run: |
+        echo "=== System Diagnostics ==="
+        ./target/release/port-kill-console cache --doctor --json > diagnostics.json
+        cat diagnostics.json
+        
+    - name: Upload Results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: cache-cleanup-results
+        path: |
+          cache-analysis.json
+          diagnostics.json
+          
+    - name: Comment on PR (if applicable)
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const analysis = JSON.parse(fs.readFileSync('cache-analysis.json', 'utf8'));
+          const diagnostics = JSON.parse(fs.readFileSync('diagnostics.json', 'utf8'));
+          
+          const comment = `## 🧹 Cache Cleanup Results
+          
+          **Cache Analysis:**
+          - Total size: ${(analysis.summary.totalSizeBytes / 1024 / 1024 / 1024).toFixed(2)} GB
+          - Total entries: ${analysis.summary.count}
+          - Stale entries: ${analysis.summary.staleCount}
+          
+          **System Health:**
+          - Status: ${diagnostics.ok ? '✅ Healthy' : '❌ Issues detected'}
+          - Warnings: ${diagnostics.warnings.length}
+          - Errors: ${diagnostics.errors.length}
+          
+          ${diagnostics.warnings.length > 0 ? `**Warnings:**\n${diagnostics.warnings.map(w => `- ${w}`).join('\n')}` : ''}
+          ${diagnostics.errors.length > 0 ? `**Errors:**\n${diagnostics.errors.map(e => `- ${e}`).join('\n')}` : ''}
+          `;
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: comment
+          });

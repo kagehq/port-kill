@@ -4,11 +4,18 @@ Expose Port Kill as MCP tools for Cursor.
 
 ## Tools
 
+### Port Management
 - `list(ports?, docker?, verbose?, remote?)`
 - `kill(ports, remote?)`
 - `reset(remote?)`
 - `audit(suspiciousOnly?, remote?)`
 - `guardStatus(baseUrl?)` (uses dashboard API)
+
+### Cache Management
+- `cacheList(lang?, includeNpx?, includeJsPm?, includeHf?, includeTorch?, includeVercel?, includeCloudflare?, staleDays?)`
+- `cacheClean(lang?, includeNpx?, includeJsPm?, includeHf?, includeTorch?, includeVercel?, includeCloudflare?, safeDelete?, force?, staleDays?)`
+- `cacheRestore()`
+- `cacheDoctor()`
 
 
 ## Quick Install
@@ -65,6 +72,18 @@ Kill the process running on port 3000
 Kill all processes using dev ports
 ```
 
+```text
+List all my development caches
+```
+
+```text
+Clean up my NPX cache
+```
+
+```text
+Show me system diagnostics for cache health
+```
+
 
 ## Tools Extended
 
@@ -116,6 +135,47 @@ Kill all processes using dev ports
 "Check the port guard status"
 "What's the current guard configuration?"
 "Show me the dashboard guard status"
+```
+
+### 6. **`cacheList`** - List Development Caches
+**Purpose**: List all detected development caches with size and metadata
+
+**Example Usage**:
+```text
+"List all my development caches"
+"Show me NPX cache usage"
+"List Python caches in my project"
+"Show me JavaScript package manager caches"
+```
+
+### 7. **`cacheClean`** - Clean Development Caches
+**Purpose**: Clean detected caches with safe backup functionality
+
+**Example Usage**:
+```text
+"Clean up my NPX cache"
+"Remove all Rust build caches"
+"Clean Python cache files"
+"Clean JavaScript package manager caches"
+```
+
+### 8. **`cacheRestore`** - Restore Cache Backup
+**Purpose**: Restore the most recent cache backup
+
+**Example Usage**:
+```text
+"Restore my last cache backup"
+"Undo the last cache cleanup"
+```
+
+### 9. **`cacheDoctor`** - System Diagnostics
+**Purpose**: Run system diagnostics and health checks for cache management
+
+**Example Usage**:
+```text
+"Show me system diagnostics for cache health"
+"Check my cache storage usage"
+"Run cache health diagnostics"
 ```
 
 

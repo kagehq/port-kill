@@ -48,6 +48,12 @@ onPort(3000, callback)
 - `clearPort(port)` - Kill all processes on a specific port (one-time action)
 - `getProcess(port)` - Get process information for a port
 
+### Cache Management (NEW!)
+- `listCaches()` - List all detected development caches
+- `cleanCaches()` - Clean caches with safe backup
+- `cacheDoctor()` - Run system diagnostics for cache health
+- `restoreCache()` - Restore the last cache backup
+
 ### Utility Commands
 - `log("message")` - Log a message to console
 - `wait(seconds)` - Wait for specified seconds
@@ -206,6 +212,15 @@ guardFile(".env")                  // Protect .env
 killFileExt(".lock")               // Clear lock files
 guardPort(3000)                    // Guard development port
 log("Development environment guard activated")
+```
+
+### Cache Management Script
+```javascript
+// examples/cache-management.js
+log("Starting cache management...")
+listCaches()                       // List all detected caches
+cacheDoctor()                      // Run system diagnostics
+log("Cache analysis complete")
 ```
 
 ## Script Syntax

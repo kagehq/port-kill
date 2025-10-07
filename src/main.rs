@@ -3,7 +3,11 @@ use anyhow::Result;
 #[cfg(target_os = "macos")]
 use log::info;
 #[cfg(target_os = "macos")]
-use port_kill::{app::PortKillApp, cli::Args};
+use port_kill::{app::PortKillApp, cli::{Args, CacheCommand}};
+#[cfg(target_os = "macos")]
+use port_kill::cache::{list::{list_caches, print_list_table}, clean::clean_caches, restore::restore_last_backup, doctor::doctor};
+#[cfg(target_os = "macos")]
+use port_kill::cache::output::print_or_json;
 #[cfg(target_os = "macos")]
 use clap::Parser;
 
@@ -83,6 +87,34 @@ fn main() -> Result<()> {
     
     info!("Starting Port Kill application...");
     info!("Monitoring: {}", args.get_port_description());
+
+    // Handle cache subcommand: route to console-like behavior
+    if let Some(CacheCommand::Cache(c)) = args.cache.clone() {
+        if c.list || c.dry_run {
+            let resp = tokio::runtime::Runtime::new().unwrap().block_on(list_caches(&c.lang, c.npx, c.js_pm, c.hf, c.torch, c.vercel, c.cloudflare, c.stale_days));
+            if c.json {
+                print_or_json(&resp, true);
+            } else {
+                print_list_table(&resp);
+            }
+            return Ok(());
+        }
+        if c.clean {
+            let resp = tokio::runtime::Runtime::new().unwrap().block_on(clean_caches(&c.lang, c.npx, c.js_pm, c.safe_delete, c.force, c.hf, c.torch, c.vercel, c.cloudflare, c.stale_days));
+            print_or_json(&resp, c.json);
+            return Ok(());
+        }
+        if c.restore_last {
+            let resp = tokio::runtime::Runtime::new().unwrap().block_on(restore_last_backup());
+            print_or_json(&resp, c.json);
+            return Ok(());
+        }
+        if c.doctor {
+            let report = tokio::runtime::Runtime::new().unwrap().block_on(doctor());
+            print_or_json(&report, c.json);
+            return Ok(());
+        }
+    }
 
     // Create and run the application
     let app = PortKillApp::new(args)?;

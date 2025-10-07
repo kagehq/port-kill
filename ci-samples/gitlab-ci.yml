@@ -1,0 +1,118 @@
+stages:
+  - cache-analysis
+  - cache-cleanup
+  - diagnostics
+
+variables:
+  CACHE_THRESHOLD: "1000000000"  # 1GB in bytes
+  STALE_DAYS: "30"
+
+cache-analysis:
+  stage: cache-analysis
+  image: rust:1.75
+  script:
+    - echo "=== Building port-kill ==="
+    - cargo build --release
+    
+    - echo "=== Cache Analysis ==="
+    - ./target/release/port-kill-console cache --list --json > cache-analysis.json
+    - echo "Cache size: $(jq -r '.summary.totalSizeBytes' cache-analysis.json) bytes"
+    - echo "Cache entries: $(jq -r '.summary.count' cache-analysis.json)"
+    - echo "Stale entries: $(jq -r '.summary.staleCount' cache-analysis.json)"
+    
+    # Set variables for next stage
+    - echo "CACHE_SIZE=$(jq -r '.summary.totalSizeBytes' cache-analysis.json)" >> cache_vars.env
+    - echo "CACHE_ENTRIES=$(jq -r '.summary.count' cache-analysis.json)" >> cache_vars.env
+    - echo "STALE_ENTRIES=$(jq -r '.summary.staleCount' cache-analysis.json)" >> cache_vars.env
+  artifacts:
+    reports:
+      dotenv: cache_vars.env
+    paths:
+      - cache-analysis.json
+      - target/release/port-kill-console
+    expire_in: 1 hour
+
+cache-cleanup:
+  stage: cache-cleanup
+  image: rust:1.75
+  dependencies:
+    - cache-analysis
+  script:
+    - echo "=== Cache Cleanup ==="
+    - |
+      if [ "$CACHE_SIZE" -gt "$CACHE_THRESHOLD" ]; then
+        echo "Cache size ($CACHE_SIZE bytes) exceeds threshold ($CACHE_THRESHOLD bytes)"
+        echo "Proceeding with cleanup..."
+        
+        # Clean based on cache type or all
+        case "${CACHE_TYPE:-all}" in
+          "rust")
+            ./target/release/port-kill-console cache --lang rust --clean --safe-delete
+            ;;
+          "js")
+            ./target/release/port-kill-console cache --lang js --clean --safe-delete
+            ;;
+          "python")
+            ./target/release/port-kill-console cache --lang py --clean --safe-delete
+            ;;
+          "java")
+            ./target/release/port-kill-console cache --lang java --clean --safe-delete
+            ;;
+          "npx")
+            ./target/release/port-kill-console cache --npx --clean --safe-delete --stale-days $STALE_DAYS
+            ;;
+          "js-pm")
+            ./target/release/port-kill-console cache --js-pm --clean --safe-delete
+            ;;
+          *)
+            ./target/release/port-kill-console cache --clean --safe-delete
+            ;;
+        esac
+        
+        echo "Cache cleanup completed"
+      else
+        echo "Cache size ($CACHE_SIZE bytes) is within acceptable limits"
+        echo "Skipping cleanup"
+      fi
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: manual
+      allow_failure: true
+
+diagnostics:
+  stage: diagnostics
+  image: rust:1.75
+  dependencies:
+    - cache-analysis
+  script:
+    - echo "=== System Diagnostics ==="
+    - ./target/release/port-kill-console cache --doctor --json > diagnostics.json
+    - echo "System health check completed"
+    - cat diagnostics.json
+  artifacts:
+    paths:
+      - diagnostics.json
+    expire_in: 1 week
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: manual
+
+# Scheduled pipeline for daily cache cleanup
+cache-cleanup-scheduled:
+  extends: cache-cleanup
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: always
+  variables:
+    CACHE_TYPE: "all"
+
+# Manual pipeline for specific cache types
+cache-cleanup-manual:
+  extends: cache-cleanup
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: manual
+  variables:
+    CACHE_TYPE: "npx"

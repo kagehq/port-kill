@@ -186,6 +186,60 @@ const handler = async (name: string, args: any, ctx?: HandlerContext): Promise<T
       const json = await resp.json();
       return { content: JSON.stringify(json) };
     }
+    case "cacheList": {
+      const lang = args?.lang || "auto";
+      const includeNpx = args?.includeNpx || false;
+      const includeJsPm = args?.includeJsPm || false;
+      const includeHf = args?.includeHf || false;
+      const includeTorch = args?.includeTorch || false;
+      const includeVercel = args?.includeVercel || false;
+      const includeCloudflare = args?.includeCloudflare || false;
+      const staleDays = args?.staleDays ? `--stale-days ${args.staleDays}` : "";
+      const npxFlag = includeNpx ? "--npx" : "";
+      const jsPmFlag = includeJsPm ? "--js-pm" : "";
+      const hfFlag = includeHf ? "--hf" : "";
+      const torchFlag = includeTorch ? "--torch" : "";
+      const vercelFlag = includeVercel ? "--vercel" : "";
+      const cloudflareFlag = includeCloudflare ? "--cloudflare" : "";
+      const langFlag = lang !== "auto" ? `--lang ${lang}` : "";
+      const cmd = `${binPath()} cache --list ${npxFlag} ${jsPmFlag} ${hfFlag} ${torchFlag} ${vercelFlag} ${cloudflareFlag} ${langFlag} ${staleDays} --json`.trim();
+      const out = await run(cmd, ctx);
+      return { content: out };
+    }
+    case "cacheClean": {
+      const lang = args?.lang || "auto";
+      const includeNpx = args?.includeNpx || false;
+      const includeJsPm = args?.includeJsPm || false;
+      const includeHf = args?.includeHf || false;
+      const includeTorch = args?.includeTorch || false;
+      const includeVercel = args?.includeVercel || false;
+      const includeCloudflare = args?.includeCloudflare || false;
+      const safeDelete = args?.safeDelete !== false; // default true
+      const force = args?.force || false;
+      const staleDays = args?.staleDays ? `--stale-days ${args.staleDays}` : "";
+      const npxFlag = includeNpx ? "--npx" : "";
+      const jsPmFlag = includeJsPm ? "--js-pm" : "";
+      const hfFlag = includeHf ? "--hf" : "";
+      const torchFlag = includeTorch ? "--torch" : "";
+      const vercelFlag = includeVercel ? "--vercel" : "";
+      const cloudflareFlag = includeCloudflare ? "--cloudflare" : "";
+      const langFlag = lang !== "auto" ? `--lang ${lang}` : "";
+      const safeFlag = safeDelete ? "--safe-delete" : "";
+      const forceFlag = force ? "--force" : "";
+      const cmd = `${binPath()} cache --clean ${npxFlag} ${jsPmFlag} ${hfFlag} ${torchFlag} ${vercelFlag} ${cloudflareFlag} ${langFlag} ${safeFlag} ${forceFlag} ${staleDays} --json`.trim();
+      const out = await run(cmd, ctx);
+      return { content: out };
+    }
+    case "cacheRestore": {
+      const cmd = `${binPath()} cache --restore-last --json`.trim();
+      const out = await run(cmd, ctx);
+      return { content: out };
+    }
+    case "cacheDoctor": {
+      const cmd = `${binPath()} cache --doctor --json`.trim();
+      const out = await run(cmd, ctx);
+      return { content: out };
+    }
     default:
       throw new Error(`Unknown tool: ${name}`);
   }
@@ -251,6 +305,58 @@ server.registerTool("guardStatus", {
   }
 }, async (args: any) => {
   const result = await invokeWithTimeout("guardStatus", args || {});
+  return { content: [{ type: "text", text: result.content }] };
+});
+
+server.registerTool("cacheList", {
+  description: "List all detected caches with size and metadata",
+  inputSchema: {
+    lang: z.string().describe("Language filter (auto, rust, js, py, java)").optional(),
+    includeNpx: z.boolean().describe("Include NPX cache analysis").optional(),
+    includeJsPm: z.boolean().describe("Include JS package manager caches").optional(),
+    includeHf: z.boolean().describe("Include Hugging Face caches").optional(),
+    includeTorch: z.boolean().describe("Include PyTorch caches").optional(),
+    includeVercel: z.boolean().describe("Include Vercel caches").optional(),
+    includeCloudflare: z.boolean().describe("Include Cloudflare caches").optional(),
+    staleDays: z.number().describe("Days to consider NPX packages stale").optional()
+  }
+}, async (args: any) => {
+  const result = await invokeWithTimeout("cacheList", args || {});
+  return { content: [{ type: "text", text: result.content }] };
+});
+
+server.registerTool("cacheClean", {
+  description: "Clean detected caches with safe backup",
+  inputSchema: {
+    lang: z.string().describe("Language filter (auto, rust, js, py, java)").optional(),
+    includeNpx: z.boolean().describe("Include NPX cache analysis").optional(),
+    includeJsPm: z.boolean().describe("Include JS package manager caches").optional(),
+    includeHf: z.boolean().describe("Include Hugging Face caches").optional(),
+    includeTorch: z.boolean().describe("Include PyTorch caches").optional(),
+    includeVercel: z.boolean().describe("Include Vercel caches").optional(),
+    includeCloudflare: z.boolean().describe("Include Cloudflare caches").optional(),
+    safeDelete: z.boolean().describe("Use safe delete with backup").optional(),
+    force: z.boolean().describe("Force cleanup without confirmation").optional(),
+    staleDays: z.number().describe("Days to consider NPX packages stale").optional()
+  }
+}, async (args: any) => {
+  const result = await invokeWithTimeout("cacheClean", args || {});
+  return { content: [{ type: "text", text: result.content }] };
+});
+
+server.registerTool("cacheRestore", {
+  description: "Restore the most recent cache backup",
+  inputSchema: {}
+}, async (args: any) => {
+  const result = await invokeWithTimeout("cacheRestore", args || {});
+  return { content: [{ type: "text", text: result.content }] };
+});
+
+server.registerTool("cacheDoctor", {
+  description: "Run system diagnostics and health checks",
+  inputSchema: {}
+}, async (args: any) => {
+  const result = await invokeWithTimeout("cacheDoctor", args || {});
   return { content: [{ type: "text", text: result.content }] };
 });
 

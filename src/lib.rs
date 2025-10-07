@@ -10,6 +10,7 @@ pub mod endpoint_monitor;
 pub mod scripting;
 pub mod file_monitor;
 pub mod preset_manager;
+pub mod cache;
 
 // macOS-specific modules (only compiled on macOS)
 #[cfg(target_os = "macos")]

@@ -1,0 +1,163 @@
+version: 2.1
+
+parameters:
+  cache_type:
+    type: string
+    default: "all"
+    description: "Type of cache to clean (all, rust, js, python, java, npx, js-pm)"
+  stale_days:
+    type: integer
+    default: 30
+    description: "Number of days to consider NPX packages stale"
+  cache_threshold:
+    type: integer
+    default: 1000000000
+    description: "Cache size threshold in bytes (1GB default)"
+
+orbs:
+  rust: circleci/rust@1.0.0
+
+jobs:
+  cache-analysis:
+    docker:
+      - image: cimg/rust:1.75
+    steps:
+      - checkout
+      - run:
+          name: Build port-kill
+          command: cargo build --release
+      - run:
+          name: Cache Analysis
+          command: |
+            echo "=== Cache Analysis ==="
+            ./target/release/port-kill-console cache --list --json > cache-analysis.json
+            echo "Cache size: $(jq -r '.summary.totalSizeBytes' cache-analysis.json) bytes"
+            echo "Cache entries: $(jq -r '.summary.count' cache-analysis.json)"
+            echo "Stale entries: $(jq -r '.summary.staleCount' cache-analysis.json)"
+      - persist_to_workspace:
+          root: .
+          paths:
+            - target/release/port-kill-console
+            - cache-analysis.json
+
+  cache-cleanup:
+    docker:
+      - image: cimg/rust:1.75
+    steps:
+      - attach_workspace:
+          at: .
+      - run:
+          name: Cache Cleanup
+          command: |
+            echo "=== Cache Cleanup ==="
+            CACHE_SIZE=$(jq -r '.summary.totalSizeBytes' cache-analysis.json)
+            echo "Current cache size: $CACHE_SIZE bytes"
+            echo "Threshold: << pipeline.parameters.cache_threshold >> bytes"
+            
+            if [ "$CACHE_SIZE" -gt "<< pipeline.parameters.cache_threshold >>" ]; then
+              echo "Cache size exceeds threshold, proceeding with cleanup..."
+              
+              case "<< pipeline.parameters.cache_type >>" in
+                "rust")
+                  ./target/release/port-kill-console cache --lang rust --clean --safe-delete
+                  ;;
+                "js")
+                  ./target/release/port-kill-console cache --lang js --clean --safe-delete
+                  ;;
+                "python")
+                  ./target/release/port-kill-console cache --lang py --clean --safe-delete
+                  ;;
+                "java")
+                  ./target/release/port-kill-console cache --lang java --clean --safe-delete
+                  ;;
+                "npx")
+                  ./target/release/port-kill-console cache --npx --clean --safe-delete --stale-days << pipeline.parameters.stale_days >>
+                  ;;
+                "js-pm")
+                  ./target/release/port-kill-console cache --js-pm --clean --safe-delete
+                  ;;
+                *)
+                  ./target/release/port-kill-console cache --clean --safe-delete
+                  ;;
+              esac
+              
+              echo "Cache cleanup completed"
+            else
+              echo "Cache size is within acceptable limits, skipping cleanup"
+            fi
+
+  diagnostics:
+    docker:
+      - image: cimg/rust:1.75
+    steps:
+      - attach_workspace:
+          at: .
+      - run:
+          name: System Diagnostics
+          command: |
+            echo "=== System Diagnostics ==="
+            ./target/release/port-kill-console cache --doctor --json > diagnostics.json
+            echo "System health check completed"
+            cat diagnostics.json
+      - store_artifacts:
+          path: diagnostics.json
+          destination: diagnostics.json
+
+workflows:
+  version: 2
+  
+  # Scheduled daily cache cleanup
+  scheduled-cleanup:
+    triggers:
+      - schedule:
+          cron: "0 2 * * *"  # Daily at 2 AM UTC
+          filters:
+            branches:
+              only:
+                - main
+    jobs:
+      - cache-analysis
+      - cache-cleanup:
+          requires:
+            - cache-analysis
+      - diagnostics:
+          requires:
+            - cache-analysis
+
+  # Manual cache cleanup
+  manual-cleanup:
+    jobs:
+      - cache-analysis
+      - cache-cleanup:
+          requires:
+            - cache-analysis
+      - diagnostics:
+          requires:
+            - cache-analysis
+
+  # NPX-specific cleanup
+  npx-cleanup:
+    jobs:
+      - cache-analysis
+      - cache-cleanup:
+          requires:
+            - cache-analysis
+          parameters:
+            cache_type: "npx"
+            stale_days: 7
+      - diagnostics:
+          requires:
+            - cache-analysis
+
+  # Rust-specific cleanup
+  rust-cleanup:
+    jobs:
+      - cache-analysis
+      - cache-cleanup:
+          requires:
+            - cache-analysis
+          parameters:
+            cache_type: "rust"
+      - diagnostics:
+          requires:
+            - cache-analysis

@@ -38,6 +38,11 @@ Windows users: see the quick start at [WINDOWS.md](WINDOWS.md).
 - **Port Guard Mode**: Proactive port conflict prevention with background daemon and auto-resolution
 - **Security Audit Mode**: Comprehensive security analysis with suspicious port detection and risk assessment
 - **Endpoint Monitoring**: Send real-time data to external endpoints for monitoring, alerting, and automation
+- **Cache Management**: Comprehensive development cache detection, analysis, and safe cleanup
+- **Safe Cache Operations**: Timestamped backups and restore functionality for all cache operations
+- **Multi-Language Support**: Automatic detection of Rust, JavaScript/TypeScript, Python, Java, and ML framework caches
+- **NPX Package Analysis**: Per-package analysis with stale detection and intelligent cleanup
+- **System Diagnostics**: Cache health monitoring with disk usage analysis and warnings
 
 
 
@@ -229,6 +234,249 @@ curl -s -X POST \
 PORT_KILL_BIN=/abs/path/to/port-kill-console \
 PORT_KILL_CWD=/abs/path/to/project \
 HTTP_PORT=8787 npm run dev
+```
+
+## 🗂️ **Cache Management**
+
+Port Kill includes comprehensive cache management for development environments, supporting multiple languages and frameworks with safe operations and intelligent detection.
+
+### Cache Commands
+
+```bash
+# List all detected caches
+./port-kill-console cache --list
+
+# List with JSON output for scripting
+./port-kill-console cache --list --json
+
+# Clean caches safely (creates backup)
+./port-kill-console cache --clean --safe-delete
+
+# System diagnostics and health checks
+./port-kill-console cache --doctor --json
+
+# Restore last backup
+./port-kill-console cache --restore-last
+
+# Dry run to preview changes
+./port-kill-console cache --dry-run
+```
+
+### Language-Specific Cache Detection
+
+#### Rust Caches
+```bash
+# Rust target directories and Cargo cache
+./port-kill-console cache --list --lang rust
+
+# Clean Rust caches safely
+./port-kill-console cache --clean --lang rust --safe-delete
+```
+
+**Detects:**
+- `target/` directories (build artifacts)
+- `~/.cargo` (Cargo package cache)
+- `~/.rustup` (Rust toolchain cache)
+
+#### JavaScript/TypeScript Caches
+```bash
+# JS/TS build caches and node_modules
+./port-kill-console cache --list --lang js
+
+# Clean JS/TS caches
+./port-kill-console cache --clean --lang js --safe-delete
+```
+
+**Detects:**
+- `node_modules/` directories
+- `.next/` (Next.js build cache)
+- `.vite/` (Vite build cache)
+- `.nuxt/` (Nuxt.js build cache)
+- `.svelte-kit/` (SvelteKit build cache)
+- `dist/` and `build/` directories
+
+#### Python Caches
+```bash
+# Python bytecode and virtual environments
+./port-kill-console cache --list --lang py
+
+# Clean Python caches
+./port-kill-console cache --clean --lang py --safe-delete
+```
+
+**Detects:**
+- `__pycache__/` directories (bytecode cache)
+- `.venv/` and `venv/` (virtual environments)
+- `.pytest_cache/` (pytest cache)
+- `~/.cache/pip/` (pip cache)
+
+#### Java Caches
+```bash
+# Java build caches and Maven repositories
+./port-kill-console cache --list --lang java
+
+# Clean Java caches
+./port-kill-console cache --clean --lang java --safe-delete
+```
+
+**Detects:**
+- `.gradle/` directories (Gradle cache)
+- `build/` directories (with Java artifacts)
+- `~/.m2/repository/` (Maven repository)
+
+### NPX Package Analysis
+
+Advanced NPX package analysis with per-package details and stale detection:
+
+```bash
+# Analyze NPX packages with detailed information
+./port-kill-console cache --npx --list --json
+
+# Clean stale NPX packages (older than 30 days)
+./port-kill-console cache --npx --clean --stale-days 30
+
+# Dry run to see what would be cleaned
+./port-kill-console cache --npx --dry-run --stale-days 14
+
+# Force cleanup without confirmation
+./port-kill-console cache --npx --clean --force
+```
+
+**Features:**
+- Per-package analysis with names and versions
+- Stale detection based on last used date
+- Size analysis for each package
+- Safe cleanup with backup
+
+### JavaScript Package Manager Caches
+
+```bash
+# npm, pnpm, yarn caches
+./port-kill-console cache --js-pm --list --json
+
+# Clean JS package manager caches
+./port-kill-console cache --js-pm --clean --safe-delete
+```
+
+**Detects:**
+- `~/.npm` (npm cache)
+- `~/.pnpm-store` (pnpm store)
+- `~/.yarn/cache` (yarn cache)
+
+### Specialized Integrations
+
+#### Hugging Face Cache
+```bash
+# Hugging Face model cache
+./port-kill-console cache --hf --list --json
+
+# Clean Hugging Face cache
+./port-kill-console cache --hf --clean --safe-delete
+```
+
+#### PyTorch Cache
+```bash
+# PyTorch model cache
+./port-kill-console cache --torch --list --json
+
+# Clean PyTorch cache
+./port-kill-console cache --torch --clean --safe-delete
+```
+
+#### Vercel Cache
+```bash
+# Vercel cache (requires VERCEL_TOKEN)
+VERCEL_TOKEN=your_token ./port-kill-console cache --vercel --list --json
+
+# Clean Vercel cache
+VERCEL_TOKEN=your_token ./port-kill-console cache --vercel --clean
+```
+
+#### Cloudflare Cache
+```bash
+# Cloudflare cache (requires CLOUDFLARE_TOKEN)
+CLOUDFLARE_TOKEN=your_token ./port-kill-console cache --cloudflare --list --json
+
+# Clean Cloudflare cache
+CLOUDFLARE_TOKEN=your_token ./port-kill-console cache --cloudflare --clean
+```
+
+### Safe Operations
+
+All cache operations prioritize safety:
+
+#### Backup System
+- **Automatic backups**: All clean operations create timestamped backups
+- **Backup location**: `.cachekill-backup/` directory
+- **Restore capability**: `--restore-last` to undo the last cleanup
+- **Backup manifest**: JSON manifest of all backed up items
+
+#### Safety Features
+- **Dry run**: `--dry-run` to preview changes without executing
+- **Safe delete**: `--safe-delete` (default: true) creates backups
+- **Force override**: `--force` to skip confirmations (use with caution)
+- **Confirmation prompts**: Interactive confirmation for destructive operations
+
+#### System Diagnostics
+```bash
+# Comprehensive system health check
+./port-kill-console cache --doctor --json
+```
+
+**Checks:**
+- Disk usage and available space
+- Large cache detection and warnings
+- Cache directory accessibility
+- System resource usage
+- Backup directory status
+
+### JSON Output Format
+
+All cache commands support `--json` for programmatic access:
+
+#### List Response
+```json
+{
+  "entries": [
+    {
+      "id": "rust:project-target",
+      "kind": "rust",
+      "name": "Rust target",
+      "path": "/path/to/target",
+      "sizeBytes": 1073741824,
+      "lastUsedAt": "2025-01-01T12:00:00Z",
+      "stale": false,
+      "details": {}
+    }
+  ],
+  "summary": {
+    "totalSizeBytes": 1073741824,
+    "count": 1,
+    "staleCount": 0
+  }
+}
+```
+
+#### Clean Response
+```json
+{
+  "deleted": [...],
+  "backedUpTo": "/path/to/backup",
+  "summary": {
+    "freedBytes": 1073741824,
+    "deletedCount": 1
+  }
+}
+```
+
+#### Doctor Response
+```json
+{
+  "ok": true,
+  "notes": ["System healthy"],
+  "warnings": ["Large cache detected"],
+  "errors": []
+}
 ```
 
 ### 🚀 **Remote Mode - Instant Staging/Prod Management**

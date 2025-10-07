@@ -130,6 +130,11 @@ port-kill-console.exe --console --ports 3000,8000 --json
 
 # Verbose details (command line, cwd)
 port-kill-console.exe --console --ports 3000,8000 --verbose
+
+# Cache management (NEW!)
+port-kill-console.exe cache --list
+port-kill-console.exe cache --clean --safe-delete
+port-kill-console.exe cache --doctor --json
 ```
 
 ## 4) About the tray app

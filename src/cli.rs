@@ -1,6 +1,7 @@
 use clap::Parser;
 use std::collections::HashSet;
 use crate::preset_manager::{PresetManager, PortPreset};
+use clap::{Args as ClapArgs, Subcommand};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
 pub enum LogLevel {
@@ -307,6 +308,67 @@ pub struct Args {
     /// Delete a user-defined preset by name
     #[arg(long, value_name = "NAME")]
     pub delete_preset: Option<String>,
+
+    /// Cache management commands (non-breaking addition)
+    #[command(subcommand)]
+    pub cache: Option<CacheCommand>,
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum CacheCommand {
+    /// Cache operations (list/clean/dry-run/restore/doctor) and NPX/JS PM
+    Cache(CacheArgs),
+}
+
+#[derive(ClapArgs, Debug, Clone)]
+pub struct CacheArgs {
+    /// Operation mode: list, clean, dry-run, restore-last, doctor
+    #[arg(long)]
+    pub list: bool,
+    #[arg(long)]
+    pub clean: bool,
+    #[arg(long)]
+    pub dry_run: bool,
+    #[arg(long)]
+    pub restore_last: bool,
+    #[arg(long)]
+    pub doctor: bool,
+
+    /// JSON output
+    #[arg(long)]
+    pub json: bool,
+
+    /// Language filter
+    #[arg(long, default_value = "auto")]
+    pub lang: String,
+
+    /// Include NPX analysis
+    #[arg(long)]
+    pub npx: bool,
+
+    /// Include JS package managers caches
+    #[arg(long)]
+    pub js_pm: bool,
+
+    /// Specialized providers
+    #[arg(long)]
+    pub hf: bool,
+    #[arg(long)]
+    pub torch: bool,
+    #[arg(long)]
+    pub vercel: bool,
+    #[arg(long)]
+    pub cloudflare: bool,
+
+    /// Safety and force flags for clean
+    #[arg(long, default_value = "true")]
+    pub safe_delete: bool,
+    #[arg(long)]
+    pub force: bool,
+
+    /// NPX stale days
+    #[arg(long)]
+    pub stale_days: Option<u32>,
 }
 
 impl Args {
