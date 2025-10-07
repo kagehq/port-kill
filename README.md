@@ -1,6 +1,6 @@
 # Port Kill
 
-Port Kill helps you find and free ports blocking your dev work, plus manage development caches. It works on macOS, Linux, and Windows, locally or over SSH with a simple CLI, status bar.
+Port Kill helps you find and free ports blocking your dev work, plus manage development caches. It works on macOS, Linux, and Windows, locally or over SSH with a simple CLI and status bar.
 
 ![Port Kill Status Bar Icon](image-short.png)
 
@@ -46,6 +46,9 @@ port-kill 3000 --safe
 port-kill cache --list
 port-kill cache --clean --safe-delete
 port-kill cache --doctor
+
+# Check for updates
+port-kill --check-updates
 ```
 
 ### CLI quick reference

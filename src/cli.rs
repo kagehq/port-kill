@@ -312,6 +312,10 @@ pub struct Args {
     /// Cache management commands (non-breaking addition)
     #[command(subcommand)]
     pub cache: Option<CacheCommand>,
+
+    /// Check for updates and show notification if available
+    #[arg(long)]
+    pub check_updates: bool,
 }
 
 #[derive(Subcommand, Debug, Clone)]

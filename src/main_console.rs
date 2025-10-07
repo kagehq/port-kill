@@ -3,12 +3,38 @@ use log::info;
 use port_kill::{console_app::ConsolePortKillApp, cli::{Args, CacheCommand}, scripting::{ScriptEngine, load_script_file}};
 use port_kill::cache::{list::{list_caches, print_list_table}, clean::clean_caches, restore::restore_last_backup, doctor::doctor};
 use port_kill::cache::output::print_or_json;
+use port_kill::update_check;
 use clap::Parser;
 
 #[tokio::main]
 async fn main() -> Result<()> {
     // Parse command-line arguments
     let mut args = Args::parse();
+    
+    // Handle update check
+    if args.check_updates {
+        let current_version = env!("CARGO_PKG_VERSION");
+        match update_check::check_for_updates(current_version) {
+            Ok(Some(update_info)) => {
+                update_check::print_update_check_result(&update_info);
+                return Ok(());
+            }
+            Ok(None) => {
+                println!("✅ You're running the latest version ({})", current_version);
+                return Ok(());
+            }
+            Err(e) => {
+                eprintln!("⚠️  Could not check for updates: {}", e);
+                return Ok(());
+            }
+        }
+    }
+    
+    // Check for updates in background (non-blocking)
+    let current_version = env!("CARGO_PKG_VERSION");
+    if let Ok(Some(update_info)) = update_check::check_for_updates(current_version) {
+        update_check::print_update_notification(&update_info);
+    }
     
     // Handle preset functionality
     if args.list_presets {
