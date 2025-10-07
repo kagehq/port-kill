@@ -43,7 +43,7 @@ regex = "1.0"
 sysinfo = "0.30"
 chrono = { version = "0.4", features = ["serde"] }
 walkdir = "2.5"
-reqwest = { version = "0.11", features = ["json"] }
+reqwest = { version = "0.11", features = ["json", "blocking"] }
 
 # Linux-specific tray support
 libappindicator = "0.7"
@@ -70,7 +70,8 @@ pub mod endpoint_monitor;
 pub mod scripting;
 pub mod file_monitor;
 pub mod preset_manager;
-  pub mod cache;
+pub mod cache;
+pub mod update_check;
 
 // Exclude macOS-specific modules for Linux build
 // pub mod app;
