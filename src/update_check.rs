@@ -135,7 +135,8 @@ pub fn self_update() -> Result<()> {
     
     // Get the current executable path
     let current_exe = std::env::current_exe()?;
-    let _current_exe_path = current_exe.to_string_lossy().to_string();
+    #[cfg(target_os = "windows")]
+    let current_exe_path = current_exe.to_string_lossy().to_string();
     
     // Determine platform-specific download URL
     let download_url = get_platform_download_url()?;
@@ -203,11 +204,11 @@ del "%~f0"
     {
         std::fs::copy(&temp_exe, &current_exe)?;
         std::fs::remove_file(&temp_exe)?;
+        
+        println!("✅ Update completed successfully!");
+        println!("🔗 Release notes: {}", update_info.release_url);
+        println!("💡 Restart the application to use the new version.");
     }
-    
-    println!("✅ Update completed successfully!");
-    println!("🔗 Release notes: {}", update_info.release_url);
-    println!("💡 Restart the application to use the new version.");
     
     Ok(())
 }
