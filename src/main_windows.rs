@@ -1,9 +1,17 @@
 use port_kill::{
-    cli::Args,
+    cli::{Args, CacheCommand},
     console_app::ConsolePortKillApp,
     types::{ProcessInfo, StatusBarInfo},
     process_monitor::{get_processes_on_ports, kill_all_processes},
 };
+use port_kill::cache::{
+    list::{list_caches, print_list_table},
+    clean::clean_caches,
+    restore::restore_last_backup,
+    doctor::doctor,
+};
+use port_kill::cache::output::print_or_json;
+use port_kill::update_check;
 use tray_item::TrayItem;
 use anyhow::Result;
 use clap::Parser;
@@ -37,6 +45,59 @@ async fn main() -> Result<()> {
     
     info!("Starting Port Kill application on Windows...");
     info!("Monitoring: {}", args.get_port_description());
+    
+    // Handle explicit update check
+    if args.check_updates {
+        let current_version = env!("CARGO_PKG_VERSION");
+        match update_check::check_for_updates(current_version) {
+            Ok(Some(update_info)) => {
+                update_check::print_update_check_result(&update_info);
+                return Ok(());
+            }
+            Ok(None) => {
+                println!("✅ You're running the latest version ({})", current_version);
+                return Ok(());
+            }
+            Err(e) => {
+                eprintln!("⚠️  Could not check for updates: {}", e);
+                return Ok(());
+            }
+        }
+    }
+
+    // Background update notification (non-blocking)
+    let current_version = env!("CARGO_PKG_VERSION");
+    if let Ok(Some(update_info)) = update_check::check_for_updates(current_version) {
+        update_check::print_update_notification(&update_info);
+    }
+
+    // Handle cache subcommand on Windows too (parity with console binary)
+    if let Some(CacheCommand::Cache(c)) = args.cache.clone() {
+        if c.list || c.dry_run {
+            let resp = list_caches(&c.lang, c.npx, c.js_pm, c.hf, c.torch, c.vercel, c.cloudflare, c.stale_days).await;
+            if c.json {
+                print_or_json(&resp, true);
+            } else {
+                print_list_table(&resp);
+            }
+            return Ok(());
+        }
+        if c.clean {
+            let resp = clean_caches(&c.lang, c.npx, c.js_pm, c.safe_delete, c.force, c.hf, c.torch, c.vercel, c.cloudflare, c.stale_days).await;
+            print_or_json(&resp, c.json);
+            return Ok(());
+        }
+        if c.restore_last {
+            let resp = restore_last_backup().await;
+            print_or_json(&resp, c.json);
+            return Ok(());
+        }
+        if c.doctor {
+            let report = doctor().await;
+            print_or_json(&report, c.json);
+            return Ok(());
+        }
+    }
     
     // Check if running in console mode
     if args.console {
