@@ -46,6 +46,17 @@ async fn main() -> Result<()> {
     info!("Starting Port Kill application on Windows...");
     info!("Monitoring: {}", args.get_port_description());
     
+    // Handle self-update
+    if args.self_update {
+        match update_check::self_update() {
+            Ok(()) => return Ok(()),
+            Err(e) => {
+                eprintln!("⚠️  Self-update failed: {}", e);
+                return Ok(());
+            }
+        }
+    }
+
     // Handle explicit update check
     if args.check_updates {
         let current_version = env!("CARGO_PKG_VERSION");

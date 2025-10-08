@@ -49,6 +49,9 @@ port-kill cache --doctor
 
 # Check for updates
 port-kill --check-updates
+
+# Automatically update to latest version
+port-kill --self-update
 ```
 
 ### CLI quick reference

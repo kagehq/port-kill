@@ -11,6 +11,17 @@ async fn main() -> Result<()> {
     // Parse command-line arguments
     let mut args = Args::parse();
     
+    // Handle self-update
+    if args.self_update {
+        match update_check::self_update() {
+            Ok(()) => return Ok(()),
+            Err(e) => {
+                eprintln!("⚠️  Self-update failed: {}", e);
+                return Ok(());
+            }
+        }
+    }
+
     // Handle update check
     if args.check_updates {
         let current_version = env!("CARGO_PKG_VERSION");

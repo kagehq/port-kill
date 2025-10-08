@@ -119,6 +119,132 @@ fn current_timestamp() -> u64 {
         .as_secs()
 }
 
+pub fn self_update() -> Result<()> {
+    let current_version = env!("CARGO_PKG_VERSION");
+    
+    // Check for updates
+    let update_info = match check_for_updates(current_version)? {
+        Some(info) => info,
+        None => {
+            println!("✅ You're already running the latest version ({})", current_version);
+            return Ok(());
+        }
+    };
+    
+    println!("🔄 Updating from {} to {}...", update_info.current_version, update_info.latest_version);
+    
+    // Get the current executable path
+    let current_exe = std::env::current_exe()?;
+    let _current_exe_path = current_exe.to_string_lossy().to_string();
+    
+    // Determine platform-specific download URL
+    let download_url = get_platform_download_url()?;
+    
+    // Download the new binary
+    println!("📥 Downloading latest version...");
+    let client = reqwest::blocking::Client::new();
+    let response = client
+        .get(&download_url)
+        .header(reqwest::header::USER_AGENT, "port-kill-updater")
+        .send()?;
+    
+    if !response.status().is_success() {
+        return Err(anyhow::anyhow!("Failed to download update: HTTP {}", response.status()));
+    }
+    
+    let new_binary = response.bytes()?;
+    
+    // Create a temporary file for the new binary
+    let temp_dir = std::env::temp_dir();
+    let temp_exe = temp_dir.join("port-kill-new.exe");
+    std::fs::write(&temp_exe, new_binary)?;
+    
+    // Make the new binary executable (Unix systems)
+    #[cfg(not(target_os = "windows"))]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = std::fs::metadata(&temp_exe)?.permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&temp_exe, perms)?;
+    }
+    
+    // Replace the current binary
+    println!("🔄 Replacing current binary...");
+    
+    // On Windows, we need to use a different approach due to file locking
+    #[cfg(target_os = "windows")]
+    {
+        // Create a batch script to replace the binary after the current process exits
+        let batch_content = format!(
+            r#"@echo off
+timeout /t 2 /nobreak >nul
+move "{}" "{}"
+del "%~f0"
+"#,
+            temp_exe.to_string_lossy(),
+            current_exe_path
+        );
+        
+        let batch_file = temp_dir.join("port-kill-update.bat");
+        std::fs::write(&batch_file, batch_content)?;
+        
+        // Execute the batch file
+        std::process::Command::new("cmd")
+            .args(&["/c", "start", "/b", &batch_file.to_string_lossy()])
+            .spawn()?;
+        
+        println!("✅ Update will complete after you restart the application.");
+        println!("🔗 Release notes: {}", update_info.release_url);
+        return Ok(());
+    }
+    
+    // On Unix systems, we can replace directly
+    #[cfg(not(target_os = "windows"))]
+    {
+        std::fs::copy(&temp_exe, &current_exe)?;
+        std::fs::remove_file(&temp_exe)?;
+    }
+    
+    println!("✅ Update completed successfully!");
+    println!("🔗 Release notes: {}", update_info.release_url);
+    println!("💡 Restart the application to use the new version.");
+    
+    Ok(())
+}
+
+fn get_platform_download_url() -> Result<String> {
+    let _platform = if cfg!(target_os = "windows") {
+        "windows"
+    } else if cfg!(target_os = "macos") {
+        "macos"
+    } else {
+        "linux"
+    };
+    
+    // Get the latest release info to construct the download URL
+    let client = reqwest::blocking::Client::new();
+    let response = client
+        .get(GITHUB_API_URL)
+        .header(reqwest::header::USER_AGENT, "port-kill-updater")
+        .send()?;
+    
+    let release: GitHubRelease = response.json()?;
+    let tag_name = release.tag_name;
+    
+    let binary_name = if cfg!(target_os = "windows") {
+        "port-kill-windows.exe"
+    } else if cfg!(target_os = "macos") {
+        "port-kill-macos"
+    } else {
+        "port-kill-linux"
+    };
+    
+    Ok(format!(
+        "https://github.com/kagehq/port-kill/releases/download/{}/{}",
+        tag_name, binary_name
+    ))
+}
+
 pub fn print_update_notification(update_info: &UpdateInfo) {
     println!();
     println!("🔄 Update Available!");

@@ -316,6 +316,10 @@ pub struct Args {
     /// Check for updates and show notification if available
     #[arg(long)]
     pub check_updates: bool,
+
+    /// Automatically update to the latest version
+    #[arg(long)]
+    pub self_update: bool,
 }
 
 #[derive(Subcommand, Debug, Clone)]
