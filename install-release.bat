@@ -30,6 +30,18 @@ powershell -NoProfile -Command "[Net.ServicePointManager]::SecurityProtocol = [N
 )
 
 echo(
+echo(Verifying installation...
+if not exist "%INSTALL_DIR%\port-kill.exe" (
+  echo(ERROR: port-kill.exe not found after download
+  exit /b 1
+)
+if not exist "%INSTALL_DIR%\port-kill-console.exe" (
+  echo(ERROR: port-kill-console.exe not found after download
+  exit /b 1
+)
+echo(✅ Both binaries downloaded successfully
+
+echo(
 echo(Adding to PATH...
 powershell -NoProfile -Command "if (-not (Test-Path 'env:PATH' -PathType Container)) { [Environment]::SetEnvironmentVariable('PATH', '%INSTALL_DIR%', 'User') } else { $currentPath = [Environment]::GetEnvironmentVariable('PATH', 'User'); if ($currentPath -notlike '*%INSTALL_DIR%*') { [Environment]::SetEnvironmentVariable('PATH', $currentPath + ';%INSTALL_DIR%', 'User') } }"
 
@@ -40,7 +52,10 @@ echo(Quick start:
 echo(  port-kill --list
 echo(  port-kill 3000
 echo(  port-kill --guard 3000
+echo(  port-kill cache --list
+echo(  port-kill-console cache --list
 
 echo(
 echo(Note: You may need to restart your terminal for PATH changes to take effect.
 echo(Installation directory: %INSTALL_DIR%
+echo(Installed binaries: port-kill.exe, port-kill-console.exe
