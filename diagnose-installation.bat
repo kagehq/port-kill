@@ -49,14 +49,55 @@ if %errorlevel% equ 0 (
 )
 
 echo.
-echo 5. Recommendations:
-
-echo 📥 Download and run installer (bypass cache):
-echo    powershell -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -UseBasicParsing -Headers @{Pragma='no-cache'; 'Cache-Control'='no-cache'} -Uri 'https://raw.githubusercontent.com/kagehq/port-kill/main/install-release.bat' -OutFile 'install-release.bat'" ^&^& .\install-release.bat
+echo 5. Testing if binaries work (without PATH)...
+if exist "%INSTALL_DIR%\port-kill.exe" (
+    "%INSTALL_DIR%\port-kill.exe" --version >nul 2>&1
+    if %errorlevel% equ 0 (
+        echo ✅ port-kill.exe is executable
+    ) else (
+        echo ❌ port-kill.exe exists but failed to run
+    )
+)
+if exist "%INSTALL_DIR%\port-kill-console.exe" (
+    "%INSTALL_DIR%\port-kill-console.exe" --version >nul 2>&1
+    if %errorlevel% equ 0 (
+        echo ✅ port-kill-console.exe is executable
+    ) else (
+        echo ❌ port-kill-console.exe exists but failed to run
+    )
+)
 
 echo.
-echo 🔄 After installation, restart your terminal and try:
-echo    port-kill-console --console --ports 3000,8000
+echo ==========================================
+echo 6. SOLUTIONS:
+echo ==========================================
+
+echo %PATH% | findstr /i "%INSTALL_DIR%" >nul
+if %errorlevel% neq 0 (
+    echo.
+    echo ⚠️  MAIN ISSUE: Installation directory is NOT in your current terminal's PATH
+    echo.
+    echo 🔧 SOLUTION A - Restart Terminal (RECOMMENDED):
+    echo    1. Close this terminal completely
+    echo    2. Open a new terminal window
+    echo    3. Try: port-kill --list
+    echo.
+    echo 🔧 SOLUTION B - Use Full Path (temporary workaround):
+    echo    "%INSTALL_DIR%\port-kill.exe" --list
+    echo    "%INSTALL_DIR%\port-kill-console.exe" --version
+    echo.
+    echo 🔧 SOLUTION C - Reinstall (if files are missing):
+    echo    powershell -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -UseBasicParsing -Headers @{Pragma='no-cache'; 'Cache-Control'='no-cache'} -Uri 'https://raw.githubusercontent.com/kagehq/port-kill/main/install-release.bat' -OutFile 'install-release.bat'" ^&^& .\install-release.bat
+) else (
+    echo.
+    echo ✅ PATH is configured correctly!
+    echo.
+    echo 🧪 Try running these commands:
+    echo    port-kill --list
+    echo    port-kill-console --version
+)
 
 echo.
-echo 📞 If issues persist, please share this diagnostic output with support.
+echo 📞 If issues persist after trying these solutions, please:
+echo    - Share this diagnostic output
+echo    - Join our Discord: https://discord.gg/KqdBcqRk5E

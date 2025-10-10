@@ -46,16 +46,31 @@ echo(Adding to PATH...
 powershell -NoProfile -Command "if (-not (Test-Path 'env:PATH' -PathType Container)) { [Environment]::SetEnvironmentVariable('PATH', '%INSTALL_DIR%', 'User') } else { $currentPath = [Environment]::GetEnvironmentVariable('PATH', 'User'); if ($currentPath -notlike '*%INSTALL_DIR%*') { [Environment]::SetEnvironmentVariable('PATH', $currentPath + ';%INSTALL_DIR%', 'User') } }"
 
 echo(
-echo(Installation complete!
+echo(==========================================
+echo(✅ Installation Complete!
+echo(==========================================
 echo(
-echo(Quick start:
-echo(  port-kill --list
-echo(  port-kill 3000
-echo(  port-kill --guard 3000
-echo(  port-kill cache --list
-echo(  port-kill-console cache --list
-
+echo(📁 Files installed to: %INSTALL_DIR%
+echo(   - port-kill.exe
+echo(   - port-kill-console.exe
 echo(
-echo(Note: You may need to restart your terminal for PATH changes to take effect.
-echo(Installation directory: %INSTALL_DIR%
-echo(Installed binaries: port-kill.exe, port-kill-console.exe
+echo(⚠️  IMPORTANT: You MUST restart your terminal for PATH changes to take effect!
+echo(
+echo(🔄 To apply changes:
+echo(   1. Close this terminal window completely
+echo(   2. Open a new terminal window
+echo(   3. Run: port-kill --list
+echo(
+echo(🧪 Test immediately without restarting (use full path):
+echo(   "%INSTALL_DIR%\port-kill.exe" --list
+echo(   "%INSTALL_DIR%\port-kill-console.exe" --version
+echo(
+echo(❌ If you get "not recognized" error after restarting:
+echo(   Run diagnostics: 
+echo(   powershell -Command "Invoke-WebRequest -UseBasicParsing -Uri 'https://raw.githubusercontent.com/kagehq/port-kill/main/diagnose-installation.bat' -OutFile 'diagnose.bat'" ^&^& .\diagnose.bat
+echo(
+echo(📖 Quick start (after restarting terminal):
+echo(   port-kill --list
+echo(   port-kill 3000
+echo(   port-kill --guard 3000
+echo(   port-kill cache --list

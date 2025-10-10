@@ -35,17 +35,25 @@ echo Adding to PATH...
 powershell -NoProfile -Command "if (-not (Test-Path 'env:PATH' -PathType Container)) { [Environment]::SetEnvironmentVariable('PATH', '%INSTALL_DIR%', 'User') } else { $currentPath = [Environment]::GetEnvironmentVariable('PATH', 'User'); if ($currentPath -notlike '*%INSTALL_DIR%*') { [Environment]::SetEnvironmentVariable('PATH', $currentPath + ';%INSTALL_DIR%', 'User') } }"
 
 echo.
-echo ✅ Installation complete!
+echo ==========================================
+echo ✅ Installation Complete!
+echo ==========================================
 echo.
 echo 📁 Files installed to: %INSTALL_DIR%
 echo    - port-kill.exe
 echo    - port-kill-console.exe
 echo.
-echo 🔄 IMPORTANT: Restart your terminal for PATH changes to take effect
+echo ⚠️  CRITICAL: You MUST completely restart your terminal!
 echo.
-echo 🧪 Test the installation:
-echo    port-kill-console --console --ports 3000,8000
+echo 🔄 Next steps:
+echo    1. Close this terminal window completely
+echo    2. Open a new terminal window
+echo    3. Test: port-kill --list
 echo.
-echo 💡 If you still get 'not recognized' error:
-echo    1. Restart your terminal completely
-echo    2. Or use the full path: "%INSTALL_DIR%\port-kill-console.exe"
+echo 🧪 Test NOW without restarting (use full path):
+echo    "%INSTALL_DIR%\port-kill.exe" --list
+echo    "%INSTALL_DIR%\port-kill-console.exe" --version
+echo.
+echo ❌ If you get 'not recognized' error AFTER restarting:
+echo    Download diagnostics:
+echo    powershell -Command "Invoke-WebRequest -UseBasicParsing -Uri 'https://raw.githubusercontent.com/kagehq/port-kill/main/diagnose-installation.bat' -OutFile 'diagnose.bat'" ^&^& .\diagnose.bat

@@ -11,6 +11,8 @@ curl.exe -L "https://raw.githubusercontent.com/kagehq/port-kill/main/install-rel
 .\\install-release.bat
 ```
 
+**⚠️ IMPORTANT:** After installation completes, you MUST completely restart your terminal (close and reopen) for PATH changes to take effect. This is not optional!
+
 Alternative (PowerShell with cache-bypass):
 
 ```powershell
@@ -149,18 +151,56 @@ This is harmless. The console app has the same functionality and is the recommen
 
 ## 5) Troubleshooting
 
-- **"Command not found" after install**: add the install folder to your PATH (see step 2) or open a new shell.
-- **"port-kill-console.exe not recognized"**: both binaries should be available in releases. If you only see `port-kill.exe`, you can use `port-kill.exe --console` instead.
-- **Only one binary installed**: this may indicate an installation issue. Both `port-kill.exe` and `port-kill-console.exe` should be available.
+### Common Issue: "port-kill is not recognized" or "port-kill-console is not recognized"
+
+This is the #1 issue Windows users face. Here's how to solve it:
+
+**Root Cause:** The installer adds binaries to your PATH, but your current terminal session doesn't see the updated PATH yet.
+
+**Solution (pick one):**
+
+1. **Restart your terminal completely** (RECOMMENDED)
+   - Close all terminal windows completely
+   - Open a new terminal window
+   - Try: `port-kill --list`
+
+2. **Use full path** (temporary workaround - works immediately):
+   ```powershell
+   "%USERPROFILE%\AppData\Local\port-kill\port-kill.exe" --list
+   "%USERPROFILE%\AppData\Local\port-kill\port-kill-console.exe" --version
+   ```
+
+3. **Run diagnostics** to identify what's wrong:
+   ```powershell
+   powershell -Command "Invoke-WebRequest -UseBasicParsing -Uri 'https://raw.githubusercontent.com/kagehq/port-kill/main/diagnose-installation.bat' -OutFile 'diagnose.bat'"; .\diagnose.bat
+   ```
+
+4. **Reinstall** (if binaries are missing):
+   ```powershell
+   powershell -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -UseBasicParsing -Headers @{Pragma='no-cache'; 'Cache-Control'='no-cache'} -Uri 'https://raw.githubusercontent.com/kagehq/port-kill/main/install-release.bat' -OutFile 'install-release.bat'"; .\install-release.bat
+   ```
+
+### Other Common Issues
+
+- **Only one binary installed**: Both `port-kill.exe` and `port-kill-console.exe` should be downloaded. Run diagnostics above.
 - **Access denied / can't kill a process**: run PowerShell/CMD "as Administrator".
 - **SmartScreen or AV blocks the exe**: open file Properties and "Unblock", or allow it in your AV.
 - **Docker processes not showing**: ensure Docker Desktop is running and `docker` is on PATH.
 
-Diagnostic tool (collects environment and URL checks):
+### Verify Installation
+
+Check if binaries exist and PATH is set correctly:
 
 ```powershell
-Invoke-WebRequest -UseBasicParsing -Uri "https://raw.githubusercontent.com/kagehq/port-kill/main/diagnose-installation.bat" -OutFile "diagnose-installation.bat"
-.\diagnose-installation.bat
+# Check if binaries exist
+dir "%USERPROFILE%\AppData\Local\port-kill"
+
+# Check if PATH contains the install directory
+echo %PATH% | findstr "port-kill"
+
+# Test binaries directly (works without PATH)
+"%USERPROFILE%\AppData\Local\port-kill\port-kill.exe" --version
+"%USERPROFILE%\AppData\Local\port-kill\port-kill-console.exe" --version
 ```
 
 ## 6) Scripting

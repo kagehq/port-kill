@@ -22,10 +22,23 @@ curl.exe -L "https://raw.githubusercontent.com/kagehq/port-kill/main/install-rel
 .\\install-release.bat
 ```
 
-Tip (Windows diagnostics):
-```powershell
-Invoke-WebRequest -UseBasicParsing -Uri "https://raw.githubusercontent.com/kagehq/port-kill/main/diagnose-installation.bat" -OutFile "diagnose-installation.bat"; .\diagnose-installation.bat
-```
+**Windows users:** After installation, you MUST restart your terminal completely for PATH changes to take effect.
+
+### Troubleshooting Windows Installation
+
+If you get `'port-kill' is not recognized` error after installing:
+
+1. **Close and reopen your terminal completely** (required for PATH changes)
+2. **Run diagnostics** to identify the issue:
+   ```powershell
+   powershell -Command "Invoke-WebRequest -UseBasicParsing -Uri 'https://raw.githubusercontent.com/kagehq/port-kill/main/diagnose-installation.bat' -OutFile 'diagnose.bat'"; .\diagnose.bat
+   ```
+3. **Test with full path** (works without PATH):
+   ```powershell
+   "%USERPROFILE%\AppData\Local\port-kill\port-kill.exe" --list
+   ```
+
+See [WINDOWS.md](WINDOWS.md) for detailed Windows-specific guidance.
 
 ## Quick start
 

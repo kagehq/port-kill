@@ -479,6 +479,75 @@ All cache commands support `--json` for programmatic access:
 }
 ```
 
+## 🔄 **Self-Update System**
+
+Port Kill includes an automatic self-update system that allows users to easily update to the latest version without manual downloads.
+
+### Self-Update Commands
+
+```bash
+# Check for updates (shows notification if available)
+port-kill --check-updates
+
+# Automatically update to the latest version
+port-kill --self-update
+```
+
+### How Self-Update Works
+
+#### Update Check (`--check-updates`)
+- **GitHub API Integration**: Fetches latest release information
+- **Version Comparison**: Compares current version with latest
+- **Caching**: Limits API calls to once per day
+- **User Notification**: Shows update instructions if available
+
+#### Self-Update (`--self-update`)
+- **Automatic Download**: Downloads latest binary for your platform
+- **Platform Detection**: Automatically selects correct binary (Windows/macOS/Linux)
+- **Safe Replacement**: Uses temporary files and proper file locking
+- **Windows Support**: Uses batch scripts for file replacement on Windows
+- **Unix Support**: Direct file replacement on macOS/Linux
+- **Permission Handling**: Maintains executable permissions
+
+### Update Process
+
+1. **Check for Updates**: Compares current version with GitHub releases
+2. **Download Latest**: Fetches platform-specific binary from GitHub
+3. **Safe Replacement**: Replaces current binary with new version
+4. **Restart Required**: User needs to restart application to use new version
+
+### Platform-Specific Behavior
+
+#### Windows
+- Uses batch script for file replacement (handles file locking)
+- Update completes after application restart
+- Maintains executable permissions
+
+#### macOS/Linux
+- Direct file replacement
+- Preserves executable permissions (755)
+- Immediate update completion
+
+### Error Handling
+
+- **Network Issues**: Graceful handling of download failures
+- **Permission Errors**: Clear error messages for permission issues
+- **Version Conflicts**: Handles cases where already on latest version
+- **Platform Detection**: Fallback for unsupported platforms
+
+### Examples
+
+```bash
+# Check if update is available
+port-kill --check-updates
+
+# Update to latest version
+port-kill --self-update
+
+# After update, verify new version
+port-kill --version
+```
+
 ### 🚀 **Remote Mode - Instant Staging/Prod Management**
 ```bash
 # Monitor remote staging server
