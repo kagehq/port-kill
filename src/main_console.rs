@@ -1,6 +1,6 @@
 use anyhow::Result;
 use log::info;
-use port_kill::{console_app::ConsolePortKillApp, cli::{Args, CacheCommand}, scripting::{ScriptEngine, load_script_file}};
+use port_kill::{console_app::ConsolePortKillApp, cli::Args, scripting::{ScriptEngine, load_script_file}};
 use port_kill::cache::{list::{list_caches, print_list_table}, clean::clean_caches, restore::restore_last_backup, doctor::doctor};
 use port_kill::cache::output::print_or_json;
 use port_kill::update_check;
@@ -104,8 +104,9 @@ async fn main() -> Result<()> {
         std::process::exit(1);
     }
 
-    // Handle cache subcommand (Phase 1 stubs)
-    if let Some(CacheCommand::Cache(c)) = args.cache.clone() {
+    // Handle cache subcommand
+    if let Some(cache_cmd) = args.cache.clone() {
+        let c = cache_cmd.args();
         if c.list || c.dry_run {
             let resp = list_caches(&c.lang, c.npx, c.js_pm, c.hf, c.torch, c.vercel, c.cloudflare, c.stale_days).await;
             if c.json {

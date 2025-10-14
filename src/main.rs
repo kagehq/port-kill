@@ -3,7 +3,7 @@ use anyhow::Result;
 #[cfg(target_os = "macos")]
 use log::info;
 #[cfg(target_os = "macos")]
-use port_kill::{app::PortKillApp, cli::{Args, CacheCommand}};
+use port_kill::{app::PortKillApp, cli::Args};
 #[cfg(target_os = "macos")]
 use port_kill::cache::{list::{list_caches, print_list_table}, clean::clean_caches, restore::restore_last_backup, doctor::doctor};
 #[cfg(target_os = "macos")]
@@ -115,7 +115,8 @@ fn main() -> Result<()> {
     info!("Monitoring: {}", args.get_port_description());
 
     // Handle cache subcommand: route to console-like behavior
-    if let Some(CacheCommand::Cache(c)) = args.cache.clone() {
+    if let Some(cache_cmd) = args.cache.clone() {
+        let c = cache_cmd.args();
         if c.list || c.dry_run {
             let resp = tokio::runtime::Runtime::new().unwrap().block_on(list_caches(&c.lang, c.npx, c.js_pm, c.hf, c.torch, c.vercel, c.cloudflare, c.stale_days));
             if c.json {

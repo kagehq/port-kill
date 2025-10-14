@@ -309,10 +309,6 @@ pub struct Args {
     #[arg(long, value_name = "NAME")]
     pub delete_preset: Option<String>,
 
-    /// Cache management commands (non-breaking addition)
-    #[command(subcommand)]
-    pub cache: Option<CacheCommand>,
-
     /// Check for updates and show notification if available
     #[arg(long)]
     pub check_updates: bool,
@@ -320,12 +316,27 @@ pub struct Args {
     /// Automatically update to the latest version
     #[arg(long)]
     pub self_update: bool,
+
+    /// Cache management subcommand
+    #[command(subcommand)]
+    pub cache: Option<CacheCommand>,
 }
 
 #[derive(Subcommand, Debug, Clone)]
 pub enum CacheCommand {
-    /// Cache operations (list/clean/dry-run/restore/doctor) and NPX/JS PM
-    Cache(CacheArgs),
+    /// Cache operations: list, clean, dry-run, restore, doctor, NPX, JS PM
+    Cache {
+        #[command(flatten)]
+        args: CacheArgs,
+    },
+}
+
+impl CacheCommand {
+    pub fn args(&self) -> &CacheArgs {
+        match self {
+            CacheCommand::Cache { args } => args,
+        }
+    }
 }
 
 #[derive(ClapArgs, Debug, Clone)]

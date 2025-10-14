@@ -1,5 +1,5 @@
 use port_kill::{
-    cli::{Args, CacheCommand},
+    cli::Args,
     console_app::ConsolePortKillApp,
     types::{ProcessInfo, StatusBarInfo},
     process_monitor::{get_processes_on_ports, kill_all_processes},
@@ -83,7 +83,8 @@ async fn main() -> Result<()> {
     }
 
     // Handle cache subcommand on Windows too (parity with console binary)
-    if let Some(CacheCommand::Cache(c)) = args.cache.clone() {
+    if let Some(cache_cmd) = args.cache.clone() {
+        let c = cache_cmd.args();
         if c.list || c.dry_run {
             let resp = list_caches(&c.lang, c.npx, c.js_pm, c.hf, c.torch, c.vercel, c.cloudflare, c.stale_days).await;
             if c.json {
