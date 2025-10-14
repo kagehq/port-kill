@@ -1004,6 +1004,69 @@ pub fn get_processes_on_ports(ports: &[u16], args: &crate::cli::Args) -> (usize,
     }
 }
 
+#[cfg(target_os = "windows")]
+pub fn kill_all_processes(ports: &[u16], args: &crate::cli::Args) -> anyhow::Result<()> {
+    let port_list = ports.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(", ");
+    log::info!("Killing all processes on ports {}...", port_list);
+    
+    // Get ignore sets for efficient lookup
+    let ignore_ports = args.get_ignore_ports_set();
+    let ignore_processes = args.get_ignore_processes_set();
+    
+    let mut pids_to_kill = Vec::new();
+    
+    // On Windows, use netstat to find processes on ports
+    for &port in ports {
+        if ignore_ports.contains(&port) {
+            log::info!("Ignoring port {} during kill operation (ignored by user configuration)", port);
+            continue;
+        }
+        
+        let output = match std::process::Command::new("netstat")
+            .args(&["-ano", "-p", "TCP"])
+            .output() {
+            Ok(output) => output,
+            Err(e) => {
+                log::error!("Failed to run netstat command: {}", e);
+                continue;
+            }
+        };
+        
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        for line in stdout.lines() {
+            if line.contains(&format!(":{}", port)) && line.contains("LISTENING") {
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                if let Some(pid_str) = parts.last() {
+                    if let Ok(pid) = pid_str.parse::<i32>() {
+                        if !pids_to_kill.contains(&pid) {
+                            pids_to_kill.push(pid);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    if pids_to_kill.is_empty() {
+        log::info!("No processes found to kill on the specified ports");
+        return Ok(());
+    }
+    
+    log::info!("Found {} processes to kill", pids_to_kill.len());
+    
+    for pid in pids_to_kill {
+        log::info!("Attempting to kill process PID: {}", pid);
+        match kill_process(pid) {
+            Ok(_) => log::info!("Successfully killed process PID: {}", pid),
+            Err(e) => log::error!("Failed to kill process {}: {}", pid, e),
+        }
+    }
+    
+    log::info!("Finished killing all processes");
+    Ok(())
+}
+
+#[cfg(not(target_os = "windows"))]
 pub fn kill_all_processes(ports: &[u16], args: &crate::cli::Args) -> anyhow::Result<()> {
     // Build port range string for lsof
     let port_list = ports.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(", ");
@@ -1073,6 +1136,15 @@ pub fn kill_all_processes(ports: &[u16], args: &crate::cli::Args) -> anyhow::Res
     Ok(())
 }
 
+#[cfg(target_os = "windows")]
+pub fn kill_single_process(pid: i32, _args: &crate::cli::Args) -> anyhow::Result<()> {
+    log::info!("Killing single process PID: {}", pid);
+    // On Windows, simplified version - just kill the process
+    // Process filtering is done at a higher level
+    kill_process(pid)
+}
+
+#[cfg(not(target_os = "windows"))]
 pub fn kill_single_process(pid: i32, args: &crate::cli::Args) -> anyhow::Result<()> {
     log::info!("Killing single process PID: {}", pid);
     
