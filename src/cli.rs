@@ -319,22 +319,23 @@ pub struct Args {
 
     /// Cache management subcommand
     #[command(subcommand)]
-    pub cache: Option<CacheCommand>,
+    pub cache: Option<CacheSubcommand>,
 }
 
 #[derive(Subcommand, Debug, Clone)]
-pub enum CacheCommand {
+pub enum CacheSubcommand {
     /// Cache operations: list, clean, dry-run, restore, doctor, NPX, JS PM
-    Cache {
-        #[command(flatten)]
-        args: CacheArgs,
-    },
+    #[command(name = "cache", visible_alias = "c")]
+    Op(CacheArgs),
 }
 
-impl CacheCommand {
+// For backward compatibility - keep CacheCommand as an alias
+pub type CacheCommand = CacheSubcommand;
+
+impl CacheSubcommand {
     pub fn args(&self) -> &CacheArgs {
         match self {
-            CacheCommand::Cache { args } => args,
+            CacheSubcommand::Op(args) => args,
         }
     }
 }
