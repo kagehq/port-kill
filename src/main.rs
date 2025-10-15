@@ -166,6 +166,42 @@ async fn main() -> Result<()> {
     // Parse command-line arguments
     let mut args = Args::parse();
     
+    // Handle self-update
+    if args.self_update {
+        match port_kill::update_check::self_update() {
+            Ok(()) => return Ok(()),
+            Err(e) => {
+                eprintln!("⚠️  Self-update failed: {}", e);
+                return Ok(());
+            }
+        }
+    }
+    
+    // Handle update check
+    if args.check_updates {
+        let current_version = env!("CARGO_PKG_VERSION");
+        match port_kill::update_check::check_for_updates(current_version) {
+            Ok(Some(update_info)) => {
+                port_kill::update_check::print_update_check_result(&update_info);
+                return Ok(());
+            }
+            Ok(None) => {
+                println!("✅ You're running the latest version ({})", current_version);
+                return Ok(());
+            }
+            Err(e) => {
+                eprintln!("⚠️  Could not check for updates: {}", e);
+                return Ok(());
+            }
+        }
+    }
+    
+    // Check for updates in background (non-blocking)
+    let current_version = env!("CARGO_PKG_VERSION");
+    if let Ok(Some(update_info)) = port_kill::update_check::check_for_updates(current_version) {
+        port_kill::update_check::print_update_notification(&update_info);
+    }
+    
     // Handle preset functionality
     if args.list_presets {
         match Args::list_available_presets() {
@@ -178,6 +214,35 @@ async fn main() -> Result<()> {
                 std::process::exit(1);
             }
         }
+    }
+    
+    // Save preset
+    if let Some(name) = args.save_preset.clone() {
+        let desc = args.preset_desc.clone().unwrap_or_else(|| "User-defined preset".to_string());
+        let preset = args.build_preset_from_args(name.clone(), desc);
+        let mut mgr = port_kill::preset_manager::PresetManager::new();
+        if let Err(e) = mgr.load_presets() { eprintln!("Error: {}", e); std::process::exit(1); }
+        mgr.add_preset(preset);
+        if let Err(e) = mgr.save_presets() { eprintln!("Error: {}", e); std::process::exit(1); }
+        println!("✅ Saved preset '{}'.", name);
+        return Ok(());
+    }
+
+    // Delete preset
+    if let Some(name) = args.delete_preset.clone() {
+        let mut mgr = port_kill::preset_manager::PresetManager::new();
+        if let Err(e) = mgr.load_presets() { eprintln!("Error: {}", e); std::process::exit(1); }
+        match mgr.remove_preset(&name) {
+            Some(_) => {
+                if let Err(e) = mgr.save_presets() { eprintln!("Error: {}", e); std::process::exit(1); }
+                println!("🗑️  Deleted preset '{}'.", name);
+            }
+            None => {
+                eprintln!("Preset '{}' not found.", name);
+                std::process::exit(1);
+            }
+        }
+        return Ok(());
     }
     
     // Apply preset if specified
@@ -232,6 +297,42 @@ async fn main() -> Result<()> {
     // Parse command-line arguments
     let mut args = Args::parse();
     
+    // Handle self-update
+    if args.self_update {
+        match port_kill::update_check::self_update() {
+            Ok(()) => return Ok(()),
+            Err(e) => {
+                eprintln!("⚠️  Self-update failed: {}", e);
+                return Ok(());
+            }
+        }
+    }
+    
+    // Handle update check
+    if args.check_updates {
+        let current_version = env!("CARGO_PKG_VERSION");
+        match port_kill::update_check::check_for_updates(current_version) {
+            Ok(Some(update_info)) => {
+                port_kill::update_check::print_update_check_result(&update_info);
+                return Ok(());
+            }
+            Ok(None) => {
+                println!("✅ You're running the latest version ({})", current_version);
+                return Ok(());
+            }
+            Err(e) => {
+                eprintln!("⚠️  Could not check for updates: {}", e);
+                return Ok(());
+            }
+        }
+    }
+    
+    // Check for updates in background (non-blocking)
+    let current_version = env!("CARGO_PKG_VERSION");
+    if let Ok(Some(update_info)) = port_kill::update_check::check_for_updates(current_version) {
+        port_kill::update_check::print_update_notification(&update_info);
+    }
+    
     // Handle preset functionality
     if args.list_presets {
         match Args::list_available_presets() {
@@ -244,6 +345,35 @@ async fn main() -> Result<()> {
                 std::process::exit(1);
             }
         }
+    }
+    
+    // Save preset
+    if let Some(name) = args.save_preset.clone() {
+        let desc = args.preset_desc.clone().unwrap_or_else(|| "User-defined preset".to_string());
+        let preset = args.build_preset_from_args(name.clone(), desc);
+        let mut mgr = port_kill::preset_manager::PresetManager::new();
+        if let Err(e) = mgr.load_presets() { eprintln!("Error: {}", e); std::process::exit(1); }
+        mgr.add_preset(preset);
+        if let Err(e) = mgr.save_presets() { eprintln!("Error: {}", e); std::process::exit(1); }
+        println!("✅ Saved preset '{}'.", name);
+        return Ok(());
+    }
+
+    // Delete preset
+    if let Some(name) = args.delete_preset.clone() {
+        let mut mgr = port_kill::preset_manager::PresetManager::new();
+        if let Err(e) = mgr.load_presets() { eprintln!("Error: {}", e); std::process::exit(1); }
+        match mgr.remove_preset(&name) {
+            Some(_) => {
+                if let Err(e) = mgr.save_presets() { eprintln!("Error: {}", e); std::process::exit(1); }
+                println!("🗑️  Deleted preset '{}'.", name);
+            }
+            None => {
+                eprintln!("Preset '{}' not found.", name);
+                std::process::exit(1);
+            }
+        }
+        return Ok(());
     }
     
     // Apply preset if specified
