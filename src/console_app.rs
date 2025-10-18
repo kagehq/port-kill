@@ -71,19 +71,11 @@ impl ConsolePortKillApp {
         })
     }
     
-    /// Get ports to scan, using smart defaults when no ports are specified or when ranges are too large
+    /// Get ports to scan, using smart defaults when no ports are specified
     fn get_ports_to_scan(args: &Args) -> Vec<u16> {
         if args.ports.is_some() {
-            let user_ports = args.get_ports_to_monitor();
-            
-            // If the user specified a large number of ports (>100), limit to common dev ports
-            // to prevent hanging on large port ranges
-            if user_ports.len() > 100 {
-                println!("ℹ️  Large port range detected ({} ports), limiting to common development ports to prevent hanging", user_ports.len());
-                vec![3000, 3001, 5000, 8000, 8080, 9000]
-            } else {
-                user_ports
-            }
+            // Use the user-specified ports directly - no arbitrary limits
+            args.get_ports_to_monitor()
         } else {
             // No ports specified, use common development ports to avoid hanging
             vec![3000, 3001, 5000, 8000, 8080, 9000]

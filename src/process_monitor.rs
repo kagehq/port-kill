@@ -924,8 +924,10 @@ pub fn get_processes_on_ports(ports: &[u16], args: &crate::cli::Args) -> (usize,
         
         let (update_sender, _update_receiver) = bounded(100);
         if let Ok(mut process_monitor) = ProcessMonitor::new(update_sender, ports.to_vec(), args.docker, args.verbose) {
-            let rt = tokio::runtime::Runtime::new().unwrap();
-            match rt.block_on(process_monitor.scan_processes()) {
+            // Use block_in_place to avoid runtime conflicts when already in a tokio runtime
+            match tokio::task::block_in_place(|| {
+                tokio::runtime::Handle::current().block_on(process_monitor.scan_processes())
+            }) {
                 Ok(processes) => return (processes.len(), processes),
                 Err(e) => {
                     log::warn!("Failed to get verbose process info: {}, falling back to basic mode", e);
