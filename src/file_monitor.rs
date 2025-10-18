@@ -17,7 +17,7 @@ impl FileMonitor {
     /// Find all processes that have a specific file open
     pub fn find_processes_with_file(&self, file_path: &str) -> Result<Vec<ProcessInfo>> {
         let file_path = Path::new(file_path);
-        
+
         if !file_path.exists() {
             return Ok(vec![]);
         }
@@ -26,7 +26,7 @@ impl FileMonitor {
         {
             self.find_processes_with_file_windows(file_path)
         }
-        
+
         #[cfg(any(target_os = "linux", target_os = "macos"))]
         {
             self.find_processes_with_file_unix(file_path)
@@ -39,7 +39,7 @@ impl FileMonitor {
         {
             self.find_processes_with_extension_windows(extension)
         }
-        
+
         #[cfg(any(target_os = "linux", target_os = "macos"))]
         {
             self.find_processes_with_extension_unix(extension)
@@ -52,7 +52,7 @@ impl FileMonitor {
         {
             self.find_processes_with_pattern_windows(pattern)
         }
-        
+
         #[cfg(any(target_os = "linux", target_os = "macos"))]
         {
             self.find_processes_with_pattern_unix(pattern)
@@ -65,7 +65,7 @@ impl FileMonitor {
         {
             self.get_process_files_windows(pid)
         }
-        
+
         #[cfg(any(target_os = "linux", target_os = "macos"))]
         {
             self.get_process_files_unix(pid)
@@ -102,9 +102,7 @@ impl FileMonitor {
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     fn find_processes_with_file_unix(&self, file_path: &Path) -> Result<Vec<ProcessInfo>> {
         // Use lsof to find processes with file open
-        let output = Command::new("lsof")
-            .arg(file_path)
-            .output()?;
+        let output = Command::new("lsof").arg(file_path).output()?;
 
         if !output.status.success() {
             return Ok(vec![]);
@@ -116,10 +114,7 @@ impl FileMonitor {
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     fn find_processes_with_extension_unix(&self, extension: &str) -> Result<Vec<ProcessInfo>> {
         // Use lsof with pattern matching
-        let output = Command::new("lsof")
-            .arg("+D")
-            .arg(".")
-            .output()?;
+        let output = Command::new("lsof").arg("+D").arg(".").output()?;
 
         if !output.status.success() {
             return Ok(vec![]);
@@ -132,10 +127,7 @@ impl FileMonitor {
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     fn find_processes_with_pattern_unix(&self, pattern: &str) -> Result<Vec<ProcessInfo>> {
         // Use lsof with pattern matching
-        let output = Command::new("lsof")
-            .arg("+D")
-            .arg(".")
-            .output()?;
+        let output = Command::new("lsof").arg("+D").arg(".").output()?;
 
         if !output.status.success() {
             return Ok(vec![]);
@@ -165,34 +157,34 @@ impl FileMonitor {
     #[cfg(target_os = "windows")]
     fn parse_handle_output(&self, output: &str) -> Result<Vec<ProcessInfo>> {
         let mut processes = Vec::new();
-        
+
         for line in output.lines() {
             if line.starts_with("pid:") {
                 let parts: Vec<&str> = line.split_whitespace().collect();
                 if parts.len() >= 2 {
-                if let Ok(pid) = parts[1].parse::<i32>() {
-                    // Get process name from the next line or use a default
-                    let name = "unknown".to_string();
-                    processes.push(ProcessInfo {
-                        pid,
-                        name: name.clone(),
-                        port: 0,
-                        command: name,
-                        container_id: None,
-                        container_name: None,
-                        command_line: Some(String::new()),
-                        working_directory: None,
-                        process_group: None,
-                        project_name: None,
-                        cpu_usage: None,
-                        memory_usage: None,
-                        memory_percentage: None,
-                    });
-                }
+                    if let Ok(pid) = parts[1].parse::<i32>() {
+                        // Get process name from the next line or use a default
+                        let name = "unknown".to_string();
+                        processes.push(ProcessInfo {
+                            pid,
+                            name: name.clone(),
+                            port: 0,
+                            command: name,
+                            container_id: None,
+                            container_name: None,
+                            command_line: Some(String::new()),
+                            working_directory: None,
+                            process_group: None,
+                            project_name: None,
+                            cpu_usage: None,
+                            memory_usage: None,
+                            memory_percentage: None,
+                        });
+                    }
                 }
             }
         }
-        
+
         Ok(processes)
     }
 
@@ -220,10 +212,7 @@ impl FileMonitor {
         // Fallback: try to use handle.exe if available
         #[cfg(target_os = "windows")]
         {
-            if let Ok(output) = Command::new("handle")
-                .arg(_file_path)
-                .output()
-            {
+            if let Ok(output) = Command::new("handle").arg(_file_path).output() {
                 if output.status.success() {
                     return self.parse_handle_output(&String::from_utf8_lossy(&output.stdout));
                 }
@@ -234,7 +223,10 @@ impl FileMonitor {
     }
 
     #[allow(dead_code)]
-    fn find_processes_with_extension_handle_tool(&self, _extension: &str) -> Result<Vec<ProcessInfo>> {
+    fn find_processes_with_extension_handle_tool(
+        &self,
+        _extension: &str,
+    ) -> Result<Vec<ProcessInfo>> {
         // For now, return empty - this would need more sophisticated implementation
         Ok(vec![])
     }
@@ -254,8 +246,9 @@ impl FileMonitor {
     // Output parsing methods
     fn parse_lsof_output(&self, output: &str) -> Result<Vec<ProcessInfo>> {
         let mut processes = Vec::new();
-        
-        for line in output.lines().skip(1) { // Skip header
+
+        for line in output.lines().skip(1) {
+            // Skip header
             let parts: Vec<&str> = line.split_whitespace().collect();
             if parts.len() >= 2 {
                 if let Ok(pid) = parts[1].parse::<i32>() {
@@ -278,78 +271,89 @@ impl FileMonitor {
                 }
             }
         }
-        
+
         Ok(processes)
     }
 
-    fn parse_lsof_output_with_extension(&self, output: &str, extension: &str) -> Result<Vec<ProcessInfo>> {
+    fn parse_lsof_output_with_extension(
+        &self,
+        output: &str,
+        extension: &str,
+    ) -> Result<Vec<ProcessInfo>> {
         let mut processes = Vec::new();
-        
-        for line in output.lines().skip(1) { // Skip header
+
+        for line in output.lines().skip(1) {
+            // Skip header
             if line.contains(extension) {
                 let parts: Vec<&str> = line.split_whitespace().collect();
                 if parts.len() >= 2 {
-                if let Ok(pid) = parts[1].parse::<i32>() {
-                    let name = parts[0].to_string();
-                    processes.push(ProcessInfo {
-                        pid,
-                        name: name.clone(),
-                        port: 0,
-                        command: name,
-                        container_id: None,
-                        container_name: None,
-                        command_line: Some(String::new()),
-                        working_directory: None,
-                        process_group: None,
-                        project_name: None,
-                        cpu_usage: None,
-                        memory_usage: None,
-                        memory_percentage: None,
-                    });
-                }
+                    if let Ok(pid) = parts[1].parse::<i32>() {
+                        let name = parts[0].to_string();
+                        processes.push(ProcessInfo {
+                            pid,
+                            name: name.clone(),
+                            port: 0,
+                            command: name,
+                            container_id: None,
+                            container_name: None,
+                            command_line: Some(String::new()),
+                            working_directory: None,
+                            process_group: None,
+                            project_name: None,
+                            cpu_usage: None,
+                            memory_usage: None,
+                            memory_percentage: None,
+                        });
+                    }
                 }
             }
         }
-        
+
         Ok(processes)
     }
 
-    fn parse_lsof_output_with_pattern(&self, output: &str, pattern: &str) -> Result<Vec<ProcessInfo>> {
+    fn parse_lsof_output_with_pattern(
+        &self,
+        output: &str,
+        pattern: &str,
+    ) -> Result<Vec<ProcessInfo>> {
         let mut processes = Vec::new();
-        
-        for line in output.lines().skip(1) { // Skip header
+
+        for line in output.lines().skip(1) {
+            // Skip header
             if line.contains(pattern) {
                 let parts: Vec<&str> = line.split_whitespace().collect();
                 if parts.len() >= 2 {
-                if let Ok(pid) = parts[1].parse::<i32>() {
-                    let name = parts[0].to_string();
-                    processes.push(ProcessInfo {
-                        pid,
-                        name: name.clone(),
-                        port: 0,
-                        command: name,
-                        container_id: None,
-                        container_name: None,
-                        command_line: Some(String::new()),
-                        working_directory: None,
-                        process_group: None,
-                        project_name: None,
-                        cpu_usage: None,
-                        memory_usage: None,
-                        memory_percentage: None,
-                    });
-                }
+                    if let Ok(pid) = parts[1].parse::<i32>() {
+                        let name = parts[0].to_string();
+                        processes.push(ProcessInfo {
+                            pid,
+                            name: name.clone(),
+                            port: 0,
+                            command: name,
+                            container_id: None,
+                            container_name: None,
+                            command_line: Some(String::new()),
+                            working_directory: None,
+                            process_group: None,
+                            project_name: None,
+                            cpu_usage: None,
+                            memory_usage: None,
+                            memory_percentage: None,
+                        });
+                    }
                 }
             }
         }
-        
+
         Ok(processes)
     }
 
     fn parse_lsof_files_for_process(&self, output: &str) -> Result<Vec<String>> {
         let mut files = Vec::new();
-        
-        for line in output.lines().skip(1) { // Skip header
+
+        for line in output.lines().skip(1) {
+            // Skip header
             let parts: Vec<&str> = line.split_whitespace().collect();
             if parts.len() >= 9 {
                 // The filename is typically the last part
@@ -360,45 +364,44 @@ impl FileMonitor {
                 }
             }
         }
-        
+
         Ok(files)
     }
 
     #[cfg(target_os = "windows")]
     fn parse_powershell_output(&self, output: &str) -> Result<Vec<ProcessInfo>> {
         let mut processes = Vec::new();
-        
+
         for line in output.lines() {
             if line.contains("Id") && line.contains("ProcessName") {
                 continue; // Skip header
             }
-            
+
             let parts: Vec<&str> = line.split_whitespace().collect();
             if parts.len() >= 2 {
-            if let Ok(pid) = parts[0].parse::<i32>() {
-                let name = parts[1].to_string();
-                processes.push(ProcessInfo {
-                    pid,
-                    name: name.clone(),
-                    port: 0,
-                    command: name,
-                    container_id: None,
-                    container_name: None,
-                    command_line: Some(String::new()),
-                    working_directory: None,
-                    process_group: None,
-                    project_name: None,
-                    cpu_usage: None,
-                    memory_usage: None,
-                    memory_percentage: None,
-                });
-            }
+                if let Ok(pid) = parts[0].parse::<i32>() {
+                    let name = parts[1].to_string();
+                    processes.push(ProcessInfo {
+                        pid,
+                        name: name.clone(),
+                        port: 0,
+                        command: name,
+                        container_id: None,
+                        container_name: None,
+                        command_line: Some(String::new()),
+                        working_directory: None,
+                        process_group: None,
+                        project_name: None,
+                        cpu_usage: None,
+                        memory_usage: None,
+                        memory_percentage: None,
+                    });
+                }
             }
         }
-        
+
         Ok(processes)
     }
-
 }
 
 #[cfg(test)]

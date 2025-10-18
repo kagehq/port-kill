@@ -1,11 +1,10 @@
-pub mod types;
-pub mod output;
-pub mod list;
-pub mod clean;
-pub mod restore;
-pub mod doctor;
-pub mod npx;
-pub mod js_pm;
-pub mod detect;
 pub mod backup;
-
+pub mod clean;
+pub mod detect;
+pub mod doctor;
+pub mod js_pm;
+pub mod list;
+pub mod npx;
+pub mod output;
+pub mod restore;
+pub mod types;

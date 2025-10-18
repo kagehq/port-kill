@@ -1,8 +1,8 @@
+use chrono::{DateTime, Datelike, Timelike, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
-use chrono::{DateTime, Utc, Datelike, Timelike};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ProcessInfo {
@@ -14,10 +14,10 @@ pub struct ProcessInfo {
     pub container_name: Option<String>,
     pub command_line: Option<String>,
     pub working_directory: Option<String>,
-    pub process_group: Option<String>,  // NEW: Group processes by type (e.g., "Node.js", "Python", "Docker")
-    pub project_name: Option<String>,   // NEW: Extract project name from working directory
-    pub cpu_usage: Option<f64>,         // NEW: CPU usage percentage
-    pub memory_usage: Option<u64>,      // NEW: Memory usage in bytes
+    pub process_group: Option<String>, // NEW: Group processes by type (e.g., "Node.js", "Python", "Docker")
+    pub project_name: Option<String>,  // NEW: Extract project name from working directory
+    pub cpu_usage: Option<f64>,        // NEW: CPU usage percentage
+    pub memory_usage: Option<u64>,     // NEW: Memory usage in bytes
     pub memory_percentage: Option<f64>, // NEW: Memory usage percentage
 }
 
@@ -59,23 +59,25 @@ impl StatusBarInfo {
 
         Self { text, tooltip }
     }
-    
-    pub fn from_processes_with_status(processes: &std::collections::HashMap<u16, ProcessInfo>) -> Self {
+
+    pub fn from_processes_with_status(
+        processes: &std::collections::HashMap<u16, ProcessInfo>,
+    ) -> Self {
         let count = processes.len();
-        
+
         if count == 0 {
             return Self {
                 text: "0".to_string(),
                 tooltip: "No development processes running".to_string(),
             };
         }
-        
+
         // Analyze process status
         let mut high_cpu_count = 0;
         let mut high_memory_count = 0;
         let mut docker_count = 0;
         let mut groups: std::collections::HashSet<String> = std::collections::HashSet::new();
-        
+
         for process_info in processes.values() {
             // Check for high resource usage
             if let Some(cpu) = process_info.cpu_usage {
@@ -83,62 +85,69 @@ impl StatusBarInfo {
                     high_cpu_count += 1;
                 }
             }
-            
+
             if let Some(memory) = process_info.memory_percentage {
                 if memory > 10.0 {
                     high_memory_count += 1;
                 }
             }
-            
+
             // Count Docker containers
             if process_info.container_id.is_some() {
                 docker_count += 1;
             }
-            
+
             // Collect process groups
             if let Some(ref group) = process_info.process_group {
                 groups.insert(group.clone());
             }
         }
-        
+
         // Create status text with indicators
         let mut status_parts = vec![count.to_string()];
-        
+
         if high_cpu_count > 0 {
             status_parts.push(format!("🔥{}", high_cpu_count));
         }
-        
+
         if high_memory_count > 0 {
             status_parts.push(format!("💾{}", high_memory_count));
         }
-        
+
         if docker_count > 0 {
             status_parts.push(format!("🐳{}", docker_count));
         }
-        
+
         let text = status_parts.join(" ");
-        
+
         // Create detailed tooltip
         let mut tooltip_parts = vec![format!("{} development process(es) running", count)];
-        
+
         if !groups.is_empty() {
-            tooltip_parts.push(format!("Groups: {}", groups.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")));
+            tooltip_parts.push(format!(
+                "Groups: {}",
+                groups
+                    .iter()
+                    .map(|s| s.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ));
         }
-        
+
         if high_cpu_count > 0 {
             tooltip_parts.push(format!("{} high CPU processes", high_cpu_count));
         }
-        
+
         if high_memory_count > 0 {
             tooltip_parts.push(format!("{} high memory processes", high_memory_count));
         }
-        
+
         if docker_count > 0 {
             tooltip_parts.push(format!("{} Docker containers", docker_count));
         }
-        
+
         let tooltip = tooltip_parts.join(" | ");
-        
+
         Self { text, tooltip }
     }
 }
@@ -148,7 +157,7 @@ impl ProcessInfo {
     pub fn determine_process_group(&self) -> Option<String> {
         let name_lower = self.name.to_lowercase();
         let command_lower = self.command.to_lowercase();
-        
+
         // Check for common development tools
         if name_lower.contains("node") || command_lower.contains("node") {
             Some("Node.js".to_string())
@@ -168,13 +177,16 @@ impl ProcessInfo {
             Some("Docker".to_string())
         } else if name_lower.contains("nginx") || command_lower.contains("apache") {
             Some("Web Server".to_string())
-        } else if name_lower.contains("postgres") || name_lower.contains("mysql") || name_lower.contains("redis") {
+        } else if name_lower.contains("postgres")
+            || name_lower.contains("mysql")
+            || name_lower.contains("redis")
+        {
             Some("Database".to_string())
         } else {
             None
         }
     }
-    
+
     /// Extract project name from working directory
     pub fn extract_project_name(&self) -> Option<String> {
         if let Some(ref work_dir) = self.working_directory {
@@ -185,14 +197,20 @@ impl ProcessInfo {
                     return Some(last_part.to_string());
                 }
             }
-            
+
             // Try to find a meaningful project name from the path
             for part in path_parts.iter().rev() {
                 if !part.is_empty() && *part != "~" && *part != "home" && *part != "Users" {
                     // Check if this looks like a project directory
-                    if part.contains("project") || part.contains("app") || part.contains("service") ||
-                       part.contains("api") || part.contains("frontend") || part.contains("backend") ||
-                       part.contains("client") || part.contains("server") {
+                    if part.contains("project")
+                        || part.contains("app")
+                        || part.contains("service")
+                        || part.contains("api")
+                        || part.contains("frontend")
+                        || part.contains("backend")
+                        || part.contains("client")
+                        || part.contains("server")
+                    {
                         return Some(part.to_string());
                     }
                 }
@@ -200,7 +218,7 @@ impl ProcessInfo {
         }
         None
     }
-    
+
     /// Get the full project path context
     pub fn get_project_context(&self) -> Option<String> {
         if let Some(ref work_dir) = self.working_directory {
@@ -210,7 +228,7 @@ impl ProcessInfo {
             None
         }
     }
-    
+
     /// Get a human-readable project description
     pub fn get_project_description(&self) -> String {
         if let Some(ref project) = self.project_name {
@@ -225,31 +243,31 @@ impl ProcessInfo {
             "Unknown Project".to_string()
         }
     }
-    
+
     /// Get a more descriptive display name
     pub fn get_display_name(&self) -> String {
         // Try to create a more descriptive name
         let mut display_parts = Vec::new();
-        
+
         // Add process name
         display_parts.push(self.name.clone());
-        
+
         // Add project context if available
         if let Some(ref project) = self.project_name {
             display_parts.push(format!("[{}]", project));
         }
-        
+
         // Add process group context
         if let Some(ref group) = self.process_group {
             display_parts.push(format!("({})", group));
         }
-        
+
         // Add port context for clarity
         display_parts.push(format!(":{}", self.port));
-        
+
         display_parts.join(" ")
     }
-    
+
     /// Get a short, clean process name for status display
     pub fn get_short_name(&self) -> String {
         // Extract just the executable name without path
@@ -260,40 +278,42 @@ impl ProcessInfo {
         } else {
             &self.name
         };
-        
+
         // Remove common extensions
         let name = name
             .trim_end_matches(".exe")
             .trim_end_matches(".dll")
             .trim_end_matches(".so");
-        
+
         name.to_string()
     }
-    
+
     /// Get a detailed process description
     pub fn get_detailed_description(&self) -> String {
         let mut parts = Vec::new();
-        
+
         // Process name and port
         parts.push(format!("{} on port {}", self.get_short_name(), self.port));
-        
+
         // Add command line if available and different from name
         if let Some(ref cmd_line) = self.command_line {
             if cmd_line != &self.name && !cmd_line.is_empty() {
                 parts.push(format!("({})", cmd_line));
             }
         }
-        
+
         // Add working directory if available
         if let Some(ref work_dir) = self.working_directory {
             parts.push(format!("in {}", work_dir));
         }
-        
+
         // Add container info
-        if let (Some(_container_id), Some(container_name)) = (&self.container_id, &self.container_name) {
+        if let (Some(_container_id), Some(container_name)) =
+            (&self.container_id, &self.container_name)
+        {
             parts.push(format!("[Docker: {}]", container_name));
         }
-        
+
         parts.join(" ")
     }
 }
@@ -325,7 +345,7 @@ impl ProcessHistoryEntry {
             working_directory: process_info.working_directory.clone(),
         }
     }
-    
+
     pub fn get_display_name(&self) -> String {
         if let Some(ref group) = self.process_group {
             if let Some(ref project) = self.project_name {
@@ -618,16 +638,16 @@ impl ProcessHistory {
             max_entries,
         }
     }
-    
+
     pub fn add_entry(&mut self, entry: ProcessHistoryEntry) {
         self.entries.push(entry);
-        
+
         // Keep only the most recent entries
         if self.entries.len() > self.max_entries {
             self.entries.remove(0);
         }
     }
-    
+
     pub fn get_recent_entries(&self, limit: usize) -> &[ProcessHistoryEntry] {
         let start = if self.entries.len() > limit {
             self.entries.len() - limit
@@ -636,40 +656,43 @@ impl ProcessHistory {
         };
         &self.entries[start..]
     }
-    
+
     pub fn get_entries_by_group(&self, group: &str) -> Vec<&ProcessHistoryEntry> {
         self.entries
             .iter()
             .filter(|entry| entry.process_group.as_ref().map_or(false, |g| g == group))
             .collect()
     }
-    
+
     pub fn get_entries_by_project(&self, project: &str) -> Vec<&ProcessHistoryEntry> {
         self.entries
             .iter()
             .filter(|entry| entry.project_name.as_ref().map_or(false, |p| p == project))
             .collect()
     }
-    
+
     pub fn clear(&mut self) {
         self.entries.clear();
     }
-    
+
     pub fn len(&self) -> usize {
         self.entries.len()
     }
-    
+
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
-    
+
     pub fn save_to_file(&self, file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
         let json = serde_json::to_string_pretty(&self.entries)?;
         fs::write(file_path, json)?;
         Ok(())
     }
-    
-    pub fn load_from_file(file_path: &str, max_entries: usize) -> Result<Self, Box<dyn std::error::Error>> {
+
+    pub fn load_from_file(
+        file_path: &str,
+        max_entries: usize,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
         if Path::new(file_path).exists() {
             let json = fs::read_to_string(file_path)?;
             let entries: Vec<ProcessHistoryEntry> = serde_json::from_str(&json)?;
@@ -681,7 +704,7 @@ impl ProcessHistory {
             Ok(Self::new(max_entries))
         }
     }
-    
+
     pub fn get_history_file_path() -> String {
         let home_dir = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
         format!("{}/.port-kill-history.json", home_dir)
@@ -690,15 +713,18 @@ impl ProcessHistory {
     /// Get frequent offenders - processes that have been killed multiple times
     pub fn get_frequent_offenders(&self, min_kills: usize) -> Vec<FrequentOffender> {
         use std::collections::HashMap;
-        
+
         let mut process_counts: HashMap<String, Vec<&ProcessHistoryEntry>> = HashMap::new();
-        
+
         // Group entries by process name and port
         for entry in &self.entries {
             let key = format!("{}:{}", entry.process_name, entry.port);
-            process_counts.entry(key).or_insert_with(Vec::new).push(entry);
+            process_counts
+                .entry(key)
+                .or_insert_with(Vec::new)
+                .push(entry);
         }
-        
+
         // Find processes that have been killed multiple times
         let mut offenders = Vec::new();
         for (_key, entries) in process_counts {
@@ -706,7 +732,7 @@ impl ProcessHistory {
                 let first_entry = entries[0];
                 let last_killed = entries.iter().map(|e| e.killed_at).max().unwrap();
                 let first_killed = entries.iter().map(|e| e.killed_at).min().unwrap();
-                
+
                 offenders.push(FrequentOffender {
                     process_name: first_entry.process_name.clone(),
                     port: first_entry.port,
@@ -718,36 +744,38 @@ impl ProcessHistory {
                 });
             }
         }
-        
+
         // Sort by kill count (most frequent first)
         offenders.sort_by(|a, b| b.kill_count.cmp(&a.kill_count));
         offenders
     }
-    
+
     /// Get time-based patterns - when processes are most commonly killed
     pub fn get_time_patterns(&self) -> TimePatterns {
         use std::collections::HashMap;
-        
+
         let mut hour_counts: HashMap<u32, usize> = HashMap::new();
         let mut day_counts: HashMap<chrono::Weekday, usize> = HashMap::new();
-        
+
         for entry in &self.entries {
             let hour = entry.killed_at.hour();
             *hour_counts.entry(hour).or_insert(0) += 1;
-            
+
             let weekday = entry.killed_at.weekday();
             *day_counts.entry(weekday).or_insert(0) += 1;
         }
-        
+
         // Find peak hours and days
-        let peak_hour = hour_counts.iter()
+        let peak_hour = hour_counts
+            .iter()
             .max_by_key(|(_, count)| *count)
             .map(|(hour, _)| *hour);
-            
-        let peak_day = day_counts.iter()
+
+        let peak_day = day_counts
+            .iter()
             .max_by_key(|(_, count)| *count)
             .map(|(day, _)| *day);
-        
+
         TimePatterns {
             total_kills: self.entries.len(),
             peak_hour,
@@ -756,26 +784,26 @@ impl ProcessHistory {
             day_distribution: day_counts,
         }
     }
-    
+
     /// Get auto-suggestions for ignore lists based on history
     pub fn get_ignore_suggestions(&self, min_kills: usize) -> IgnoreSuggestions {
         let frequent_offenders = self.get_frequent_offenders(min_kills);
-        
+
         let mut suggested_ports = Vec::new();
         let mut suggested_processes = Vec::new();
         let mut suggested_groups = Vec::new();
-        
+
         for offender in &frequent_offenders {
             // Suggest ports that are frequently killed (lowered threshold)
             if offender.kill_count >= min_kills {
                 suggested_ports.push(offender.port);
             }
-            
+
             // Suggest process names that are frequently killed
             if offender.kill_count >= min_kills {
                 suggested_processes.push(offender.process_name.clone());
             }
-            
+
             // Suggest groups that are frequently killed
             if let Some(ref group) = offender.process_group {
                 if offender.kill_count >= min_kills {
@@ -783,7 +811,7 @@ impl ProcessHistory {
                 }
             }
         }
-        
+
         // Remove duplicates
         suggested_ports.sort();
         suggested_ports.dedup();
@@ -791,7 +819,7 @@ impl ProcessHistory {
         suggested_processes.dedup();
         suggested_groups.sort();
         suggested_groups.dedup();
-        
+
         IgnoreSuggestions {
             suggested_ports,
             suggested_processes,
@@ -799,7 +827,7 @@ impl ProcessHistory {
             frequent_offenders,
         }
     }
-    
+
     /// Get statistics about the history
     pub fn get_statistics(&self) -> HistoryStatistics {
         if self.entries.is_empty() {
@@ -819,16 +847,16 @@ impl ProcessHistory {
                 newest_kill: None,
             };
         }
-        
+
         use std::collections::HashMap;
-        
+
         let mut process_counts: HashMap<String, usize> = HashMap::new();
         let mut port_counts: HashMap<u16, usize> = HashMap::new();
         let mut project_counts: HashMap<String, usize> = HashMap::new();
-        
+
         let mut oldest_kill = self.entries[0].killed_at;
         let mut newest_kill = self.entries[0].killed_at;
-        
+
         for entry in &self.entries {
             // Use process_group if available, otherwise fall back to process_name
             let process_key = if let Some(ref group) = entry.process_group {
@@ -838,11 +866,11 @@ impl ProcessHistory {
             };
             *process_counts.entry(process_key).or_insert(0) += 1;
             *port_counts.entry(entry.port).or_insert(0) += 1;
-            
+
             if let Some(ref project) = entry.project_name {
                 *project_counts.entry(project.clone()).or_insert(0) += 1;
             }
-            
+
             if entry.killed_at < oldest_kill {
                 oldest_kill = entry.killed_at;
             }
@@ -850,36 +878,39 @@ impl ProcessHistory {
                 newest_kill = entry.killed_at;
             }
         }
-        
-        let most_killed_process = process_counts.iter()
+
+        let most_killed_process = process_counts
+            .iter()
             .max_by_key(|(_, count)| *count)
             .map(|(name, count)| (name.clone(), *count));
-            
-        let most_killed_port = port_counts.iter()
+
+        let most_killed_port = port_counts
+            .iter()
             .max_by_key(|(_, count)| *count)
             .map(|(port, count)| (*port, *count));
-            
-        let most_killed_project = project_counts.iter()
+
+        let most_killed_project = project_counts
+            .iter()
             .max_by_key(|(_, count)| *count)
             .map(|(name, count)| (name.clone(), *count));
-        
+
         // Get top 3 processes, ports, and projects
         let total_unique_processes = process_counts.len();
         let total_unique_ports = port_counts.len();
         let total_unique_projects = project_counts.len();
-        
+
         let mut top_processes: Vec<(String, usize)> = process_counts.into_iter().collect();
         top_processes.sort_by(|a, b| b.1.cmp(&a.1));
         top_processes.truncate(3);
-        
+
         let mut top_ports: Vec<(u16, usize)> = port_counts.into_iter().collect();
         top_ports.sort_by(|a, b| b.1.cmp(&a.1));
         top_ports.truncate(3);
-        
+
         let mut top_projects: Vec<(String, usize)> = project_counts.into_iter().collect();
         top_projects.sort_by(|a, b| b.1.cmp(&a.1));
         top_projects.truncate(3);
-        
+
         // Calculate average kills per day
         let days_span = if oldest_kill != newest_kill {
             (newest_kill - oldest_kill).num_days() as f64
@@ -887,7 +918,7 @@ impl ProcessHistory {
             1.0
         };
         let average_kills_per_day = self.entries.len() as f64 / days_span.max(1.0);
-        
+
         HistoryStatistics {
             total_kills: self.entries.len(),
             unique_processes: total_unique_processes,
@@ -904,29 +935,29 @@ impl ProcessHistory {
             newest_kill: Some(newest_kill),
         }
     }
-    
+
     /// Perform smart root cause analysis on the process history
     pub fn get_root_cause_analysis(&self) -> RootCauseAnalysis {
         let mut conflicts = Vec::new();
         let mut patterns = Vec::new();
         let mut recommendations = Vec::new();
-        
+
         // Analyze conflicts
         conflicts.extend(self.analyze_port_conflicts());
         conflicts.extend(self.analyze_auto_restart_patterns());
-        
+
         // Analyze workflow patterns
         patterns.extend(self.analyze_development_patterns());
         patterns.extend(self.analyze_time_patterns());
-        
+
         // Generate smart recommendations
         recommendations.extend(self.generate_process_management_recommendations());
         recommendations.extend(self.generate_port_optimization_recommendations());
         recommendations.extend(self.generate_workflow_recommendations());
-        
+
         // Generate summary
         let summary = self.generate_analysis_summary(&conflicts, &patterns, &recommendations);
-        
+
         RootCauseAnalysis {
             conflicts,
             patterns,
@@ -935,26 +966,27 @@ impl ProcessHistory {
             analysis_timestamp: Utc::now(),
         }
     }
-    
+
     /// Analyze port conflicts and collisions
     fn analyze_port_conflicts(&self) -> Vec<ProcessConflict> {
         let mut conflicts = Vec::new();
         use std::collections::HashMap;
-        
+
         // Group processes by port
         let mut port_processes: HashMap<u16, Vec<&ProcessHistoryEntry>> = HashMap::new();
         for entry in &self.entries {
-            port_processes.entry(entry.port).or_insert_with(Vec::new).push(entry);
+            port_processes
+                .entry(entry.port)
+                .or_insert_with(Vec::new)
+                .push(entry);
         }
-        
+
         // Find ports with multiple different processes
         for (port, entries) in port_processes {
             if entries.len() > 1 {
-                let unique_processes: std::collections::HashSet<String> = entries
-                    .iter()
-                    .map(|e| e.process_name.clone())
-                    .collect();
-                
+                let unique_processes: std::collections::HashSet<String> =
+                    entries.iter().map(|e| e.process_name.clone()).collect();
+
                 if unique_processes.len() > 1 {
                     let conflicting_processes: Vec<String> = unique_processes.into_iter().collect();
                     let severity = if entries.len() > 5 {
@@ -964,7 +996,7 @@ impl ProcessHistory {
                     } else {
                         ConflictSeverity::Low
                     };
-                    
+
                     conflicts.push(ProcessConflict {
                         port,
                         conflicting_processes,
@@ -975,42 +1007,45 @@ impl ProcessHistory {
                 }
             }
         }
-        
+
         conflicts
     }
-    
+
     /// Analyze auto-restart patterns
     fn analyze_auto_restart_patterns(&self) -> Vec<ProcessConflict> {
         let mut conflicts = Vec::new();
         use std::collections::HashMap;
-        
+
         // Group by process name and port
         let mut process_groups: HashMap<String, Vec<&ProcessHistoryEntry>> = HashMap::new();
         for entry in &self.entries {
             let key = format!("{}:{}", entry.process_name, entry.port);
-            process_groups.entry(key).or_insert_with(Vec::new).push(entry);
+            process_groups
+                .entry(key)
+                .or_insert_with(Vec::new)
+                .push(entry);
         }
-        
+
         // Find processes that restart frequently
         for (key, entries) in process_groups {
             if entries.len() >= 3 {
                 // Check if kills are close in time (indicating auto-restart)
                 let mut sorted_entries = entries.clone();
                 sorted_entries.sort_by(|a, b| a.killed_at.cmp(&b.killed_at));
-                
+
                 let mut short_intervals = 0;
                 for i in 1..sorted_entries.len() {
-                    let interval = sorted_entries[i].killed_at - sorted_entries[i-1].killed_at;
+                    let interval = sorted_entries[i].killed_at - sorted_entries[i - 1].killed_at;
                     if interval.num_minutes() < 5 {
                         short_intervals += 1;
                     }
                 }
-                
+
                 if short_intervals > 0 {
                     let parts: Vec<&str> = key.split(':').collect();
                     let process_name = parts[0].to_string();
                     let port: u16 = parts[1].parse().unwrap_or(0);
-                    
+
                     conflicts.push(ProcessConflict {
                         port,
                         conflicting_processes: vec![process_name.clone()],
@@ -1021,34 +1056,38 @@ impl ProcessHistory {
                 }
             }
         }
-        
+
         conflicts
     }
-    
+
     /// Analyze development workflow patterns
     fn analyze_development_patterns(&self) -> Vec<WorkflowPattern> {
         let mut patterns = Vec::new();
-        
+
         // Look for hot reload patterns (same process killed multiple times in short intervals)
-        let mut process_groups: std::collections::HashMap<String, Vec<&ProcessHistoryEntry>> = std::collections::HashMap::new();
+        let mut process_groups: std::collections::HashMap<String, Vec<&ProcessHistoryEntry>> =
+            std::collections::HashMap::new();
         for entry in &self.entries {
-            process_groups.entry(entry.process_name.clone()).or_insert_with(Vec::new).push(entry);
+            process_groups
+                .entry(entry.process_name.clone())
+                .or_insert_with(Vec::new)
+                .push(entry);
         }
-        
+
         for (process_name, entries) in process_groups {
             if entries.len() >= 3 {
                 let mut sorted_entries = entries.clone();
                 sorted_entries.sort_by(|a, b| a.killed_at.cmp(&b.killed_at));
-                
+
                 // Check for hot reload pattern (kills within 1-2 minutes)
                 let mut hot_reload_count = 0;
                 for i in 1..sorted_entries.len() {
-                    let interval = sorted_entries[i].killed_at - sorted_entries[i-1].killed_at;
+                    let interval = sorted_entries[i].killed_at - sorted_entries[i - 1].killed_at;
                     if interval.num_minutes() <= 2 {
                         hot_reload_count += 1;
                     }
                 }
-                
+
                 if hot_reload_count >= 2 {
                     patterns.push(WorkflowPattern {
                         pattern_type: PatternType::HotReload,
@@ -1061,25 +1100,26 @@ impl ProcessHistory {
                 }
             }
         }
-        
+
         patterns
     }
-    
+
     /// Analyze time-based patterns
     fn analyze_time_patterns(&self) -> Vec<WorkflowPattern> {
         let mut patterns = Vec::new();
-        
+
         if self.entries.len() < 5 {
             return patterns;
         }
-        
+
         // Group kills by hour of day
-        let mut hourly_kills: std::collections::HashMap<u32, usize> = std::collections::HashMap::new();
+        let mut hourly_kills: std::collections::HashMap<u32, usize> =
+            std::collections::HashMap::new();
         for entry in &self.entries {
             let hour = entry.killed_at.hour();
             *hourly_kills.entry(hour).or_insert(0) += 1;
         }
-        
+
         // Find peak hours
         if let Some((peak_hour, count)) = hourly_kills.iter().max_by_key(|(_, &count)| count) {
             if *count > 2 {
@@ -1093,34 +1133,37 @@ impl ProcessHistory {
                 });
             }
         }
-        
+
         patterns
     }
-    
+
     /// Generate process management recommendations
     fn generate_process_management_recommendations(&self) -> Vec<SmartRecommendation> {
         let mut recommendations = Vec::new();
-        
+
         // Check for frequently killed processes
         let frequent_offenders = self.get_frequent_offenders(2);
         if !frequent_offenders.is_empty() {
             recommendations.push(SmartRecommendation {
                 category: RecommendationCategory::ProcessManagement,
                 title: "Add Frequent Offenders to Ignore List".to_string(),
-                description: format!("{} processes are being killed repeatedly", frequent_offenders.len()),
+                description: format!(
+                    "{} processes are being killed repeatedly",
+                    frequent_offenders.len()
+                ),
                 action: "Use --ignore-processes flag to prevent repeated kills".to_string(),
                 impact: "Reduces manual intervention and improves workflow efficiency".to_string(),
                 priority: RecommendationPriority::High,
             });
         }
-        
+
         recommendations
     }
-    
+
     /// Generate port optimization recommendations
     fn generate_port_optimization_recommendations(&self) -> Vec<SmartRecommendation> {
         let mut recommendations = Vec::new();
-        
+
         // Check for port conflicts
         let conflicts = self.analyze_port_conflicts();
         if !conflicts.is_empty() {
@@ -1133,14 +1176,14 @@ impl ProcessHistory {
                 priority: RecommendationPriority::Medium,
             });
         }
-        
+
         recommendations
     }
-    
+
     /// Generate workflow improvement recommendations
     fn generate_workflow_recommendations(&self) -> Vec<SmartRecommendation> {
         let mut recommendations = Vec::new();
-        
+
         // Check for auto-restart patterns
         let auto_restart_conflicts = self.analyze_auto_restart_patterns();
         if !auto_restart_conflicts.is_empty() {
@@ -1153,17 +1196,22 @@ impl ProcessHistory {
                 priority: RecommendationPriority::Medium,
             });
         }
-        
+
         recommendations
     }
-    
+
     /// Generate analysis summary
-    fn generate_analysis_summary(&self, conflicts: &[ProcessConflict], patterns: &[WorkflowPattern], recommendations: &[SmartRecommendation]) -> String {
+    fn generate_analysis_summary(
+        &self,
+        conflicts: &[ProcessConflict],
+        patterns: &[WorkflowPattern],
+        recommendations: &[SmartRecommendation],
+    ) -> String {
         let total_kills = self.entries.len();
         let conflict_count = conflicts.len();
         let pattern_count = patterns.len();
         let recommendation_count = recommendations.len();
-        
+
         if total_kills == 0 {
             "No process history available for analysis.".to_string()
         } else if conflict_count == 0 && pattern_count == 0 {

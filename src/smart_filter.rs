@@ -1,7 +1,7 @@
 use crate::types::ProcessInfo;
-use std::collections::HashSet;
-use regex::Regex;
 use anyhow::Result;
+use regex::Regex;
+use std::collections::HashSet;
 
 pub struct SmartFilter {
     ignore_ports: HashSet<u16>,
@@ -20,13 +20,11 @@ impl SmartFilter {
         only_groups: Option<HashSet<String>>,
     ) -> Result<Self> {
         let mut compiled_patterns = Vec::new();
-        
+
         if let Some(patterns) = ignore_patterns {
             for pattern in patterns {
                 // Convert wildcard pattern to regex
-                let regex_pattern = pattern
-                    .replace("*", ".*")
-                    .replace("?", ".");
+                let regex_pattern = pattern.replace("*", ".*").replace("?", ".");
                 let regex = Regex::new(&format!("^{}$", regex_pattern))?;
                 compiled_patterns.push(regex);
             }
@@ -107,16 +105,16 @@ pub struct FilterStats {
 
 impl FilterStats {
     pub fn is_active(&self) -> bool {
-        self.ignore_ports_count > 0 
-            || self.ignore_processes_count > 0 
-            || self.ignore_patterns_count > 0 
-            || self.ignore_groups_count > 0 
+        self.ignore_ports_count > 0
+            || self.ignore_processes_count > 0
+            || self.ignore_patterns_count > 0
+            || self.ignore_groups_count > 0
             || self.only_groups_count > 0
     }
 
     pub fn get_description(&self) -> String {
         let mut parts = Vec::new();
-        
+
         if self.ignore_ports_count > 0 {
             parts.push(format!("{} ports", self.ignore_ports_count));
         }
@@ -154,59 +152,69 @@ mod tests {
             Some(vec!["node*".to_string(), "python*".to_string()]),
             HashSet::new(),
             None,
-        ).unwrap();
+        )
+        .unwrap();
 
         let mut processes = HashMap::new();
-        processes.insert(3000, ProcessInfo {
-            pid: 1234,
-            port: 3000,
-            command: "node".to_string(),
-            name: "node".to_string(),
-            container_id: None,
-            container_name: None,
-            command_line: None,
-            working_directory: None,
-            process_group: None,
-            project_name: None,
-            cpu_usage: None,
-            memory_usage: None,
-            memory_percentage: None,
-        });
+        processes.insert(
+            3000,
+            ProcessInfo {
+                pid: 1234,
+                port: 3000,
+                command: "node".to_string(),
+                name: "node".to_string(),
+                container_id: None,
+                container_name: None,
+                command_line: None,
+                working_directory: None,
+                process_group: None,
+                project_name: None,
+                cpu_usage: None,
+                memory_usage: None,
+                memory_percentage: None,
+            },
+        );
 
-        processes.insert(8000, ProcessInfo {
-            pid: 5678,
-            port: 8000,
-            command: "python".to_string(),
-            name: "python".to_string(),
-            container_id: None,
-            container_name: None,
-            command_line: None,
-            working_directory: None,
-            process_group: None,
-            project_name: None,
-            cpu_usage: None,
-            memory_usage: None,
-            memory_percentage: None,
-        });
+        processes.insert(
+            8000,
+            ProcessInfo {
+                pid: 5678,
+                port: 8000,
+                command: "python".to_string(),
+                name: "python".to_string(),
+                container_id: None,
+                container_name: None,
+                command_line: None,
+                working_directory: None,
+                process_group: None,
+                project_name: None,
+                cpu_usage: None,
+                memory_usage: None,
+                memory_percentage: None,
+            },
+        );
 
-        processes.insert(9000, ProcessInfo {
-            pid: 9012,
-            port: 9000,
-            command: "rust".to_string(),
-            name: "rust".to_string(),
-            container_id: None,
-            container_name: None,
-            command_line: None,
-            working_directory: None,
-            process_group: None,
-            project_name: None,
-            cpu_usage: None,
-            memory_usage: None,
-            memory_percentage: None,
-        });
+        processes.insert(
+            9000,
+            ProcessInfo {
+                pid: 9012,
+                port: 9000,
+                command: "rust".to_string(),
+                name: "rust".to_string(),
+                container_id: None,
+                container_name: None,
+                command_line: None,
+                working_directory: None,
+                process_group: None,
+                project_name: None,
+                cpu_usage: None,
+                memory_usage: None,
+                memory_percentage: None,
+            },
+        );
 
         filter.filter_processes(&mut processes);
-        
+
         // Only rust should remain (node and python should be filtered out)
         assert_eq!(processes.len(), 1);
         assert!(processes.contains_key(&9000));
@@ -220,43 +228,50 @@ mod tests {
             None,
             HashSet::new(),
             Some(["Node.js".to_string()].iter().cloned().collect()),
-        ).unwrap();
+        )
+        .unwrap();
 
         let mut processes = HashMap::new();
-        processes.insert(3000, ProcessInfo {
-            pid: 1234,
-            port: 3000,
-            command: "node".to_string(),
-            name: "node".to_string(),
-            container_id: None,
-            container_name: None,
-            command_line: None,
-            working_directory: None,
-            process_group: Some("Node.js".to_string()),
-            project_name: None,
-            cpu_usage: None,
-            memory_usage: None,
-            memory_percentage: None,
-        });
+        processes.insert(
+            3000,
+            ProcessInfo {
+                pid: 1234,
+                port: 3000,
+                command: "node".to_string(),
+                name: "node".to_string(),
+                container_id: None,
+                container_name: None,
+                command_line: None,
+                working_directory: None,
+                process_group: Some("Node.js".to_string()),
+                project_name: None,
+                cpu_usage: None,
+                memory_usage: None,
+                memory_percentage: None,
+            },
+        );
 
-        processes.insert(8000, ProcessInfo {
-            pid: 5678,
-            port: 8000,
-            command: "python".to_string(),
-            name: "python".to_string(),
-            container_id: None,
-            container_name: None,
-            command_line: None,
-            working_directory: None,
-            process_group: Some("Python".to_string()),
-            project_name: None,
-            cpu_usage: None,
-            memory_usage: None,
-            memory_percentage: None,
-        });
+        processes.insert(
+            8000,
+            ProcessInfo {
+                pid: 5678,
+                port: 8000,
+                command: "python".to_string(),
+                name: "python".to_string(),
+                container_id: None,
+                container_name: None,
+                command_line: None,
+                working_directory: None,
+                process_group: Some("Python".to_string()),
+                project_name: None,
+                cpu_usage: None,
+                memory_usage: None,
+                memory_percentage: None,
+            },
+        );
 
         filter.filter_processes(&mut processes);
-        
+
         // Only Node.js should remain
         assert_eq!(processes.len(), 1);
         assert!(processes.contains_key(&3000));

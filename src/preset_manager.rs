@@ -1,8 +1,8 @@
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
-use anyhow::Result;
 
 /// Represents a port preset configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -118,7 +118,7 @@ impl PresetManager {
     pub fn new() -> Self {
         let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
         let config_path = format!("{}/.port-kill/presets.json", home);
-        
+
         Self {
             presets: HashMap::new(),
             config_path,
@@ -129,18 +129,18 @@ impl PresetManager {
     pub fn load_presets(&mut self) -> Result<()> {
         // First, load default presets
         self.load_default_presets();
-        
+
         // Then try to load user presets from file
         if Path::new(&self.config_path).exists() {
             let content = fs::read_to_string(&self.config_path)?;
             let user_presets: HashMap<String, PortPreset> = serde_json::from_str(&content)?;
-            
+
             // Merge user presets (they override defaults)
             for (name, preset) in user_presets {
                 self.presets.insert(name, preset);
             }
         }
-        
+
         Ok(())
     }
 
@@ -150,10 +150,10 @@ impl PresetManager {
         if let Some(parent) = Path::new(&self.config_path).parent() {
             fs::create_dir_all(parent)?;
         }
-        
+
         let content = serde_json::to_string_pretty(&self.presets)?;
         fs::write(&self.config_path, content)?;
-        
+
         Ok(())
     }
 
@@ -165,7 +165,11 @@ impl PresetManager {
             "Common development ports (React, Node.js, Python, etc.)".to_string(),
             vec![3000, 3001, 3002, 4321, 5000, 8000, 8080, 9000],
             Some(vec![5353, 7000]), // Ignore AirDrop and mDNS
-            Some(vec!["Chrome".to_string(), "Safari".to_string(), "Firefox".to_string()]), // Ignore browsers
+            Some(vec![
+                "Chrome".to_string(),
+                "Safari".to_string(),
+                "Firefox".to_string(),
+            ]), // Ignore browsers
             None,
             None,
         );
@@ -175,7 +179,9 @@ impl PresetManager {
         let system_preset = PortPreset::with_smart_filter(
             "system".to_string(),
             "System services and daemons".to_string(),
-            vec![22, 25, 53, 80, 443, 993, 995, 1433, 3306, 5432, 6379, 27017, 8080, 8443],
+            vec![
+                22, 25, 53, 80, 443, 993, 995, 1433, 3306, 5432, 6379, 27017, 8080, 8443,
+            ],
             true, // Enable smart filtering
         );
         self.presets.insert("system".to_string(), system_preset);
@@ -194,7 +200,11 @@ impl PresetManager {
             "Web servers and proxies".to_string(),
             vec![80, 443, 8080, 8443, 3000, 5000, 8000, 9000],
             Some(vec![5353]), // Ignore mDNS
-            Some(vec!["nginx".to_string(), "apache2".to_string(), "httpd".to_string()]), // Ignore system web servers
+            Some(vec![
+                "nginx".to_string(),
+                "apache2".to_string(),
+                "httpd".to_string(),
+            ]), // Ignore system web servers
             None,
             None,
         );
@@ -268,37 +278,53 @@ impl PresetManager {
         output.push_str("📋 Available Port Presets:\n");
         output.push_str(&"=".repeat(50));
         output.push('\n');
-        
+
         let mut preset_names: Vec<_> = self.presets.keys().collect();
         preset_names.sort();
-        
+
         for name in preset_names {
             if let Some(preset) = self.presets.get(name) {
                 output.push_str(&format!("• {}: {}\n", name, preset.description));
-                output.push_str(&format!("  Ports: {}\n", 
-                    preset.ports.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(", ")));
-                
+                output.push_str(&format!(
+                    "  Ports: {}\n",
+                    preset
+                        .ports
+                        .iter()
+                        .map(|p| p.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ));
+
                 if let Some(ref ignore_ports) = preset.ignore_ports {
                     if !ignore_ports.is_empty() {
-                        output.push_str(&format!("  Ignores ports: {}\n", 
-                            ignore_ports.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(", ")));
+                        output.push_str(&format!(
+                            "  Ignores ports: {}\n",
+                            ignore_ports
+                                .iter()
+                                .map(|p| p.to_string())
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        ));
                     }
                 }
-                
+
                 if let Some(ref ignore_processes) = preset.ignore_processes {
                     if !ignore_processes.is_empty() {
-                        output.push_str(&format!("  Ignores processes: {}\n", ignore_processes.join(", ")));
+                        output.push_str(&format!(
+                            "  Ignores processes: {}\n",
+                            ignore_processes.join(", ")
+                        ));
                     }
                 }
-                
+
                 if preset.smart_filter {
                     output.push_str("  Smart filtering: enabled\n");
                 }
-                
+
                 output.push('\n');
             }
         }
-        
+
         output
     }
 
@@ -325,7 +351,7 @@ mod tests {
             "Test preset".to_string(),
             vec![3000, 8080],
         );
-        
+
         assert_eq!(preset.name, "test");
         assert_eq!(preset.description, "Test preset");
         assert_eq!(preset.ports, vec![3000, 8080]);
@@ -342,7 +368,7 @@ mod tests {
             None,
             None,
         );
-        
+
         assert_eq!(preset.ignore_ports, Some(vec![5353]));
         assert_eq!(preset.ignore_processes, Some(vec!["Chrome".to_string()]));
     }
@@ -351,11 +377,11 @@ mod tests {
     fn test_preset_manager() {
         let mut manager = PresetManager::new();
         manager.load_default_presets();
-        
+
         assert!(manager.get_preset("dev").is_some());
         assert!(manager.get_preset("system").is_some());
         assert!(manager.get_preset("nonexistent").is_none());
-        
+
         let names = manager.get_preset_names();
         assert!(names.contains(&"dev".to_string()));
         assert!(names.contains(&"system".to_string()));

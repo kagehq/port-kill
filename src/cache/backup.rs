@@ -1,8 +1,8 @@
-use std::path::{Path, PathBuf};
-use std::fs;
-use chrono::{DateTime, Utc};
-use serde::{Serialize, Deserialize};
 use super::types::CacheEntry;
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use std::fs;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct BackupManifest {
@@ -28,7 +28,10 @@ pub fn get_timestamped_dir() -> PathBuf {
     backup_dir.join(timestamp.to_string())
 }
 
-pub async fn safe_delete_entries(entries: &[CacheEntry], safe_delete: bool) -> Result<(Vec<CacheEntry>, Option<String>), std::io::Error> {
+pub async fn safe_delete_entries(
+    entries: &[CacheEntry],
+    safe_delete: bool,
+) -> Result<(Vec<CacheEntry>, Option<String>), std::io::Error> {
     let mut deleted = Vec::new();
     let mut backup_path = None;
 
@@ -96,7 +99,12 @@ pub fn find_latest_backup() -> Result<Option<PathBuf>, std::io::Error> {
         .filter(|e| e.path().is_dir())
         .collect();
 
-    entries.sort_by_key(|e| e.metadata().ok().and_then(|m| m.modified().ok()).unwrap_or(std::time::UNIX_EPOCH));
+    entries.sort_by_key(|e| {
+        e.metadata()
+            .ok()
+            .and_then(|m| m.modified().ok())
+            .unwrap_or(std::time::UNIX_EPOCH)
+    });
 
     Ok(entries.last().map(|e| e.path()))
 }

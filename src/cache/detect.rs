@@ -1,8 +1,8 @@
-use std::path::{Path, PathBuf};
-use std::fs;
-use chrono::{DateTime, Utc};
 use super::types::CacheEntry;
+use chrono::{DateTime, Utc};
 use serde_json::json;
+use std::fs;
+use std::path::{Path, PathBuf};
 
 fn dir_size_and_mtime(path: &Path) -> (u64, Option<DateTime<Utc>>) {
     let mut total: u64 = 0;
@@ -10,10 +10,15 @@ fn dir_size_and_mtime(path: &Path) -> (u64, Option<DateTime<Utc>>) {
     let _ = walkdir::WalkDir::new(path).into_iter().for_each(|e| {
         if let Ok(entry) = e {
             if let Ok(md) = entry.metadata() {
-                if md.is_file() { total = total.saturating_add(md.len()); }
+                if md.is_file() {
+                    total = total.saturating_add(md.len());
+                }
                 if let Ok(modified) = md.modified() {
                     let dt: DateTime<Utc> = modified.into();
-                    newest = Some(match newest { Some(n) => n.max(dt), None => dt });
+                    newest = Some(match newest {
+                        Some(n) => n.max(dt),
+                        None => dt,
+                    });
                 }
             }
         }
@@ -102,7 +107,7 @@ pub fn detect_js_caches(root: &Path) -> Vec<CacheEntry> {
 
 pub fn detect_npx_caches(stale_days: Option<u32>) -> Vec<CacheEntry> {
     let mut entries = Vec::new();
-    
+
     // NPX cache location
     if let Ok(home) = std::env::var("HOME") {
         let npx_cache = PathBuf::from(home).join(".npm/_npx");
@@ -114,7 +119,7 @@ pub fn detect_npx_caches(stale_days: Option<u32>) -> Vec<CacheEntry> {
                         let package_name = entry.file_name().to_string_lossy().to_string();
                         let package_path = entry.path();
                         let (size, mtime) = dir_size_and_mtime(&package_path);
-                        
+
                         // Determine if package is stale based on stale_days parameter
                         let stale = if let Some(last_used) = mtime {
                             let now = chrono::Utc::now();
@@ -124,10 +129,10 @@ pub fn detect_npx_caches(stale_days: Option<u32>) -> Vec<CacheEntry> {
                         } else {
                             true
                         };
-                        
+
                         // Try to extract package name and version from package.json
                         let (actual_name, version) = extract_package_info(&package_path);
-                        
+
                         entries.push(CacheEntry {
                             id: format!("npx:{}", package_name),
                             kind: "npx".to_string(),
@@ -168,8 +173,11 @@ fn extract_package_info(package_path: &Path) -> (String, Option<String>) {
                             let package_json = package_dir.join("package.json");
                             if package_json.exists() {
                                 if let Ok(content) = fs::read_to_string(&package_json) {
-                                    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&content) {
-                                        let version = parsed.get("version")
+                                    if let Ok(parsed) =
+                                        serde_json::from_str::<serde_json::Value>(&content)
+                                    {
+                                        let version = parsed
+                                            .get("version")
                                             .and_then(|v| v.as_str())
                                             .map(|v| v.to_string());
                                         return (package_name.clone(), version);
@@ -183,7 +191,7 @@ fn extract_package_info(package_path: &Path) -> (String, Option<String>) {
             }
         }
     }
-    
+
     // Fallback: look for package.json in node_modules subdirectories
     let node_modules = package_path.join("node_modules");
     if node_modules.exists() {
@@ -193,12 +201,15 @@ fn extract_package_info(package_path: &Path) -> (String, Option<String>) {
                     let package_json = entry.path().join("package.json");
                     if package_json.exists() {
                         if let Ok(content) = fs::read_to_string(&package_json) {
-                            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&content) {
-                                let name = parsed.get("name")
+                            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&content)
+                            {
+                                let name = parsed
+                                    .get("name")
                                     .and_then(|n| n.as_str())
                                     .unwrap_or("unknown")
                                     .to_string();
-                                let version = parsed.get("version")
+                                let version = parsed
+                                    .get("version")
                                     .and_then(|v| v.as_str())
                                     .map(|v| v.to_string());
                                 return (name, version);
@@ -209,16 +220,16 @@ fn extract_package_info(package_path: &Path) -> (String, Option<String>) {
             }
         }
     }
-    
+
     ("unknown".to_string(), None)
 }
 
 pub fn detect_js_pm_caches() -> Vec<CacheEntry> {
     let mut entries = Vec::new();
-    
+
     if let Ok(home) = std::env::var("HOME") {
         let home_path = PathBuf::from(home);
-        
+
         // npm cache
         let npm_cache = home_path.join(".npm");
         if npm_cache.exists() {
@@ -234,7 +245,7 @@ pub fn detect_js_pm_caches() -> Vec<CacheEntry> {
                 details: json!({"manager": "npm"}),
             });
         }
-        
+
         // pnpm store
         let pnpm_store = home_path.join(".pnpm-store");
         if pnpm_store.exists() {
@@ -250,7 +261,7 @@ pub fn detect_js_pm_caches() -> Vec<CacheEntry> {
                 details: json!({"manager": "pnpm"}),
             });
         }
-        
+
         // yarn cache
         let yarn_cache = home_path.join(".yarn/cache");
         if yarn_cache.exists() {
@@ -274,9 +285,12 @@ pub fn detect_js_pm_caches() -> Vec<CacheEntry> {
 pub fn detect_python_caches() -> Vec<CacheEntry> {
     let mut entries = Vec::new();
     let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
-    
+
     // __pycache__ directories
-    if let Ok(walker) = walkdir::WalkDir::new(&cwd).into_iter().collect::<Result<Vec<_>, _>>() {
+    if let Ok(walker) = walkdir::WalkDir::new(&cwd)
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()
+    {
         for entry in walker {
             if entry.path().is_dir() && entry.file_name() == "__pycache__" {
                 let (size, mtime) = dir_size_and_mtime(entry.path());
@@ -295,9 +309,12 @@ pub fn detect_python_caches() -> Vec<CacheEntry> {
             }
         }
     }
-    
+
     // .venv directories
-    if let Ok(walker) = walkdir::WalkDir::new(&cwd).into_iter().collect::<Result<Vec<_>, _>>() {
+    if let Ok(walker) = walkdir::WalkDir::new(&cwd)
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()
+    {
         for entry in walker {
             if entry.path().is_dir() && entry.file_name() == ".venv" {
                 let (size, mtime) = dir_size_and_mtime(entry.path());
@@ -316,9 +333,12 @@ pub fn detect_python_caches() -> Vec<CacheEntry> {
             }
         }
     }
-    
+
     // .pytest_cache directories
-    if let Ok(walker) = walkdir::WalkDir::new(&cwd).into_iter().collect::<Result<Vec<_>, _>>() {
+    if let Ok(walker) = walkdir::WalkDir::new(&cwd)
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()
+    {
         for entry in walker {
             if entry.path().is_dir() && entry.file_name() == ".pytest_cache" {
                 let (size, mtime) = dir_size_and_mtime(entry.path());
@@ -344,9 +364,12 @@ pub fn detect_python_caches() -> Vec<CacheEntry> {
 pub fn detect_java_caches() -> Vec<CacheEntry> {
     let mut entries = Vec::new();
     let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
-    
+
     // .gradle directories
-    if let Ok(walker) = walkdir::WalkDir::new(&cwd).into_iter().collect::<Result<Vec<_>, _>>() {
+    if let Ok(walker) = walkdir::WalkDir::new(&cwd)
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()
+    {
         for entry in walker {
             if entry.path().is_dir() && entry.file_name() == ".gradle" {
                 let (size, mtime) = dir_size_and_mtime(entry.path());
@@ -365,25 +388,27 @@ pub fn detect_java_caches() -> Vec<CacheEntry> {
             }
         }
     }
-    
+
     // build directories (only if they contain Java-related files)
-    if let Ok(walker) = walkdir::WalkDir::new(&cwd).into_iter().collect::<Result<Vec<_>, _>>() {
+    if let Ok(walker) = walkdir::WalkDir::new(&cwd)
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()
+    {
         for entry in walker {
             if entry.path().is_dir() && entry.file_name() == "build" {
                 // Check if this is a Java build directory by looking for Java-specific files
-                let has_java_files = walkdir::WalkDir::new(entry.path())
-                    .into_iter()
-                    .any(|e| {
-                        if let Ok(e) = e {
-                            e.path().extension()
-                                .and_then(|ext| ext.to_str())
-                                .map(|ext| ext == "class" || ext == "jar")
-                                .unwrap_or(false)
-                        } else {
-                            false
-                        }
-                    });
-                
+                let has_java_files = walkdir::WalkDir::new(entry.path()).into_iter().any(|e| {
+                    if let Ok(e) = e {
+                        e.path()
+                            .extension()
+                            .and_then(|ext| ext.to_str())
+                            .map(|ext| ext == "class" || ext == "jar")
+                            .unwrap_or(false)
+                    } else {
+                        false
+                    }
+                });
+
                 if has_java_files {
                     let (size, mtime) = dir_size_and_mtime(entry.path());
                     entries.push(CacheEntry {
@@ -402,7 +427,7 @@ pub fn detect_java_caches() -> Vec<CacheEntry> {
             }
         }
     }
-    
+
     // Maven cache (~/.m2)
     if let Ok(home) = std::env::var("HOME") {
         let maven_cache = PathBuf::from(home).join(".m2");
@@ -426,13 +451,12 @@ pub fn detect_java_caches() -> Vec<CacheEntry> {
     entries
 }
 
-
 pub fn detect_hf_caches() -> Vec<CacheEntry> {
     let mut entries = Vec::new();
-    
+
     if let Ok(home) = std::env::var("HOME") {
         let home_path = PathBuf::from(home);
-        
+
         // Hugging Face cache directory
         let hf_cache = home_path.join(".cache/huggingface");
         if hf_cache.exists() {
@@ -450,7 +474,7 @@ pub fn detect_hf_caches() -> Vec<CacheEntry> {
                 }),
             });
         }
-        
+
         // Transformers cache
         let transformers_cache = home_path.join(".cache/torch/transformers");
         if transformers_cache.exists() {
@@ -475,10 +499,10 @@ pub fn detect_hf_caches() -> Vec<CacheEntry> {
 
 pub fn detect_torch_caches() -> Vec<CacheEntry> {
     let mut entries = Vec::new();
-    
+
     if let Ok(home) = std::env::var("HOME") {
         let home_path = PathBuf::from(home);
-        
+
         // PyTorch cache directory
         let torch_cache = home_path.join(".cache/torch");
         if torch_cache.exists() {
@@ -496,7 +520,7 @@ pub fn detect_torch_caches() -> Vec<CacheEntry> {
                 }),
             });
         }
-        
+
         // PyTorch hub cache
         let hub_cache = home_path.join(".cache/torch/hub");
         if hub_cache.exists() {
@@ -521,10 +545,10 @@ pub fn detect_torch_caches() -> Vec<CacheEntry> {
 
 pub fn detect_vercel_caches() -> Vec<CacheEntry> {
     let mut entries = Vec::new();
-    
+
     if let Ok(home) = std::env::var("HOME") {
         let home_path = PathBuf::from(home);
-        
+
         // Vercel cache directory
         let vercel_cache = home_path.join(".vercel");
         if vercel_cache.exists() {
@@ -549,10 +573,10 @@ pub fn detect_vercel_caches() -> Vec<CacheEntry> {
 
 pub fn detect_cloudflare_caches() -> Vec<CacheEntry> {
     let mut entries = Vec::new();
-    
+
     if let Ok(home) = std::env::var("HOME") {
         let home_path = PathBuf::from(home);
-        
+
         // Cloudflare cache directory
         let cf_cache = home_path.join(".cloudflare");
         if cf_cache.exists() {

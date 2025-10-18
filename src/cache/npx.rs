@@ -18,4 +18,3 @@ pub struct NpxReport {
 pub async fn analyze_npx(_stale_days: Option<u32>) -> NpxReport {
     NpxReport { packages: vec![] }
 }
-

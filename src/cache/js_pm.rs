@@ -8,6 +8,9 @@ pub struct JsPmReport {
 }
 
 pub async fn scan_js_pm() -> JsPmReport {
-    JsPmReport { npm: false, pnpm: false, yarn: false }
+    JsPmReport {
+        npm: false,
+        pnpm: false,
+        yarn: false,
+    }
 }
-

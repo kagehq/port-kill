@@ -36,7 +36,11 @@ impl TrayMenu {
         })
     }
 
-    pub fn update_menu(&mut self, processes: &HashMap<u16, ProcessInfo>, show_pid: bool) -> Result<()> {
+    pub fn update_menu(
+        &mut self,
+        processes: &HashMap<u16, ProcessInfo>,
+        show_pid: bool,
+    ) -> Result<()> {
         debug!("Updating menu with {} processes", processes.len());
 
         // Update internal state
@@ -53,18 +57,25 @@ impl TrayMenu {
 
     pub fn update_status(&mut self, status_info: &StatusBarInfo) -> Result<()> {
         debug!("Updating status bar: {}", status_info.text);
-        
+
         // Update icon with new status text
         self.icon = Self::create_icon(&status_info.text)?;
-        
+
         Ok(())
     }
 
-    pub fn create_menu(processes: &HashMap<u16, ProcessInfo>, show_pid: bool) -> Result<(Menu, HashMap<String, u16>)> {
+    pub fn create_menu(
+        processes: &HashMap<u16, ProcessInfo>,
+        show_pid: bool,
+    ) -> Result<(Menu, HashMap<String, u16>)> {
         Self::create_menu_with_verbose(processes, show_pid, false)
     }
 
-    pub fn create_menu_with_verbose(processes: &HashMap<u16, ProcessInfo>, show_pid: bool, verbose: bool) -> Result<(Menu, HashMap<String, u16>)> {
+    pub fn create_menu_with_verbose(
+        processes: &HashMap<u16, ProcessInfo>,
+        show_pid: bool,
+        verbose: bool,
+    ) -> Result<(Menu, HashMap<String, u16>)> {
         let menu = Menu::new();
         let mut menu_id_to_port = HashMap::new();
 
@@ -82,25 +93,29 @@ impl TrayMenu {
             let menu_text = if verbose {
                 // Verbose mode: show command line and working directory
                 let mut parts = vec![format!("Kill: Port {}: {}", port, process_info.name)];
-                
+
                 if let Some(ref cmd_line) = process_info.command_line {
                     parts.push(format!("({})", cmd_line));
                 }
-                
+
                 if show_pid {
                     parts.push(format!("(PID {})", process_info.pid));
                 }
-                
+
                 if let Some(ref work_dir) = process_info.working_directory {
                     parts.push(format!("- {}", work_dir));
                 }
-                
-                if let (Some(_container_id), Some(container_name)) = (&process_info.container_id, &process_info.container_name) {
+
+                if let (Some(_container_id), Some(container_name)) =
+                    (&process_info.container_id, &process_info.container_name)
+                {
                     parts.push(format!("[Docker: {}]", container_name));
                 }
-                
+
                 parts.join(" ")
-            } else if let (Some(_container_id), Some(container_name)) = (&process_info.container_id, &process_info.container_name) {
+            } else if let (Some(_container_id), Some(container_name)) =
+                (&process_info.container_id, &process_info.container_name)
+            {
                 format!(
                     "Kill: Port {}: {} [Docker: {}]",
                     port, process_info.name, container_name
@@ -111,17 +126,14 @@ impl TrayMenu {
                     port, process_info.name, process_info.pid
                 )
             } else {
-                format!(
-                    "Kill: Port {}: {}",
-                    port, process_info.name
-                )
+                format!("Kill: Port {}: {}", port, process_info.name)
             };
-            
+
             // Create menu item for each process
             let process_item = MenuItem::new(&menu_text, true, None);
             let process_id = process_item.id();
             menu.append(&process_item)?;
-            
+
             // Store the mapping from menu ID to port
             menu_id_to_port.insert(process_id.0.clone(), *port);
         }
@@ -140,12 +152,10 @@ impl TrayMenu {
         Ok((menu, menu_id_to_port))
     }
 
-
-
     pub fn create_icon(text: &str) -> Result<Icon> {
         // Create a simple but visible icon for the status bar
         let icon_data = Self::generate_visible_icon(text);
-        
+
         // Try different sizes for better compatibility
         match Icon::from_rgba(icon_data.clone(), 16, 16) {
             Ok(icon) => Ok(icon),
@@ -160,21 +170,21 @@ impl TrayMenu {
     fn generate_visible_icon(text: &str) -> Vec<u8> {
         // Create a much larger, highly visible 32x32 RGBA icon for the status bar
         let mut icon_data = Vec::new();
-        
+
         for y in 0..32 {
             for x in 0..32 {
                 // Create a very simple, highly visible icon
                 let _is_edge = x < 2 || x > 29 || y < 2 || y > 29;
                 let _is_center = x >= 14 && x <= 17 && y >= 14 && y <= 17;
-                
+
                 // Create a number display area in the center
                 let is_number_area = x >= 12 && x <= 19 && y >= 12 && y <= 19;
-                
+
                 let (r, g, b, a) = if is_number_area {
                     // Parse the number from text (remove any non-numeric characters)
                     let number = text.chars().filter(|c| c.is_numeric()).collect::<String>();
                     let num = number.parse::<u32>().unwrap_or(0);
-                    
+
                     if num == 0 {
                         (0, 255, 0, 255) // Bright green when no processes
                     } else if num <= 9 {
@@ -187,11 +197,11 @@ impl TrayMenu {
                 } else {
                     (255, 255, 255, 255) // Clean white background
                 };
-                
+
                 icon_data.extend_from_slice(&[r, g, b, a]);
             }
         }
-        
+
         icon_data
     }
 }

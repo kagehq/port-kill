@@ -1,5 +1,5 @@
 use anyhow::Result;
-use chrono::{Utc, Duration};
+use chrono::{Duration, Utc};
 use log::{info, warn};
 use std::collections::HashMap;
 use std::fs;
@@ -8,11 +8,10 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::time::{sleep, Duration as TokioDuration};
 
-use crate::types::{
-    PortReservation, PortConflict, PortConflictType, PortResolution, 
-    GuardStatus, ProcessInfo
-};
 use crate::process_monitor::ProcessMonitor;
+use crate::types::{
+    GuardStatus, PortConflict, PortConflictType, PortReservation, PortResolution, ProcessInfo,
+};
 use std::collections::HashSet;
 
 /// Port Guard daemon that proactively prevents port conflicts
@@ -53,14 +52,17 @@ impl PortGuardDaemon {
     pub async fn start(&self) -> Result<()> {
         // Load existing reservations
         self.load_reservations().await?;
-        
+
         // Mark as running
         {
             let mut running = self.is_running.lock().await;
             *running = true;
         }
 
-        info!("🛡️  Port Guard daemon started, watching ports: {:?}", self.watched_ports);
+        info!(
+            "🛡️  Port Guard daemon started, watching ports: {:?}",
+            self.watched_ports
+        );
 
         // Start the main monitoring loop
         self.monitor_loop().await?;
@@ -74,10 +76,10 @@ impl PortGuardDaemon {
             let mut running = self.is_running.lock().await;
             *running = false;
         }
-        
+
         // Save reservations before stopping
         self.save_reservations().await?;
-        
+
         info!("🛡️  Port Guard daemon stopped");
         Ok(())
     }
@@ -110,7 +112,10 @@ impl PortGuardDaemon {
         let mut port_processes: HashMap<u16, Vec<&ProcessInfo>> = HashMap::new();
         for process in processes.values() {
             if self.watched_ports.contains(&process.port) {
-                port_processes.entry(process.port).or_insert_with(Vec::new).push(process);
+                port_processes
+                    .entry(process.port)
+                    .or_insert_with(Vec::new)
+                    .push(process);
             }
         }
 
@@ -126,10 +131,9 @@ impl PortGuardDaemon {
                     resolution: None,
                 };
 
-                info!("⚠️  Port conflict detected on port {}: {} vs {}", 
-                    port, 
-                    conflict.existing_process.name, 
-                    conflict.new_process.name
+                info!(
+                    "⚠️  Port conflict detected on port {}: {} vs {}",
+                    port, conflict.existing_process.name, conflict.new_process.name
                 );
 
                 // Resolve the conflict
@@ -146,7 +150,10 @@ impl PortGuardDaemon {
     async fn resolve_conflict(&self, mut conflict: PortConflict) -> Result<()> {
         if !self.auto_resolve {
             conflict.resolution = Some(PortResolution::NotifyUser);
-            info!("🔔 Port conflict on {} - manual resolution required", conflict.port);
+            info!(
+                "🔔 Port conflict on {} - manual resolution required",
+                conflict.port
+            );
             return Ok(());
         }
 
@@ -157,8 +164,10 @@ impl PortGuardDaemon {
             &conflict.new_process
         };
 
-        info!("🔧 Auto-resolving port conflict on {} by killing process {} (PID: {})", 
-            conflict.port, older_process.name, older_process.pid);
+        info!(
+            "🔧 Auto-resolving port conflict on {} by killing process {} (PID: {})",
+            conflict.port, older_process.name, older_process.pid
+        );
 
         // Kill the older process
         if let Err(e) = self.kill_process(older_process.pid).await {
@@ -168,7 +177,7 @@ impl PortGuardDaemon {
 
         // Update conflict resolution
         conflict.resolution = Some(PortResolution::KillExisting);
-        
+
         // Increment conflicts resolved counter
         {
             let mut count = self.conflicts_resolved.lock().await;
@@ -180,7 +189,12 @@ impl PortGuardDaemon {
     }
 
     /// Reserve a port for a specific project
-    pub async fn reserve_port(&self, port: u16, project_name: String, process_name: String) -> Result<()> {
+    pub async fn reserve_port(
+        &self,
+        port: u16,
+        project_name: String,
+        process_name: String,
+    ) -> Result<()> {
         let project_name_clone = project_name.clone();
         let reservation = PortReservation {
             port,
@@ -196,7 +210,10 @@ impl PortGuardDaemon {
             reservations.insert(port, reservation);
         }
 
-        info!("🔒 Port {} reserved for project '{}'", port, project_name_clone);
+        info!(
+            "🔒 Port {} reserved for project '{}'",
+            port, project_name_clone
+        );
         self.save_reservations().await?;
         Ok(())
     }
@@ -243,7 +260,10 @@ impl PortGuardDaemon {
             *current_reservations = reservations;
         }
 
-        info!("📂 Loaded {} port reservations", self.reservations.lock().await.len());
+        info!(
+            "📂 Loaded {} port reservations",
+            self.reservations.lock().await.len()
+        );
         Ok(())
     }
 
@@ -292,20 +312,20 @@ impl PortGuardDaemon {
                 .arg("-TERM")
                 .arg(pid.to_string())
                 .output()?;
-            
+
             if !output.status.success() {
                 // Try SIGKILL if SIGTERM fails
                 let output = Command::new("kill")
                     .arg("-KILL")
                     .arg(pid.to_string())
                     .output()?;
-                
+
                 if !output.status.success() {
                     return Err(anyhow::anyhow!("Failed to kill process {}", pid));
                 }
             }
         }
-        
+
         #[cfg(target_os = "linux")]
         {
             use std::process::Command;
@@ -313,20 +333,20 @@ impl PortGuardDaemon {
                 .arg("-TERM")
                 .arg(pid.to_string())
                 .output()?;
-            
+
             if !output.status.success() {
                 // Try SIGKILL if SIGTERM fails
                 let output = Command::new("kill")
                     .arg("-KILL")
                     .arg(pid.to_string())
                     .output()?;
-                
+
                 if !output.status.success() {
                     return Err(anyhow::anyhow!("Failed to kill process {}", pid));
                 }
             }
         }
-        
+
         #[cfg(target_os = "windows")]
         {
             use std::process::Command;
@@ -335,12 +355,12 @@ impl PortGuardDaemon {
                 .arg(pid.to_string())
                 .arg("/F")
                 .output()?;
-            
+
             if !output.status.success() {
                 return Err(anyhow::anyhow!("Failed to kill process {}", pid));
             }
         }
-        
+
         Ok(())
     }
 
@@ -353,25 +373,31 @@ impl PortGuardDaemon {
         // Check if this is a development server command
         if self.is_development_server_command(command, args) {
             let target_port = self.extract_port_from_command(command, args);
-            
+
             if let Some(port) = target_port {
                 if self.watched_ports.contains(&port) {
-                    info!("🔍 Intercepting command: {} - checking port {}", command, port);
-                    
+                    info!(
+                        "🔍 Intercepting command: {} - checking port {}",
+                        command, port
+                    );
+
                     // Check if port is already in use
                     if !is_port_available(port).await {
                         info!("⚠️  Port {} is busy, attempting to resolve conflict", port);
-                        
+
                         if self.auto_resolve {
                             // Try to kill the conflicting process
                             if let Err(e) = self.resolve_port_conflict(port).await {
                                 warn!("Failed to resolve port conflict: {}", e);
                                 return Err(e);
                             }
-                            
+
                             info!("✅ Port {} conflict resolved, command can proceed", port);
                         } else {
-                            return Err(anyhow::anyhow!("Port {} is busy and auto-resolve is disabled", port));
+                            return Err(anyhow::anyhow!(
+                                "Port {} is busy and auto-resolve is disabled",
+                                port
+                            ));
                         }
                     } else {
                         info!("✅ Port {} is available, command can proceed", port);
@@ -392,22 +418,31 @@ impl PortGuardDaemon {
     /// Check if a command is a development server
     fn is_development_server_command(&self, command: &str, args: &[String]) -> bool {
         let dev_commands = [
-            "npm", "yarn", "pnpm", "node", "python", "python3", 
-            "ruby", "rails", "cargo", "go", "java", "mvn", "gradle"
+            "npm", "yarn", "pnpm", "node", "python", "python3", "ruby", "rails", "cargo", "go",
+            "java", "mvn", "gradle",
         ];
-        
+
         let dev_args = [
-            "start", "dev", "serve", "run", "server", "http.server",
-            "rails", "server", "runserver", "serve", "dev"
+            "start",
+            "dev",
+            "serve",
+            "run",
+            "server",
+            "http.server",
+            "rails",
+            "server",
+            "runserver",
+            "serve",
+            "dev",
         ];
 
         // Check if command is a development tool
         let is_dev_command = dev_commands.iter().any(|&cmd| command.contains(cmd));
-        
+
         // Check if args contain development server keywords
-        let is_dev_args = args.iter().any(|arg| 
-            dev_args.iter().any(|&dev_arg| arg.contains(dev_arg))
-        );
+        let is_dev_args = args
+            .iter()
+            .any(|arg| dev_args.iter().any(|&dev_arg| arg.contains(dev_arg)));
 
         is_dev_command && is_dev_args
     }
@@ -424,15 +459,16 @@ impl PortGuardDaemon {
                     }
                 }
             }
-            
+
             // Look for standalone port numbers
             if let Ok(port) = arg.parse::<u16>() {
-                if port > 1024 { // Valid port range (u16 max is 65535)
+                if port > 1024 {
+                    // Valid port range (u16 max is 65535)
                     return Some(port);
                 }
             }
         }
-        
+
         None
     }
 
@@ -440,33 +476,39 @@ impl PortGuardDaemon {
     async fn resolve_port_conflict(&self, port: u16) -> Result<()> {
         let mut monitor = self.process_monitor.lock().await;
         let processes = monitor.scan_processes().await?;
-        
+
         // Find processes using the port
-        let conflicting_processes: Vec<&ProcessInfo> = processes
-            .values()
-            .filter(|p| p.port == port)
-            .collect();
-        
+        let conflicting_processes: Vec<&ProcessInfo> =
+            processes.values().filter(|p| p.port == port).collect();
+
         if !conflicting_processes.is_empty() {
             // Kill the first conflicting process
             let process_to_kill = conflicting_processes[0];
-            info!("🔧 Killing conflicting process {} (PID: {}) on port {}", 
-                process_to_kill.name, process_to_kill.pid, port);
-            
+            info!(
+                "🔧 Killing conflicting process {} (PID: {}) on port {}",
+                process_to_kill.name, process_to_kill.pid, port
+            );
+
             self.kill_process(process_to_kill.pid).await?;
-            
+
             // Wait a moment for the process to die
             sleep(TokioDuration::from_millis(500)).await;
-            
+
             // Verify port is now available
             if is_port_available(port).await {
                 info!("✅ Port {} is now available", port);
                 Ok(())
             } else {
-                Err(anyhow::anyhow!("Port {} is still busy after killing process", port))
+                Err(anyhow::anyhow!(
+                    "Port {} is still busy after killing process",
+                    port
+                ))
             }
         } else {
-            Err(anyhow::anyhow!("No conflicting process found on port {}", port))
+            Err(anyhow::anyhow!(
+                "No conflicting process found on port {}",
+                port
+            ))
         }
     }
 
@@ -484,8 +526,8 @@ impl PortGuardDaemon {
 
 /// Check if a port is available for binding
 pub async fn is_port_available(port: u16) -> bool {
-    use std::net::{TcpListener, SocketAddr};
     use std::net::Ipv4Addr;
+    use std::net::{SocketAddr, TcpListener};
 
     let addr = SocketAddr::from((Ipv4Addr::LOCALHOST, port));
     match TcpListener::bind(addr) {

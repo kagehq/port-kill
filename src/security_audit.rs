@@ -6,9 +6,8 @@ use std::fs;
 use std::path::Path;
 
 use crate::types::{
-    ProcessInfo, SecurityAuditResult, SuspiciousProcess, ApprovedProcess,
-    SuspicionReason, RiskLevel, ServiceType, SecurityRecommendation,
-    BaselineComparison, ProcessChange, ProcessChangeType
+    ApprovedProcess, BaselineComparison, ProcessChange, ProcessChangeType, ProcessInfo, RiskLevel,
+    SecurityAuditResult, SecurityRecommendation, ServiceType, SuspicionReason, SuspiciousProcess,
 };
 
 /// Security Audit engine for comprehensive port and process analysis
@@ -33,8 +32,14 @@ impl SecurityAuditor {
     }
 
     /// Perform comprehensive security audit
-    pub async fn perform_audit(&self, processes: HashMap<u16, ProcessInfo>) -> Result<SecurityAuditResult> {
-        info!("🔒 Starting Security Audit - scanning {} processes", processes.len());
+    pub async fn perform_audit(
+        &self,
+        processes: HashMap<u16, ProcessInfo>,
+    ) -> Result<SecurityAuditResult> {
+        info!(
+            "🔒 Starting Security Audit - scanning {} processes",
+            processes.len()
+        );
 
         let mut suspicious_processes = Vec::new();
         let mut approved_processes = Vec::new();
@@ -45,11 +50,12 @@ impl SecurityAuditor {
             // Add timeout to prevent hanging on individual process analysis
             let analysis = tokio::time::timeout(
                 std::time::Duration::from_secs(5),
-                self.analyze_process(*port, process)
-            ).await
+                self.analyze_process(*port, process),
+            )
+            .await
             .map_err(|_| anyhow::anyhow!("Process analysis timeout for port {}", port))?
             .map_err(|e| anyhow::anyhow!("Process analysis failed for port {}: {}", port, e))?;
-            
+
             match analysis.risk_level {
                 RiskLevel::Low => {
                     approved_processes.push(ApprovedProcess {
@@ -76,8 +82,9 @@ impl SecurityAuditor {
         let baseline_comparison = if let Some(baseline_path) = &self.baseline_file {
             tokio::time::timeout(
                 std::time::Duration::from_secs(10),
-                self.compare_with_baseline(baseline_path, &processes)
-            ).await
+                self.compare_with_baseline(baseline_path, &processes),
+            )
+            .await
             .map_err(|_| {
                 log::warn!("Baseline comparison timeout, skipping");
                 anyhow::anyhow!("Baseline comparison timeout")
@@ -98,7 +105,10 @@ impl SecurityAuditor {
             baseline_comparison,
         };
 
-        info!("🔒 Security Audit completed - Score: {:.1}/100", security_score);
+        info!(
+            "🔒 Security Audit completed - Score: {:.1}/100",
+            security_score
+        );
         Ok(result)
     }
 
@@ -144,7 +154,8 @@ impl SecurityAuditor {
         }
 
         // Get primary suspicion reason (highest risk)
-        let primary_reason = suspicion_reasons.first()
+        let primary_reason = suspicion_reasons
+            .first()
             .cloned()
             .unwrap_or(SuspicionReason::ProcessAnomaly);
 
@@ -163,25 +174,37 @@ impl SecurityAuditor {
     /// Check if binary is unknown/suspicious
     fn is_unknown_binary(&self, process: &ProcessInfo) -> bool {
         let suspicious_paths = [
-            "/tmp/", "/var/tmp/", "/dev/shm/", "/proc/",
-            "/home/", "/root/", "/opt/", "/usr/local/bin/",
+            "/tmp/",
+            "/var/tmp/",
+            "/dev/shm/",
+            "/proc/",
+            "/home/",
+            "/root/",
+            "/opt/",
+            "/usr/local/bin/",
         ];
 
         let suspicious_names = [
-            "miner", "crypto", "bitcoin", "monero", "xmr",
-            "backdoor", "shell", "reverse", "payload",
+            "miner", "crypto", "bitcoin", "monero", "xmr", "backdoor", "shell", "reverse",
+            "payload",
         ];
 
         let path = process.name.to_lowercase();
         let name = process.name.to_lowercase();
 
         // Check for suspicious paths
-        if suspicious_paths.iter().any(|&susp_path| path.contains(susp_path)) {
+        if suspicious_paths
+            .iter()
+            .any(|&susp_path| path.contains(susp_path))
+        {
             return true;
         }
 
         // Check for suspicious names
-        if suspicious_names.iter().any(|&susp_name| name.contains(susp_name)) {
+        if suspicious_names
+            .iter()
+            .any(|&susp_name| name.contains(susp_name))
+        {
             return true;
         }
 
@@ -191,12 +214,20 @@ impl SecurityAuditor {
     /// Check if process is in unexpected location
     fn is_unexpected_location(&self, process: &ProcessInfo) -> bool {
         let expected_paths = [
-            "/usr/bin/", "/usr/sbin/", "/bin/", "/sbin/",
-            "/usr/lib/", "/lib/", "/opt/", "/usr/local/bin/",
+            "/usr/bin/",
+            "/usr/sbin/",
+            "/bin/",
+            "/sbin/",
+            "/usr/lib/",
+            "/lib/",
+            "/opt/",
+            "/usr/local/bin/",
         ];
 
         let path = process.name.to_lowercase();
-        !expected_paths.iter().any(|&expected| path.starts_with(expected))
+        !expected_paths
+            .iter()
+            .any(|&expected| path.starts_with(expected))
     }
 
     /// Check if process runs with high privileges
@@ -237,7 +268,7 @@ impl SecurityAuditor {
     /// Classify service type
     fn classify_service_type(&self, process: &ProcessInfo) -> ServiceType {
         let name = process.name.to_lowercase();
-        
+
         if name.contains("nginx") || name.contains("apache") || name.contains("httpd") {
             ServiceType::WebServer
         } else if name.contains("mysql") || name.contains("postgres") || name.contains("redis") {
@@ -287,13 +318,19 @@ impl SecurityAuditor {
     }
 
     /// Generate security recommendations
-    fn generate_recommendations(&self, suspicious_processes: &[SuspiciousProcess]) -> Vec<SecurityRecommendation> {
+    fn generate_recommendations(
+        &self,
+        suspicious_processes: &[SuspiciousProcess],
+    ) -> Vec<SecurityRecommendation> {
         let mut recommendations = Vec::new();
 
         if !suspicious_processes.is_empty() {
             recommendations.push(SecurityRecommendation {
                 title: "Investigate Suspicious Processes".to_string(),
-                description: format!("{} suspicious processes detected", suspicious_processes.len()),
+                description: format!(
+                    "{} suspicious processes detected",
+                    suspicious_processes.len()
+                ),
                 action: "Review and terminate suspicious processes immediately".to_string(),
                 priority: RiskLevel::High,
                 affected_processes: suspicious_processes.iter().map(|p| p.port).collect(),
@@ -304,7 +341,11 @@ impl SecurityAuditor {
     }
 
     /// Calculate security score
-    fn calculate_security_score(&self, suspicious_processes: &[SuspiciousProcess], total_processes: usize) -> f64 {
+    fn calculate_security_score(
+        &self,
+        suspicious_processes: &[SuspiciousProcess],
+        total_processes: usize,
+    ) -> f64 {
         if total_processes == 0 {
             return 100.0;
         }
@@ -313,7 +354,8 @@ impl SecurityAuditor {
         let base_score = 100.0 - (suspicious_count as f64 / total_processes as f64) * 100.0;
 
         // Penalize based on risk levels
-        let risk_penalty = suspicious_processes.iter()
+        let risk_penalty = suspicious_processes
+            .iter()
             .map(|p| match p.risk_level {
                 RiskLevel::Low => 5.0,
                 RiskLevel::Medium => 10.0,
@@ -326,9 +368,16 @@ impl SecurityAuditor {
     }
 
     /// Compare with baseline file
-    async fn compare_with_baseline(&self, baseline_path: &str, current_processes: &HashMap<u16, ProcessInfo>) -> Result<BaselineComparison> {
+    async fn compare_with_baseline(
+        &self,
+        baseline_path: &str,
+        current_processes: &HashMap<u16, ProcessInfo>,
+    ) -> Result<BaselineComparison> {
         if !Path::new(baseline_path).exists() {
-            return Err(anyhow::anyhow!("Baseline file not found: {}", baseline_path));
+            return Err(anyhow::anyhow!(
+                "Baseline file not found: {}",
+                baseline_path
+            ));
         }
 
         let baseline_data = fs::read_to_string(baseline_path)?;

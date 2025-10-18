@@ -1,20 +1,17 @@
 use crate::{
-    process_monitor::ProcessMonitor,
-    types::ProcessInfo,
-    cli::Args,
-    file_monitor::FileMonitor,
+    cli::Args, file_monitor::FileMonitor, process_monitor::ProcessMonitor, types::ProcessInfo,
 };
 use anyhow::Result;
-use std::sync::Arc;
-use tokio::sync::Mutex;
 use std::collections::HashMap;
 use std::fs;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 /// Port guard configuration
 #[derive(Debug, Clone)]
 enum GuardConfig {
-    KillAll,                    // Kill any process on this port
-    AllowOnly(String),          // Only allow specific process name
+    KillAll,           // Kill any process on this port
+    AllowOnly(String), // Only allow specific process name
 }
 
 /// Scripting engine for port-kill
@@ -24,8 +21,8 @@ pub struct ScriptEngine {
     args: Args,
     port_handlers: HashMap<u16, Vec<Box<dyn Fn(ProcessInfo) + Send + Sync>>>,
     _last_processes: HashMap<u16, ProcessInfo>, // Track last known processes to detect changes
-    port_guards: HashMap<u16, GuardConfig>,    // Port guard configurations
-    file_guards: HashMap<String, GuardConfig>, // File guard configurations
+    port_guards: HashMap<u16, GuardConfig>,     // Port guard configurations
+    file_guards: HashMap<String, GuardConfig>,  // File guard configurations
 }
 
 impl ScriptEngine {
@@ -47,7 +44,10 @@ impl ScriptEngine {
         match self.args.script_lang.as_str() {
             "js" => self.execute_javascript(script).await,
             "python" => self.execute_python(script).await,
-            _ => Err(anyhow::anyhow!("Unsupported scripting language: {}", self.args.script_lang)),
+            _ => Err(anyhow::anyhow!(
+                "Unsupported scripting language: {}",
+                self.args.script_lang
+            )),
         }
     }
 
@@ -55,7 +55,7 @@ impl ScriptEngine {
     async fn execute_javascript(&mut self, script: &str) -> Result<()> {
         println!("🚀 Executing JavaScript script...");
         println!("📝 Script: {}", script);
-        
+
         // For now, we'll implement a simple command parser
         // Later we'll integrate a proper JavaScript runtime
         self.parse_and_execute_commands(script).await
@@ -65,7 +65,7 @@ impl ScriptEngine {
     async fn execute_python(&mut self, script: &str) -> Result<()> {
         println!("🚀 Executing Python script...");
         println!("📝 Script: {}", script);
-        
+
         // For now, we'll implement a simple command parser
         // Later we'll integrate a proper Python runtime
         self.parse_and_execute_commands(script).await
@@ -74,7 +74,7 @@ impl ScriptEngine {
     /// Parse and execute simple commands (temporary implementation)
     async fn parse_and_execute_commands(&mut self, script: &str) -> Result<()> {
         let lines: Vec<&str> = script.lines().collect();
-        
+
         for line in lines {
             let line = line.trim();
             if line.is_empty() || line.starts_with("//") || line.starts_with("#") {
@@ -83,12 +83,12 @@ impl ScriptEngine {
 
             // Handle multiple commands on one line (separated by semicolons)
             let commands: Vec<&str> = line.split(';').map(|s| s.trim()).collect();
-            
+
             for command in commands {
                 if command.is_empty() {
                     continue;
                 }
-                
+
                 if command.starts_with("onPort(") {
                     self.parse_on_port_command(command).await?;
                 } else if command.starts_with("kill(") {
@@ -135,14 +135,19 @@ impl ScriptEngine {
         if let Some(port_str) = self.extract_port_from_onport(line) {
             if let Ok(port) = port_str.parse::<u16>() {
                 println!("📌 Registered handler for port {}", port);
-                
+
                 // Register a simple handler that logs when processes are detected
                 let handler = Box::new(move |process: ProcessInfo| {
-                    println!("🔍 Process detected on port {}: {} (PID: {})", 
-                             process.port, process.name, process.pid);
+                    println!(
+                        "🔍 Process detected on port {}: {} (PID: {})",
+                        process.port, process.name, process.pid
+                    );
                 });
-                
-                self.port_handlers.entry(port).or_insert_with(Vec::new).push(handler);
+
+                self.port_handlers
+                    .entry(port)
+                    .or_insert_with(Vec::new)
+                    .push(handler);
             }
         }
         Ok(())
@@ -180,7 +185,9 @@ impl ScriptEngine {
             if let Ok(port) = port_str.parse::<u16>() {
                 println!("🧹 Clearing all processes on port {}", port);
                 let ports_to_kill = vec![port];
-                if let Err(e) = crate::process_monitor::kill_all_processes(&ports_to_kill, &self.args) {
+                if let Err(e) =
+                    crate::process_monitor::kill_all_processes(&ports_to_kill, &self.args)
+                {
                     println!("❌ Failed to clear processes on port {}: {}", port, e);
                 } else {
                     println!("✅ Successfully cleared processes on port {}", port);
@@ -196,7 +203,10 @@ impl ScriptEngine {
             if let Ok(port) = port_str.parse::<u16>() {
                 println!("🔍 Getting process info for port {}", port);
                 // TODO: Implement process info retrieval
-                println!("  Port {}: Process information would be displayed here", port);
+                println!(
+                    "  Port {}: Process information would be displayed here",
+                    port
+                );
             }
         }
         Ok(())
@@ -228,7 +238,8 @@ impl ScriptEngine {
             if let Ok(port) = port_str.parse::<u16>() {
                 if let Some(name) = allowed_name {
                     println!("🛡️  Guarding port {} - only allowing '{}'", port, name);
-                    self.port_guards.insert(port, GuardConfig::AllowOnly(name.to_string()));
+                    self.port_guards
+                        .insert(port, GuardConfig::AllowOnly(name.to_string()));
                 } else {
                     println!("🛡️  Guarding port {} - killing all processes", port);
                     self.port_guards.insert(port, GuardConfig::KillAll);
@@ -238,7 +249,6 @@ impl ScriptEngine {
         Ok(())
     }
 
-
     /// Parse killFile command
     async fn parse_kill_file_command(&mut self, line: &str) -> Result<()> {
         if let Some(file_path) = self.extract_file_path_from_killfile(line) {
@@ -246,7 +256,13 @@ impl ScriptEngine {
             if let Ok(processes) = self.file_monitor.find_processes_with_file(&file_path) {
                 for process in processes {
                     println!("  Killing process: {} (PID: {})", process.name, process.pid);
-                    if let Err(e) = self.process_monitor.lock().await.kill_process(process.pid).await {
+                    if let Err(e) = self
+                        .process_monitor
+                        .lock()
+                        .await
+                        .kill_process(process.pid)
+                        .await
+                    {
                         println!("❌ Failed to kill process {}: {}", process.pid, e);
                     } else {
                         println!("✅ Successfully killed process {}", process.pid);
@@ -263,11 +279,21 @@ impl ScriptEngine {
     async fn parse_guard_file_command(&mut self, line: &str) -> Result<()> {
         if let Some((file_path, allowed_name)) = self.extract_guard_file_params(line) {
             if let Some(name) = allowed_name {
-                println!("🛡️  Guarding file '{}' - only allowing '{}'", file_path, name);
-                self.file_guards.insert(file_path.to_string(), GuardConfig::AllowOnly(name.to_string()));
+                println!(
+                    "🛡️  Guarding file '{}' - only allowing '{}'",
+                    file_path, name
+                );
+                self.file_guards.insert(
+                    file_path.to_string(),
+                    GuardConfig::AllowOnly(name.to_string()),
+                );
             } else {
-                println!("🛡️  Guarding file '{}' - killing all processes that open it", file_path);
-                self.file_guards.insert(file_path.to_string(), GuardConfig::KillAll);
+                println!(
+                    "🛡️  Guarding file '{}' - killing all processes that open it",
+                    file_path
+                );
+                self.file_guards
+                    .insert(file_path.to_string(), GuardConfig::KillAll);
             }
         }
         Ok(())
@@ -280,7 +306,13 @@ impl ScriptEngine {
             if let Ok(processes) = self.file_monitor.find_processes_with_extension(&extension) {
                 for process in processes {
                     println!("  Killing process: {} (PID: {})", process.name, process.pid);
-                    if let Err(e) = self.process_monitor.lock().await.kill_process(process.pid).await {
+                    if let Err(e) = self
+                        .process_monitor
+                        .lock()
+                        .await
+                        .kill_process(process.pid)
+                        .await
+                    {
                         println!("❌ Failed to kill process {}: {}", process.pid, e);
                     } else {
                         println!("✅ Successfully killed process {}", process.pid);
@@ -316,8 +348,8 @@ impl ScriptEngine {
     fn extract_port_from_onport<'a>(&self, line: &'a str) -> Option<&'a str> {
         // Simple regex-like parsing: onPort(3000, ...)
         if let Some(start) = line.find('(') {
-            if let Some(end) = line[start+1..].find(',') {
-                return Some(&line[start+1..start+1+end]);
+            if let Some(end) = line[start + 1..].find(',') {
+                return Some(&line[start + 1..start + 1 + end]);
             }
         }
         None
@@ -327,8 +359,8 @@ impl ScriptEngine {
     fn extract_pid_from_kill<'a>(&self, line: &'a str) -> Option<&'a str> {
         // Simple parsing: kill(1234)
         if let Some(start) = line.find('(') {
-            if let Some(end) = line[start+1..].find(')') {
-                return Some(&line[start+1..start+1+end]);
+            if let Some(end) = line[start + 1..].find(')') {
+                return Some(&line[start + 1..start + 1 + end]);
             }
         }
         None
@@ -338,8 +370,8 @@ impl ScriptEngine {
     fn extract_port_from_clearport<'a>(&self, line: &'a str) -> Option<&'a str> {
         // Simple parsing: clearPort(3000)
         if let Some(start) = line.find('(') {
-            if let Some(end) = line[start+1..].find(')') {
-                return Some(&line[start+1..start+1+end]);
+            if let Some(end) = line[start + 1..].find(')') {
+                return Some(&line[start + 1..start + 1 + end]);
             }
         }
         None
@@ -349,8 +381,8 @@ impl ScriptEngine {
     fn extract_port_from_getprocess<'a>(&self, line: &'a str) -> Option<&'a str> {
         // Simple parsing: getProcess(3000)
         if let Some(start) = line.find('(') {
-            if let Some(end) = line[start+1..].find(')') {
-                return Some(&line[start+1..start+1+end]);
+            if let Some(end) = line[start + 1..].find(')') {
+                return Some(&line[start + 1..start + 1 + end]);
             }
         }
         None
@@ -360,11 +392,11 @@ impl ScriptEngine {
     fn extract_message_from_log<'a>(&self, line: &'a str) -> Option<&'a str> {
         // Simple parsing: log("message")
         if let Some(start) = line.find('(') {
-            if let Some(end) = line[start+1..].find(')') {
-                let content = &line[start+1..start+1+end];
+            if let Some(end) = line[start + 1..].find(')') {
+                let content = &line[start + 1..start + 1 + end];
                 // Remove quotes if present
                 if content.starts_with('"') && content.ends_with('"') {
-                    return Some(&content[1..content.len()-1]);
+                    return Some(&content[1..content.len() - 1]);
                 }
                 return Some(content);
             }
@@ -376,8 +408,8 @@ impl ScriptEngine {
     fn extract_seconds_from_wait<'a>(&self, line: &'a str) -> Option<&'a str> {
         // Simple parsing: wait(5)
         if let Some(start) = line.find('(') {
-            if let Some(end) = line[start+1..].find(')') {
-                return Some(&line[start+1..start+1+end]);
+            if let Some(end) = line[start + 1..].find(')') {
+                return Some(&line[start + 1..start + 1 + end]);
             }
         }
         None
@@ -387,14 +419,14 @@ impl ScriptEngine {
     fn extract_guard_port_params<'a>(&self, line: &'a str) -> Option<(&'a str, Option<&'a str>)> {
         // Simple parsing: guardPort(3000) or guardPort(3000, "my-dev-server")
         if let Some(start) = line.find('(') {
-            if let Some(end) = line[start+1..].find(')') {
-                let content = &line[start+1..start+1+end];
+            if let Some(end) = line[start + 1..].find(')') {
+                let content = &line[start + 1..start + 1 + end];
                 if let Some(comma_pos) = content.find(',') {
                     let port_str = content[..comma_pos].trim();
-                    let name_str = content[comma_pos+1..].trim();
+                    let name_str = content[comma_pos + 1..].trim();
                     // Remove quotes if present
                     let name = if name_str.starts_with('"') && name_str.ends_with('"') {
-                        Some(&name_str[1..name_str.len()-1])
+                        Some(&name_str[1..name_str.len() - 1])
                     } else {
                         Some(name_str)
                     };
@@ -407,16 +439,15 @@ impl ScriptEngine {
         None
     }
 
-
     /// Extract file path from killFile command
     fn extract_file_path_from_killfile<'a>(&self, line: &'a str) -> Option<&'a str> {
         // Simple parsing: killFile("filename.ext")
         if let Some(start) = line.find('(') {
-            if let Some(end) = line[start+1..].find(')') {
-                let content = &line[start+1..start+1+end];
+            if let Some(end) = line[start + 1..].find(')') {
+                let content = &line[start + 1..start + 1 + end];
                 // Remove quotes if present
                 if content.starts_with('"') && content.ends_with('"') {
-                    return Some(&content[1..content.len()-1]);
+                    return Some(&content[1..content.len() - 1]);
                 }
                 return Some(content);
             }
@@ -428,20 +459,20 @@ impl ScriptEngine {
     fn extract_guard_file_params<'a>(&self, line: &'a str) -> Option<(&'a str, Option<&'a str>)> {
         // Simple parsing: guardFile("filename.ext") or guardFile("filename.ext", "allowed-process")
         if let Some(start) = line.find('(') {
-            if let Some(end) = line[start+1..].find(')') {
-                let content = &line[start+1..start+1+end];
+            if let Some(end) = line[start + 1..].find(')') {
+                let content = &line[start + 1..start + 1 + end];
                 if let Some(comma_pos) = content.find(',') {
                     let file_path = content[..comma_pos].trim();
-                    let name_str = content[comma_pos+1..].trim();
+                    let name_str = content[comma_pos + 1..].trim();
                     // Remove quotes if present
                     let name = if name_str.starts_with('"') && name_str.ends_with('"') {
-                        Some(&name_str[1..name_str.len()-1])
+                        Some(&name_str[1..name_str.len() - 1])
                     } else {
                         Some(name_str)
                     };
                     // Remove quotes from file path if present
                     let file_path = if file_path.starts_with('"') && file_path.ends_with('"') {
-                        &file_path[1..file_path.len()-1]
+                        &file_path[1..file_path.len() - 1]
                     } else {
                         file_path
                     };
@@ -449,7 +480,7 @@ impl ScriptEngine {
                 } else {
                     // Remove quotes from file path if present
                     let file_path = if content.starts_with('"') && content.ends_with('"') {
-                        &content[1..content.len()-1]
+                        &content[1..content.len() - 1]
                     } else {
                         content
                     };
@@ -464,11 +495,11 @@ impl ScriptEngine {
     fn extract_extension_from_killfileext<'a>(&self, line: &'a str) -> Option<&'a str> {
         // Simple parsing: killFileExt(".lock")
         if let Some(start) = line.find('(') {
-            if let Some(end) = line[start+1..].find(')') {
-                let content = &line[start+1..start+1+end];
+            if let Some(end) = line[start + 1..].find(')') {
+                let content = &line[start + 1..start + 1 + end];
                 // Remove quotes if present
                 if content.starts_with('"') && content.ends_with('"') {
-                    return Some(&content[1..content.len()-1]);
+                    return Some(&content[1..content.len() - 1]);
                 }
                 return Some(content);
             }
@@ -480,11 +511,11 @@ impl ScriptEngine {
     fn extract_file_path_from_listfileprocesses<'a>(&self, line: &'a str) -> Option<&'a str> {
         // Simple parsing: listFileProcesses("filename.ext")
         if let Some(start) = line.find('(') {
-            if let Some(end) = line[start+1..].find(')') {
-                let content = &line[start+1..start+1+end];
+            if let Some(end) = line[start + 1..].find(')') {
+                let content = &line[start + 1..start + 1 + end];
                 // Remove quotes if present
                 if content.starts_with('"') && content.ends_with('"') {
-                    return Some(&content[1..content.len()-1]);
+                    return Some(&content[1..content.len() - 1]);
                 }
                 return Some(content);
             }
@@ -496,45 +527,59 @@ impl ScriptEngine {
     async fn start_monitoring(&mut self) -> Result<()> {
         println!("🔄 Starting continuous monitoring...");
         println!("💡 Press Ctrl+C to stop");
-        
+
         // Start the monitoring loop
         let monitor = self.process_monitor.clone();
         let watched_ports: Vec<u16> = self.port_handlers.keys().cloned().collect();
         let guard_ports: Vec<u16> = self.port_guards.keys().cloned().collect();
-        let all_monitored_ports: Vec<u16> = watched_ports.iter().chain(guard_ports.iter()).cloned().collect();
+        let all_monitored_ports: Vec<u16> = watched_ports
+            .iter()
+            .chain(guard_ports.iter())
+            .cloned()
+            .collect();
         let port_guards = self.port_guards.clone();
-        
+
         tokio::spawn(async move {
             let mut last_processes: HashMap<u16, ProcessInfo> = HashMap::new();
-            
+
             loop {
                 if let Ok(mut monitor) = monitor.try_lock() {
                     if let Ok(processes) = monitor.scan_processes().await {
                         // Get current ports first
-                        let current_ports: std::collections::HashSet<u16> = processes.keys().cloned().collect();
-                        
+                        let current_ports: std::collections::HashSet<u16> =
+                            processes.keys().cloned().collect();
+
                         for (port, process_info) in processes {
                             if all_monitored_ports.contains(&port) {
                                 // Check if this is a new or changed process
                                 let is_new = !last_processes.contains_key(&port);
-                                let is_changed = if let Some(last_process) = last_processes.get(&port) {
-                                    last_process.pid != process_info.pid || last_process.name != process_info.name
-                                } else {
-                                    false
-                                };
-                                
+                                let is_changed =
+                                    if let Some(last_process) = last_processes.get(&port) {
+                                        last_process.pid != process_info.pid
+                                            || last_process.name != process_info.name
+                                    } else {
+                                        false
+                                    };
+
                                 if is_new {
-                                    println!("🟢 NEW: Process started on port {}: {} (PID: {})", 
-                                             process_info.port, process_info.name, process_info.pid);
-                                    
+                                    println!(
+                                        "🟢 NEW: Process started on port {}: {} (PID: {})",
+                                        process_info.port, process_info.name, process_info.pid
+                                    );
+
                                     // Check if this port has a guard and handle accordingly
                                     if let Some(guard_config) = port_guards.get(&port) {
                                         match guard_config {
                                             GuardConfig::KillAll => {
                                                 println!("🚨 Unauthorized process on port {}: {} (PID: {}) - KILLING", 
                                                          port, process_info.name, process_info.pid);
-                                                if let Err(e) = monitor.kill_process(process_info.pid).await {
-                                                    println!("❌ Failed to kill process {}: {}", process_info.pid, e);
+                                                if let Err(e) =
+                                                    monitor.kill_process(process_info.pid).await
+                                                {
+                                                    println!(
+                                                        "❌ Failed to kill process {}: {}",
+                                                        process_info.pid, e
+                                                    );
                                                 } else {
                                                     println!("✅ Successfully killed unauthorized process {} on port {}", 
                                                              process_info.pid, port);
@@ -544,8 +589,13 @@ impl ScriptEngine {
                                                 if process_info.name != *allowed_name {
                                                     println!("🚨 Unauthorized process '{}' on port {}: {} (PID: {}) - KILLING", 
                                                              process_info.name, port, process_info.name, process_info.pid);
-                                                    if let Err(e) = monitor.kill_process(process_info.pid).await {
-                                                        println!("❌ Failed to kill process {}: {}", process_info.pid, e);
+                                                    if let Err(e) =
+                                                        monitor.kill_process(process_info.pid).await
+                                                    {
+                                                        println!(
+                                                            "❌ Failed to kill process {}: {}",
+                                                            process_info.pid, e
+                                                        );
                                                     } else {
                                                         println!("✅ Successfully killed unauthorized process {} on port {}", 
                                                                  process_info.pid, port);
@@ -558,28 +608,32 @@ impl ScriptEngine {
                                         }
                                     }
                                 } else if is_changed {
-                                    println!("🔄 CHANGED: Process on port {}: {} (PID: {})", 
-                                             process_info.port, process_info.name, process_info.pid);
+                                    println!(
+                                        "🔄 CHANGED: Process on port {}: {} (PID: {})",
+                                        process_info.port, process_info.name, process_info.pid
+                                    );
                                 }
-                                
+
                                 // Update our tracking
                                 last_processes.insert(port, process_info);
                             }
                         }
-                        
+
                         // Check for processes that disappeared
                         for (port, last_process) in last_processes.iter() {
                             if all_monitored_ports.contains(port) && !current_ports.contains(port) {
-                                println!("🔴 REMOVED: Process stopped on port {}: {} (PID: {})", 
-                                         port, last_process.name, last_process.pid);
+                                println!(
+                                    "🔴 REMOVED: Process stopped on port {}: {} (PID: {})",
+                                    port, last_process.name, last_process.pid
+                                );
                             }
                         }
-                        
+
                         // Clean up tracking for ports that are no longer active
                         last_processes.retain(|port, _| current_ports.contains(port));
                     }
                 }
-                
+
                 // Sleep for 2 seconds
                 tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
             }
@@ -588,7 +642,7 @@ impl ScriptEngine {
         // Keep the main thread alive
         tokio::signal::ctrl_c().await?;
         println!("🛑 Script monitoring stopped");
-        
+
         Ok(())
     }
 }
@@ -606,46 +660,207 @@ mod tests {
     #[test]
     fn test_extract_port_from_onport() {
         let engine = ScriptEngine::new(
-            Arc::new(Mutex::new(ProcessMonitor::new(
-                crossbeam_channel::bounded(100).0,
-                vec![3000],
-                false,
-                false,
-                None,
-                false,
-            ).unwrap())),
+            Arc::new(Mutex::new(
+                ProcessMonitor::new(
+                    crossbeam_channel::bounded(100).0,
+                    vec![3000],
+                    false,
+                    false,
+                )
+                .unwrap(),
+            )),
             Args {
                 script_lang: "js".to_string(),
-                ..Default::default()
-            }
+                start_port: 2000,
+                end_port: 6000,
+                ports: None,
+                ignore_ports: None,
+                ignore_processes: None,
+                ignore_patterns: None,
+                ignore_groups: None,
+                smart_filter: false,
+                only_groups: None,
+                console: false,
+                verbose: false,
+                docker: false,
+                show_pid: false,
+                log_level: crate::cli::LogLevel::Info,
+                show_history: false,
+                clear_history: false,
+                show_filters: false,
+                performance: false,
+                show_context: false,
+                kill_all: false,
+                kill_group: None,
+                kill_project: None,
+                restart: false,
+                show_tree: false,
+                json: false,
+                reset: false,
+                show_offenders: false,
+                show_patterns: false,
+                show_suggestions: false,
+                show_stats: false,
+                show_root_cause: false,
+                guard_mode: false,
+                guard_ports: "3000,3001,3002,8000,8080,9000".to_string(),
+                auto_resolve: false,
+                reservation_file: "~/.port-kill/reservations.json".to_string(),
+                intercept_commands: false,
+                reserve_port: None,
+                project_name: None,
+                process_name: None,
+                audit: false,
+                security_mode: false,
+                suspicious_ports: "8444,4444,9999,14444,5555,6666,7777".to_string(),
+                baseline_file: None,
+                suspicious_only: false,
+                remote: None,
+                monitor_endpoint: None,
+                send_interval: 30,
+                scan_interval: 2,
+                endpoint_auth: None,
+                endpoint_fields: None,
+                endpoint_include_audit: false,
+                endpoint_retries: 3,
+                endpoint_timeout: 10,
+                script: None,
+                script_file: None,
+                clear: None,
+                guard: None,
+                allow: None,
+                kill: None,
+                kill_file: None,
+                kill_ext: None,
+                list_file: None,
+                list: false,
+                safe: false,
+                positional_ports: vec![],
+                preset: None,
+                list_presets: false,
+                save_preset: None,
+                preset_desc: None,
+                delete_preset: None,
+                check_updates: false,
+                self_update: false,
+                cache: None,
+            },
         );
-        
-        assert_eq!(engine.extract_port_from_onport("onPort(3000, callback)"), Some("3000"));
-        assert_eq!(engine.extract_port_from_onport("onPort(8080, proc => kill(proc.pid))"), Some("8080"));
+
+        assert_eq!(
+            engine.extract_port_from_onport("onPort(3000, callback)"),
+            Some("3000")
+        );
+        assert_eq!(
+            engine.extract_port_from_onport("onPort(8080, proc => kill(proc.pid))"),
+            Some("8080")
+        );
     }
 
     #[test]
     fn test_extract_pid_from_kill() {
         let engine = ScriptEngine::new(
-            Arc::new(Mutex::new(ProcessMonitor::new(
-                crossbeam_channel::bounded(100).0,
-                vec![3000],
-                false,
-                false,
-                None,
-                false,
-            ).unwrap())),
+            Arc::new(Mutex::new(
+                ProcessMonitor::new(
+                    crossbeam_channel::bounded(100).0,
+                    vec![3000],
+                    false,
+                    false,
+                )
+                .unwrap(),
+            )),
             Args {
                 script_lang: "js".to_string(),
-                ..Default::default()
-            }
+                start_port: 2000,
+                end_port: 6000,
+                ports: None,
+                ignore_ports: None,
+                ignore_processes: None,
+                ignore_patterns: None,
+                ignore_groups: None,
+                smart_filter: false,
+                only_groups: None,
+                console: false,
+                verbose: false,
+                docker: false,
+                show_pid: false,
+                log_level: crate::cli::LogLevel::Info,
+                show_history: false,
+                clear_history: false,
+                show_filters: false,
+                performance: false,
+                show_context: false,
+                kill_all: false,
+                kill_group: None,
+                kill_project: None,
+                restart: false,
+                show_tree: false,
+                json: false,
+                reset: false,
+                show_offenders: false,
+                show_patterns: false,
+                show_suggestions: false,
+                show_stats: false,
+                show_root_cause: false,
+                guard_mode: false,
+                guard_ports: "3000,3001,3002,8000,8080,9000".to_string(),
+                auto_resolve: false,
+                reservation_file: "~/.port-kill/reservations.json".to_string(),
+                intercept_commands: false,
+                reserve_port: None,
+                project_name: None,
+                process_name: None,
+                audit: false,
+                security_mode: false,
+                suspicious_ports: "8444,4444,9999,14444,5555,6666,7777".to_string(),
+                baseline_file: None,
+                suspicious_only: false,
+                remote: None,
+                monitor_endpoint: None,
+                send_interval: 30,
+                scan_interval: 2,
+                endpoint_auth: None,
+                endpoint_fields: None,
+                endpoint_include_audit: false,
+                endpoint_retries: 3,
+                endpoint_timeout: 10,
+                script: None,
+                script_file: None,
+                clear: None,
+                guard: None,
+                allow: None,
+                kill: None,
+                kill_file: None,
+                kill_ext: None,
+                list_file: None,
+                list: false,
+                safe: false,
+                positional_ports: vec![],
+                preset: None,
+                list_presets: false,
+                save_preset: None,
+                preset_desc: None,
+                delete_preset: None,
+                check_updates: false,
+                self_update: false,
+                cache: None,
+            },
         );
-        
+
         assert_eq!(engine.extract_pid_from_kill("kill(1234)"), Some("1234"));
         assert_eq!(engine.extract_pid_from_kill("kill(5678)"), Some("5678"));
-        assert_eq!(engine.extract_port_from_clearport("clearPort(3000)"), Some("3000"));
-        assert_eq!(engine.extract_port_from_getprocess("getProcess(8080)"), Some("8080"));
-        assert_eq!(engine.extract_message_from_log("log(\"Hello World\")"), Some("Hello World"));
+        assert_eq!(
+            engine.extract_port_from_clearport("clearPort(3000)"),
+            Some("3000")
+        );
+        assert_eq!(
+            engine.extract_port_from_getprocess("getProcess(8080)"),
+            Some("8080")
+        );
+        assert_eq!(
+            engine.extract_message_from_log("log(\"Hello World\")"),
+            Some("Hello World")
+        );
         assert_eq!(engine.extract_seconds_from_wait("wait(5)"), Some("5"));
     }
 }

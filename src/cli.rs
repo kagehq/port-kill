@@ -1,7 +1,7 @@
+use crate::preset_manager::{PortPreset, PresetManager};
 use clap::Parser;
-use std::collections::HashSet;
-use crate::preset_manager::{PresetManager, PortPreset};
 use clap::{Args as ClapArgs, Subcommand};
+use std::collections::HashSet;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
 pub enum LogLevel {
@@ -248,7 +248,6 @@ pub struct Args {
     pub script_lang: String,
 
     // ===== Convenience one-liners (new, thin aliases) =====
-
     /// One-shot: clear whatever is on this port (alias of clearPort)
     #[arg(long)]
     pub clear: Option<u16>,
@@ -412,7 +411,7 @@ impl Args {
     /// Parse a port string that can be either a single port or a range (e.g., "3000" or "3000-3010")
     fn parse_port_range(&self, port_str: &str) -> Option<Vec<u16>> {
         let port_str = port_str.trim();
-        
+
         if port_str.contains('-') {
             // Handle port range (e.g., "3000-3010")
             let parts: Vec<&str> = port_str.split('-').collect();
@@ -437,22 +436,36 @@ impl Args {
 
     /// Get a HashSet of ports to ignore for efficient lookup
     pub fn get_ignore_ports_set(&self) -> HashSet<u16> {
-        self.ignore_ports.clone().unwrap_or_default().into_iter().collect()
+        self.ignore_ports
+            .clone()
+            .unwrap_or_default()
+            .into_iter()
+            .collect()
     }
 
     /// Get a HashSet of process names to ignore for efficient lookup
     pub fn get_ignore_processes_set(&self) -> HashSet<String> {
-        self.ignore_processes.clone().unwrap_or_default().into_iter().collect()
+        self.ignore_processes
+            .clone()
+            .unwrap_or_default()
+            .into_iter()
+            .collect()
     }
 
     /// Get a HashSet of process groups to ignore for efficient lookup
     pub fn get_ignore_groups_set(&self) -> HashSet<String> {
-        self.ignore_groups.clone().unwrap_or_default().into_iter().collect()
+        self.ignore_groups
+            .clone()
+            .unwrap_or_default()
+            .into_iter()
+            .collect()
     }
 
     /// Get a HashSet of process groups to show (if only_groups is specified)
     pub fn get_only_groups_set(&self) -> Option<HashSet<String>> {
-        self.only_groups.as_ref().map(|groups| groups.iter().cloned().collect())
+        self.only_groups
+            .as_ref()
+            .map(|groups| groups.iter().cloned().collect())
     }
 
     /// Get smart filter defaults
@@ -480,56 +493,102 @@ impl Args {
             7000,  // AirDrop
             8080,  // Common proxy
             8443,  // HTTPS Alt
-        ].iter().cloned().collect();
+        ]
+        .iter()
+        .cloned()
+        .collect();
 
         // Smart process ignores (common system processes)
         let smart_ignore_processes: HashSet<String> = [
-            "Chrome", "Safari", "Firefox", "Edge", // Browsers
-            "ControlCe", "rapportd", "AirPlayXP", // macOS system
-            "systemd", "init", "kthreadd", // Linux system
-            "svchost", "explorer", "winlogon", // Windows system
-            "docker", "dockerd", "containerd", // Docker system
-            "nginx", "apache2", "httpd", // Web servers (system)
-            "mysqld", "postgres", "redis-server", // Database servers
-            "ssh", "sshd", // SSH servers
-        ].iter().map(|s| s.to_string()).collect();
+            "Chrome",
+            "Safari",
+            "Firefox",
+            "Edge", // Browsers
+            "ControlCe",
+            "rapportd",
+            "AirPlayXP", // macOS system
+            "systemd",
+            "init",
+            "kthreadd", // Linux system
+            "svchost",
+            "explorer",
+            "winlogon", // Windows system
+            "docker",
+            "dockerd",
+            "containerd", // Docker system
+            "nginx",
+            "apache2",
+            "httpd", // Web servers (system)
+            "mysqld",
+            "postgres",
+            "redis-server", // Database servers
+            "ssh",
+            "sshd", // SSH servers
+        ]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
 
         // Smart group ignores (system service groups)
         let smart_ignore_groups: HashSet<String> = [
             "Web Server", // System web servers
             "Database",   // System databases
-        ].iter().map(|s| s.to_string()).collect();
+        ]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
 
-        (smart_ignore_ports, smart_ignore_processes, smart_ignore_groups)
+        (
+            smart_ignore_ports,
+            smart_ignore_processes,
+            smart_ignore_groups,
+        )
     }
 
     /// Get a description of the port configuration
     pub fn get_port_description(&self) -> String {
         let mut description = if let Some(ref specific_ports) = self.ports {
-            format!("specific ports: {}", specific_ports.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(", "))
+            format!(
+                "specific ports: {}",
+                specific_ports
+                    .iter()
+                    .map(|p| p.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
         } else {
             format!("port range: {}-{}", self.start_port, self.end_port)
         };
 
         // Add ignore information to description
         let mut ignore_info = Vec::new();
-        
+
         if let Some(ref ignore_ports) = self.ignore_ports {
             if !ignore_ports.is_empty() {
-                ignore_info.push(format!("ignoring ports: {}", ignore_ports.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(", ")));
+                ignore_info.push(format!(
+                    "ignoring ports: {}",
+                    ignore_ports
+                        .iter()
+                        .map(|p| p.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ));
             }
         }
-        
+
         if let Some(ref ignore_processes) = self.ignore_processes {
             if !ignore_processes.is_empty() {
-                ignore_info.push(format!("ignoring processes: {}", ignore_processes.join(", ")));
+                ignore_info.push(format!(
+                    "ignoring processes: {}",
+                    ignore_processes.join(", ")
+                ));
             }
         }
-        
+
         if !ignore_info.is_empty() {
             description.push_str(&format!(" ({})", ignore_info.join(", ")));
         }
-        
+
         description
     }
 
@@ -545,7 +604,7 @@ impl Args {
             if specific_ports.is_empty() {
                 return Err("At least one port must be specified".to_string());
             }
-            
+
             for port_str in specific_ports {
                 if let Some(ports) = self.parse_port_range(port_str) {
                     for port in ports {
@@ -583,15 +642,15 @@ impl Args {
     /// Get common development ports for reset functionality
     pub fn get_reset_ports(&self) -> Vec<u16> {
         vec![
-            3000,   // React, Next.js, Node.js dev servers
-            5000,   // Flask, Express, various dev servers
-            8000,   // Django, Rails, various dev servers
-            5432,   // PostgreSQL
-            3306,   // MySQL
-            6379,   // Redis
-            27017,  // MongoDB
-            8080,   // Tomcat, various Java apps
-            9000,   // Various dev servers
+            3000,  // React, Next.js, Node.js dev servers
+            5000,  // Flask, Express, various dev servers
+            8000,  // Django, Rails, various dev servers
+            5432,  // PostgreSQL
+            3306,  // MySQL
+            6379,  // Redis
+            27017, // MongoDB
+            8080,  // Tomcat, various Java apps
+            9000,  // Various dev servers
         ]
     }
 
@@ -642,28 +701,28 @@ impl Args {
     pub fn apply_preset(&mut self, preset: &PortPreset) {
         // Override ports with preset ports
         self.ports = Some(preset.ports.iter().map(|p| p.to_string()).collect());
-        
+
         // Apply ignore settings from preset
         if let Some(ref ignore_ports) = preset.ignore_ports {
             self.ignore_ports = Some(Vec::from(ignore_ports.as_slice()));
         }
-        
+
         if let Some(ref ignore_processes) = preset.ignore_processes {
             self.ignore_processes = Some(Vec::from(ignore_processes.as_slice()));
         }
-        
+
         if let Some(ref ignore_patterns) = preset.ignore_patterns {
             self.ignore_patterns = Some(Vec::from(ignore_patterns.as_slice()));
         }
-        
+
         if let Some(ref ignore_groups) = preset.ignore_groups {
             self.ignore_groups = Some(Vec::from(ignore_groups.as_slice()));
         }
-        
+
         if let Some(ref only_groups) = preset.only_groups {
             self.only_groups = Some(Vec::from(only_groups.as_slice()));
         }
-        
+
         // Apply other preset settings
         self.smart_filter = preset.smart_filter;
         self.docker = preset.docker;
@@ -675,20 +734,27 @@ impl Args {
     /// Load and apply preset by name
     pub fn load_preset(&mut self, preset_name: &str) -> Result<(), String> {
         let mut manager = PresetManager::new();
-        manager.load_presets().map_err(|e| format!("Failed to load presets: {}", e))?;
-        
+        manager
+            .load_presets()
+            .map_err(|e| format!("Failed to load presets: {}", e))?;
+
         if let Some(preset) = manager.get_preset(preset_name) {
             self.apply_preset(preset);
             Ok(())
         } else {
-            Err(format!("Preset '{}' not found. Use --list-presets to see available presets.", preset_name))
+            Err(format!(
+                "Preset '{}' not found. Use --list-presets to see available presets.",
+                preset_name
+            ))
         }
     }
 
     /// List available presets
     pub fn list_available_presets() -> Result<String, String> {
         let mut manager = PresetManager::new();
-        manager.load_presets().map_err(|e| format!("Failed to load presets: {}", e))?;
+        manager
+            .load_presets()
+            .map_err(|e| format!("Failed to load presets: {}", e))?;
         Ok(manager.list_presets())
     }
 
@@ -814,6 +880,12 @@ mod tests {
             positional_ports: vec![],
             preset: None,
             list_presets: false,
+            save_preset: None,
+            preset_desc: None,
+            delete_preset: None,
+            check_updates: false,
+            self_update: false,
+            cache: None,
         }
     }
 
@@ -822,7 +894,7 @@ mod tests {
         let mut args = create_test_args();
         args.start_port = 3000;
         args.end_port = 3005;
-        
+
         let ports = args.get_ports_to_monitor();
         assert_eq!(ports, vec![3000, 3001, 3002, 3003, 3004, 3005]);
     }
@@ -830,8 +902,12 @@ mod tests {
     #[test]
     fn test_get_ports_to_monitor_specific() {
         let mut args = create_test_args();
-        args.ports = Some(vec!["3000".to_string(), "8000".to_string(), "8080".to_string()]);
-        
+        args.ports = Some(vec![
+            "3000".to_string(),
+            "8000".to_string(),
+            "8080".to_string(),
+        ]);
+
         let ports = args.get_ports_to_monitor();
         assert_eq!(ports, vec![3000, 8000, 8080]);
     }
@@ -839,8 +915,12 @@ mod tests {
     #[test]
     fn test_get_ports_to_monitor_with_ranges() {
         let mut args = create_test_args();
-        args.ports = Some(vec!["3000-3002".to_string(), "8000".to_string(), "8080-8081".to_string()]);
-        
+        args.ports = Some(vec![
+            "3000-3002".to_string(),
+            "8000".to_string(),
+            "8080-8081".to_string(),
+        ]);
+
         let ports = args.get_ports_to_monitor();
         assert_eq!(ports, vec![3000, 3001, 3002, 8000, 8080, 8081]);
     }
@@ -849,7 +929,7 @@ mod tests {
     fn test_get_ignore_ports_set() {
         let mut args = create_test_args();
         args.ignore_ports = Some(vec![5353, 5000, 7000]);
-        
+
         let ignore_ports = args.get_ignore_ports_set();
         assert_eq!(ignore_ports, HashSet::from([5353, 5000, 7000]));
     }
@@ -858,9 +938,12 @@ mod tests {
     fn test_get_ignore_processes_set() {
         let mut args = create_test_args();
         args.ignore_processes = Some(vec!["Chrome".to_string(), "ControlCe".to_string()]);
-        
+
         let ignore_processes = args.get_ignore_processes_set();
-        assert_eq!(ignore_processes, HashSet::from([String::from("Chrome"), String::from("ControlCe")]));
+        assert_eq!(
+            ignore_processes,
+            HashSet::from([String::from("Chrome"), String::from("ControlCe")])
+        );
     }
 
     #[test]
@@ -868,7 +951,7 @@ mod tests {
         let mut args = create_test_args();
         args.ignore_ports = Some(vec![5353, 5000]);
         args.ignore_processes = Some(vec!["Chrome".to_string(), "ControlCe".to_string()]);
-        
+
         assert_eq!(args.get_port_description(), "port range: 2000-6000 (ignoring ports: 5353, 5000, ignoring processes: Chrome, ControlCe)");
     }
 
@@ -877,16 +960,23 @@ mod tests {
         let mut args = create_test_args();
         args.start_port = 3000;
         args.end_port = 3010;
-        
+
         assert_eq!(args.get_port_description(), "port range: 3000-3010");
     }
 
     #[test]
     fn test_get_port_description_specific() {
         let mut args = create_test_args();
-        args.ports = Some(vec!["3000".to_string(), "8000".to_string(), "8080".to_string()]);
-        
-        assert_eq!(args.get_port_description(), "specific ports: 3000, 8000, 8080");
+        args.ports = Some(vec![
+            "3000".to_string(),
+            "8000".to_string(),
+            "8080".to_string(),
+        ]);
+
+        assert_eq!(
+            args.get_port_description(),
+            "specific ports: 3000, 8000, 8080"
+        );
     }
 
     #[test]
@@ -894,7 +984,7 @@ mod tests {
         let mut args = create_test_args();
         args.start_port = 3000;
         args.end_port = 3010;
-        
+
         assert!(args.validate().is_ok());
     }
 
@@ -903,7 +993,7 @@ mod tests {
         let mut args = create_test_args();
         args.start_port = 3010;
         args.end_port = 3000;
-        
+
         assert!(args.validate().is_err());
     }
 
@@ -911,7 +1001,7 @@ mod tests {
     fn test_validation_empty_specific_ports() {
         let mut args = create_test_args();
         args.ports = Some(vec![]);
-        
+
         assert!(args.validate().is_err());
     }
 
@@ -919,7 +1009,7 @@ mod tests {
     fn test_validation_invalid_ignore_port() {
         let mut args = create_test_args();
         args.ignore_ports = Some(vec![0]);
-        
+
         assert!(args.validate().is_err());
     }
 
@@ -927,7 +1017,7 @@ mod tests {
     fn test_validation_empty_ignore_process() {
         let mut args = create_test_args();
         args.ignore_processes = Some(vec!["".to_string()]);
-        
+
         assert!(args.validate().is_err());
     }
 }

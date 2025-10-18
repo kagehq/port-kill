@@ -64,7 +64,9 @@ pub struct EndpointMonitor {
 impl EndpointMonitor {
     /// Create a new endpoint monitor
     pub fn new(args: &Args) -> Result<Self> {
-        let endpoint_url = args.monitor_endpoint.as_ref()
+        let endpoint_url = args
+            .monitor_endpoint
+            .as_ref()
             .ok_or_else(|| anyhow::anyhow!("Endpoint URL is required for monitoring"))?
             .clone();
 
@@ -109,11 +111,12 @@ impl EndpointMonitor {
         // Create security auditor if audit is enabled
         let security_auditor = if args.endpoint_include_audit {
             // Parse suspicious ports from comma-separated string
-            let suspicious_ports: Vec<u16> = args.suspicious_ports
+            let suspicious_ports: Vec<u16> = args
+                .suspicious_ports
                 .split(',')
                 .filter_map(|s| s.trim().parse().ok())
                 .collect();
-            
+
             Some(SecurityAuditor::new(
                 suspicious_ports,
                 args.baseline_file.clone(),
@@ -177,7 +180,7 @@ impl EndpointMonitor {
     /// Send data to the configured endpoint
     async fn send_to_endpoint(&self) -> Result<()> {
         let payload = self.build_payload().await?;
-        
+
         for attempt in 1..=self.retries {
             match self.send_payload(&payload).await {
                 Ok(_) => {
@@ -185,7 +188,11 @@ impl EndpointMonitor {
                     return Ok(());
                 }
                 Err(e) => {
-                    log::warn!("Failed to send data to endpoint (attempt {}): {}", attempt, e);
+                    log::warn!(
+                        "Failed to send data to endpoint (attempt {}): {}",
+                        attempt,
+                        e
+                    );
                     if attempt < self.retries {
                         let delay = Duration::from_secs(attempt as u64 * 2); // Exponential backoff
                         sleep(delay).await;
@@ -194,14 +201,15 @@ impl EndpointMonitor {
             }
         }
 
-        Err(anyhow::anyhow!("Failed to send data to endpoint after {} attempts", self.retries))
+        Err(anyhow::anyhow!(
+            "Failed to send data to endpoint after {} attempts",
+            self.retries
+        ))
     }
 
     /// Send payload to endpoint with retry logic
     async fn send_payload(&self, payload: &EndpointPayload) -> Result<()> {
-        let mut request = self.client
-            .post(&self.endpoint_url)
-            .json(payload);
+        let mut request = self.client.post(&self.endpoint_url).json(payload);
 
         // Add authentication header if provided
         if let Some(auth) = &self.auth_header {
@@ -209,7 +217,7 @@ impl EndpointMonitor {
         }
 
         let response = request.send().await?;
-        
+
         if !response.status().is_success() {
             return Err(anyhow::anyhow!(
                 "Endpoint returned status {}: {}",
@@ -259,10 +267,23 @@ impl EndpointMonitor {
             if let Some(ref auditor) = self.security_auditor {
                 let audit_result = auditor.perform_audit(processes.clone()).await?;
                 Some(SecurityAuditData {
-                    suspicious_ports: audit_result.suspicious_processes.iter().map(|p| p.port).collect(),
+                    suspicious_ports: audit_result
+                        .suspicious_processes
+                        .iter()
+                        .map(|p| p.port)
+                        .collect(),
                     risk_score: audit_result.security_score,
-                    unauthorized_processes: audit_result.suspicious_processes.iter().map(|p| p.process_info.name.clone()).collect(),
-                    baseline_violations: audit_result.baseline_comparison.as_ref().map_or_else(Vec::new, |bc| bc.new_processes.iter().map(|p| p.name.clone()).collect()),
+                    unauthorized_processes: audit_result
+                        .suspicious_processes
+                        .iter()
+                        .map(|p| p.process_info.name.clone())
+                        .collect(),
+                    baseline_violations: audit_result
+                        .baseline_comparison
+                        .as_ref()
+                        .map_or_else(Vec::new, |bc| {
+                            bc.new_processes.iter().map(|p| p.name.clone()).collect()
+                        }),
                 })
             } else {
                 None
@@ -279,23 +300,31 @@ impl EndpointMonitor {
         };
 
         // Get server information
-        let server = self.custom_fields.get("server")
+        let server = self
+            .custom_fields
+            .get("server")
             .cloned()
-            .unwrap_or_else(|| hostname::get()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .to_string());
+            .unwrap_or_else(|| {
+                hostname::get()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .to_string()
+            });
 
-        let environment = self.custom_fields.get("environment")
+        let environment = self
+            .custom_fields
+            .get("environment")
             .cloned()
             .unwrap_or_else(|| "development".to_string());
 
-        let team = self.custom_fields.get("team")
+        let team = self
+            .custom_fields
+            .get("team")
             .cloned()
             .unwrap_or_else(|| "unknown".to_string());
 
         let total_ports = ports.len();
-        
+
         Ok(EndpointPayload {
             timestamp: Utc::now(),
             server,
@@ -317,14 +346,13 @@ impl EndpointMonitor {
 /// Helper function to get hostname
 mod hostname {
     use std::ffi::OsString;
-    
+
     pub fn get() -> Result<OsString, std::io::Error> {
         std::env::var_os("HOSTNAME")
             .or_else(|| std::env::var_os("COMPUTERNAME"))
             .or_else(|| std::env::var_os("HOST"))
-            .ok_or_else(|| std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                "Could not determine hostname"
-            ))
+            .ok_or_else(|| {
+                std::io::Error::new(std::io::ErrorKind::NotFound, "Could not determine hostname")
+            })
     }
 }

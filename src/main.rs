@@ -1,22 +1,27 @@
 #[cfg(target_os = "macos")]
 use anyhow::Result;
 #[cfg(target_os = "macos")]
+use clap::Parser;
+#[cfg(target_os = "macos")]
 use log::info;
 #[cfg(target_os = "macos")]
-use port_kill::{app::PortKillApp, cli::Args};
-#[cfg(target_os = "macos")]
-use port_kill::cache::{list::{list_caches, print_list_table}, clean::clean_caches, restore::restore_last_backup, doctor::doctor};
-#[cfg(target_os = "macos")]
 use port_kill::cache::output::print_or_json;
+#[cfg(target_os = "macos")]
+use port_kill::cache::{
+    clean::clean_caches,
+    doctor::doctor,
+    list::{list_caches, print_list_table},
+    restore::restore_last_backup,
+};
 use port_kill::update_check;
 #[cfg(target_os = "macos")]
-use clap::Parser;
+use port_kill::{app::PortKillApp, cli::Args};
 
 #[cfg(target_os = "macos")]
 fn main() -> Result<()> {
     // Parse command-line arguments
     let mut args = Args::parse();
-    
+
     // Handle update check
     if args.check_updates {
         let current_version = env!("CARGO_PKG_VERSION");
@@ -35,13 +40,13 @@ fn main() -> Result<()> {
             }
         }
     }
-    
+
     // Check for updates in background (non-blocking)
     let current_version = env!("CARGO_PKG_VERSION");
     if let Ok(Some(update_info)) = update_check::check_for_updates(current_version) {
         update_check::print_update_notification(&update_info);
     }
-    
+
     // Handle preset functionality
     if args.list_presets {
         match Args::list_available_presets() {
@@ -55,15 +60,24 @@ fn main() -> Result<()> {
             }
         }
     }
-    
+
     // Save preset
     if let Some(name) = args.save_preset.clone() {
-        let desc = args.preset_desc.clone().unwrap_or_else(|| "User-defined preset".to_string());
+        let desc = args
+            .preset_desc
+            .clone()
+            .unwrap_or_else(|| "User-defined preset".to_string());
         let preset = args.build_preset_from_args(name.clone(), desc);
         let mut mgr = port_kill::preset_manager::PresetManager::new();
-        if let Err(e) = mgr.load_presets() { eprintln!("Error: {}", e); std::process::exit(1); }
+        if let Err(e) = mgr.load_presets() {
+            eprintln!("Error: {}", e);
+            std::process::exit(1);
+        }
         mgr.add_preset(preset);
-        if let Err(e) = mgr.save_presets() { eprintln!("Error: {}", e); std::process::exit(1); }
+        if let Err(e) = mgr.save_presets() {
+            eprintln!("Error: {}", e);
+            std::process::exit(1);
+        }
         println!("✅ Saved preset '{}'.", name);
         return Ok(());
     }
@@ -71,10 +85,16 @@ fn main() -> Result<()> {
     // Delete preset
     if let Some(name) = args.delete_preset.clone() {
         let mut mgr = port_kill::preset_manager::PresetManager::new();
-        if let Err(e) = mgr.load_presets() { eprintln!("Error: {}", e); std::process::exit(1); }
+        if let Err(e) = mgr.load_presets() {
+            eprintln!("Error: {}", e);
+            std::process::exit(1);
+        }
         match mgr.remove_preset(&name) {
             Some(_) => {
-                if let Err(e) = mgr.save_presets() { eprintln!("Error: {}", e); std::process::exit(1); }
+                if let Err(e) = mgr.save_presets() {
+                    eprintln!("Error: {}", e);
+                    std::process::exit(1);
+                }
                 println!("🗑️  Deleted preset '{}'.", name);
             }
             None => {
@@ -92,7 +112,7 @@ fn main() -> Result<()> {
             std::process::exit(1);
         }
     }
-    
+
     // Validate arguments
     if let Err(e) = args.validate() {
         eprintln!("Error: {}", e);
@@ -110,7 +130,7 @@ fn main() -> Result<()> {
 
     // Initialize logging
     env_logger::init();
-    
+
     info!("Starting Port Kill application...");
     info!("Monitoring: {}", args.get_port_description());
 
@@ -118,7 +138,18 @@ fn main() -> Result<()> {
     if let Some(cache_cmd) = args.cache.clone() {
         let c = cache_cmd.args();
         if c.list || c.dry_run {
-            let resp = tokio::runtime::Runtime::new().unwrap().block_on(list_caches(&c.lang, c.npx, c.js_pm, c.hf, c.torch, c.vercel, c.cloudflare, c.stale_days));
+            let resp = tokio::runtime::Runtime::new()
+                .unwrap()
+                .block_on(list_caches(
+                    &c.lang,
+                    c.npx,
+                    c.js_pm,
+                    c.hf,
+                    c.torch,
+                    c.vercel,
+                    c.cloudflare,
+                    c.stale_days,
+                ));
             if c.json {
                 print_or_json(&resp, true);
             } else {
@@ -127,12 +158,27 @@ fn main() -> Result<()> {
             return Ok(());
         }
         if c.clean {
-            let resp = tokio::runtime::Runtime::new().unwrap().block_on(clean_caches(&c.lang, c.npx, c.js_pm, c.safe_delete, c.force, c.hf, c.torch, c.vercel, c.cloudflare, c.stale_days));
+            let resp = tokio::runtime::Runtime::new()
+                .unwrap()
+                .block_on(clean_caches(
+                    &c.lang,
+                    c.npx,
+                    c.js_pm,
+                    c.safe_delete,
+                    c.force,
+                    c.hf,
+                    c.torch,
+                    c.vercel,
+                    c.cloudflare,
+                    c.stale_days,
+                ));
             print_or_json(&resp, c.json);
             return Ok(());
         }
         if c.restore_last {
-            let resp = tokio::runtime::Runtime::new().unwrap().block_on(restore_last_backup());
+            let resp = tokio::runtime::Runtime::new()
+                .unwrap()
+                .block_on(restore_last_backup());
             print_or_json(&resp, c.json);
             return Ok(());
         }
@@ -154,18 +200,18 @@ fn main() -> Result<()> {
 #[cfg(target_os = "windows")]
 use anyhow::Result;
 #[cfg(target_os = "windows")]
+use clap::Parser;
+#[cfg(target_os = "windows")]
 use log::info;
 #[cfg(target_os = "windows")]
-use port_kill::{console_app::ConsolePortKillApp, cli::Args};
-#[cfg(target_os = "windows")]
-use clap::Parser;
+use port_kill::{cli::Args, console_app::ConsolePortKillApp};
 
 #[cfg(target_os = "windows")]
 #[tokio::main]
 async fn main() -> Result<()> {
     // Parse command-line arguments
     let mut args = Args::parse();
-    
+
     // Handle self-update
     if args.self_update {
         match port_kill::update_check::self_update() {
@@ -176,7 +222,7 @@ async fn main() -> Result<()> {
             }
         }
     }
-    
+
     // Handle update check
     if args.check_updates {
         let current_version = env!("CARGO_PKG_VERSION");
@@ -195,13 +241,13 @@ async fn main() -> Result<()> {
             }
         }
     }
-    
+
     // Check for updates in background (non-blocking)
     let current_version = env!("CARGO_PKG_VERSION");
     if let Ok(Some(update_info)) = port_kill::update_check::check_for_updates(current_version) {
         port_kill::update_check::print_update_notification(&update_info);
     }
-    
+
     // Handle preset functionality
     if args.list_presets {
         match Args::list_available_presets() {
@@ -215,15 +261,24 @@ async fn main() -> Result<()> {
             }
         }
     }
-    
+
     // Save preset
     if let Some(name) = args.save_preset.clone() {
-        let desc = args.preset_desc.clone().unwrap_or_else(|| "User-defined preset".to_string());
+        let desc = args
+            .preset_desc
+            .clone()
+            .unwrap_or_else(|| "User-defined preset".to_string());
         let preset = args.build_preset_from_args(name.clone(), desc);
         let mut mgr = port_kill::preset_manager::PresetManager::new();
-        if let Err(e) = mgr.load_presets() { eprintln!("Error: {}", e); std::process::exit(1); }
+        if let Err(e) = mgr.load_presets() {
+            eprintln!("Error: {}", e);
+            std::process::exit(1);
+        }
         mgr.add_preset(preset);
-        if let Err(e) = mgr.save_presets() { eprintln!("Error: {}", e); std::process::exit(1); }
+        if let Err(e) = mgr.save_presets() {
+            eprintln!("Error: {}", e);
+            std::process::exit(1);
+        }
         println!("✅ Saved preset '{}'.", name);
         return Ok(());
     }
@@ -231,10 +286,16 @@ async fn main() -> Result<()> {
     // Delete preset
     if let Some(name) = args.delete_preset.clone() {
         let mut mgr = port_kill::preset_manager::PresetManager::new();
-        if let Err(e) = mgr.load_presets() { eprintln!("Error: {}", e); std::process::exit(1); }
+        if let Err(e) = mgr.load_presets() {
+            eprintln!("Error: {}", e);
+            std::process::exit(1);
+        }
         match mgr.remove_preset(&name) {
             Some(_) => {
-                if let Err(e) = mgr.save_presets() { eprintln!("Error: {}", e); std::process::exit(1); }
+                if let Err(e) = mgr.save_presets() {
+                    eprintln!("Error: {}", e);
+                    std::process::exit(1);
+                }
                 println!("🗑️  Deleted preset '{}'.", name);
             }
             None => {
@@ -244,7 +305,7 @@ async fn main() -> Result<()> {
         }
         return Ok(());
     }
-    
+
     // Apply preset if specified
     if let Some(preset_name) = args.preset.clone() {
         if let Err(e) = args.load_preset(&preset_name) {
@@ -252,7 +313,7 @@ async fn main() -> Result<()> {
             std::process::exit(1);
         }
     }
-    
+
     // Validate arguments
     if let Err(e) = args.validate() {
         eprintln!("Error: {}", e);
@@ -270,7 +331,7 @@ async fn main() -> Result<()> {
 
     // Initialize logging
     env_logger::init();
-    
+
     info!("Starting Port Kill application on Windows...");
     info!("Monitoring: {}", args.get_port_description());
 
@@ -285,18 +346,18 @@ async fn main() -> Result<()> {
 #[cfg(target_os = "linux")]
 use anyhow::Result;
 #[cfg(target_os = "linux")]
+use clap::Parser;
+#[cfg(target_os = "linux")]
 use log::info;
 #[cfg(target_os = "linux")]
-use port_kill::{console_app::ConsolePortKillApp, cli::Args};
-#[cfg(target_os = "linux")]
-use clap::Parser;
+use port_kill::{cli::Args, console_app::ConsolePortKillApp};
 
 #[cfg(target_os = "linux")]
 #[tokio::main]
 async fn main() -> Result<()> {
     // Parse command-line arguments
     let mut args = Args::parse();
-    
+
     // Handle self-update
     if args.self_update {
         match port_kill::update_check::self_update() {
@@ -307,7 +368,7 @@ async fn main() -> Result<()> {
             }
         }
     }
-    
+
     // Handle update check
     if args.check_updates {
         let current_version = env!("CARGO_PKG_VERSION");
@@ -326,13 +387,13 @@ async fn main() -> Result<()> {
             }
         }
     }
-    
+
     // Check for updates in background (non-blocking)
     let current_version = env!("CARGO_PKG_VERSION");
     if let Ok(Some(update_info)) = port_kill::update_check::check_for_updates(current_version) {
         port_kill::update_check::print_update_notification(&update_info);
     }
-    
+
     // Handle preset functionality
     if args.list_presets {
         match Args::list_available_presets() {
@@ -346,15 +407,24 @@ async fn main() -> Result<()> {
             }
         }
     }
-    
+
     // Save preset
     if let Some(name) = args.save_preset.clone() {
-        let desc = args.preset_desc.clone().unwrap_or_else(|| "User-defined preset".to_string());
+        let desc = args
+            .preset_desc
+            .clone()
+            .unwrap_or_else(|| "User-defined preset".to_string());
         let preset = args.build_preset_from_args(name.clone(), desc);
         let mut mgr = port_kill::preset_manager::PresetManager::new();
-        if let Err(e) = mgr.load_presets() { eprintln!("Error: {}", e); std::process::exit(1); }
+        if let Err(e) = mgr.load_presets() {
+            eprintln!("Error: {}", e);
+            std::process::exit(1);
+        }
         mgr.add_preset(preset);
-        if let Err(e) = mgr.save_presets() { eprintln!("Error: {}", e); std::process::exit(1); }
+        if let Err(e) = mgr.save_presets() {
+            eprintln!("Error: {}", e);
+            std::process::exit(1);
+        }
         println!("✅ Saved preset '{}'.", name);
         return Ok(());
     }
@@ -362,10 +432,16 @@ async fn main() -> Result<()> {
     // Delete preset
     if let Some(name) = args.delete_preset.clone() {
         let mut mgr = port_kill::preset_manager::PresetManager::new();
-        if let Err(e) = mgr.load_presets() { eprintln!("Error: {}", e); std::process::exit(1); }
+        if let Err(e) = mgr.load_presets() {
+            eprintln!("Error: {}", e);
+            std::process::exit(1);
+        }
         match mgr.remove_preset(&name) {
             Some(_) => {
-                if let Err(e) = mgr.save_presets() { eprintln!("Error: {}", e); std::process::exit(1); }
+                if let Err(e) = mgr.save_presets() {
+                    eprintln!("Error: {}", e);
+                    std::process::exit(1);
+                }
                 println!("🗑️  Deleted preset '{}'.", name);
             }
             None => {
@@ -375,7 +451,7 @@ async fn main() -> Result<()> {
         }
         return Ok(());
     }
-    
+
     // Apply preset if specified
     if let Some(preset_name) = args.preset.clone() {
         if let Err(e) = args.load_preset(&preset_name) {
@@ -383,7 +459,7 @@ async fn main() -> Result<()> {
             std::process::exit(1);
         }
     }
-    
+
     // Validate arguments
     if let Err(e) = args.validate() {
         eprintln!("Error: {}", e);
@@ -401,7 +477,7 @@ async fn main() -> Result<()> {
 
     // Initialize logging
     env_logger::init();
-    
+
     info!("Starting Port Kill application on Linux...");
     info!("Monitoring: {}", args.get_port_description());
 
