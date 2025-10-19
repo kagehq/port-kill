@@ -137,38 +137,108 @@ impl ProcessMonitor {
     }
 
     pub async fn scan_processes(&mut self) -> Result<HashMap<u16, ProcessInfo>> {
-        let mut processes = HashMap::new();
+        // Use the optimized batch scanning approach instead of iterating one by one
+        let args = crate::cli::Args {
+            start_port: 2000,
+            end_port: 6000,
+            ports: None,
+            ignore_ports: None,
+            ignore_processes: None,
+            ignore_patterns: None,
+            ignore_groups: None,
+            smart_filter: false,
+            only_groups: None,
+            console: false,
+            verbose: self.verbose,
+            docker: self.docker_enabled,
+            show_pid: false,
+            log_level: crate::cli::LogLevel::Info,
+            show_history: false,
+            clear_history: false,
+            show_filters: false,
+            performance: self.performance_enabled,
+            show_context: false,
+            kill_all: false,
+            kill_group: None,
+            kill_project: None,
+            restart: false,
+            show_tree: false,
+            json: false,
+            reset: false,
+            show_offenders: false,
+            show_patterns: false,
+            show_suggestions: false,
+            show_stats: false,
+            show_root_cause: false,
+            guard_mode: false,
+            guard_ports: "3000,3001,3002,8000,8080,9000".to_string(),
+            auto_resolve: false,
+            reservation_file: "~/.port-kill/reservations.json".to_string(),
+            intercept_commands: false,
+            reserve_port: None,
+            project_name: None,
+            process_name: None,
+            audit: false,
+            security_mode: false,
+            suspicious_ports: "8444,4444,9999,14444,5555,6666,7777".to_string(),
+            baseline_file: None,
+            suspicious_only: false,
+            remote: None,
+            monitor_endpoint: None,
+            send_interval: 30,
+            scan_interval: 2,
+            endpoint_auth: None,
+            endpoint_fields: None,
+            endpoint_include_audit: false,
+            endpoint_retries: 3,
+            endpoint_timeout: 10,
+            script: None,
+            script_file: None,
+            script_lang: "js".to_string(),
+            clear: None,
+            guard: None,
+            allow: None,
+            kill: None,
+            kill_file: None,
+            kill_ext: None,
+            list_file: None,
+            list: false,
+            safe: false,
+            positional_ports: vec![],
+            preset: None,
+            list_presets: false,
+            save_preset: None,
+            preset_desc: None,
+            delete_preset: None,
+            check_updates: false,
+            self_update: false,
+            cache: None,
+        };
+        
+        let (_count, mut processes) = get_processes_on_ports(&self.ports_to_monitor, &args);
 
         // Refresh system information for performance metrics
         if self.performance_enabled {
             self.system_monitor.refresh();
-        }
-
-        for &port in &self.ports_to_monitor {
-            if let Ok(mut process_info) = self.get_process_on_port(port).await {
-                // Add performance metrics if enabled
-                if self.performance_enabled {
-                    if let Some(cpu_usage) =
-                        self.system_monitor.get_process_cpu_usage(process_info.pid)
-                    {
-                        process_info.cpu_usage = Some(cpu_usage);
-                    }
-
-                    if let Some((memory_bytes, memory_percentage)) = self
-                        .system_monitor
-                        .get_process_memory_usage(process_info.pid)
-                    {
-                        process_info.memory_usage = Some(memory_bytes);
-                        process_info.memory_percentage = Some(memory_percentage);
-                    }
+            
+            // Add performance metrics to each process
+            for process_info in processes.values_mut() {
+                if let Some(cpu_usage) =
+                    self.system_monitor.get_process_cpu_usage(process_info.pid)
+                {
+                    process_info.cpu_usage = Some(cpu_usage);
                 }
 
-                processes.insert(port, process_info);
+                if let Some((memory_bytes, memory_percentage)) = self
+                    .system_monitor
+                    .get_process_memory_usage(process_info.pid)
+                {
+                    process_info.memory_usage = Some(memory_bytes);
+                    process_info.memory_percentage = Some(memory_percentage);
+                }
             }
-        }
-
-        // Clean up old processes from system monitor
-        if self.performance_enabled {
+            
+            // Clean up old processes from system monitor
             self.system_monitor.cleanup_old_processes();
         }
 
@@ -1051,50 +1121,84 @@ pub fn get_processes_on_ports(
     }
 
     const MAX_PORTS_PER_LSOF: usize = 100;
+    const LARGE_RANGE_THRESHOLD: usize = 200; // If more than 200 ports, use optimized scanning
+    
     let mut processes = std::collections::HashMap::new();
     let ports_filter: HashSet<u16> = ports.iter().copied().collect();
     let ignore_ports = args.get_ignore_ports_set();
     let ignore_processes = args.get_ignore_processes_set();
 
-    for chunk in ports.chunks(MAX_PORTS_PER_LSOF) {
-        // Build lsof command with multiple -i flags for each chunk of ports
-        let mut lsof_args = vec![
+    // For large port ranges, use a single lsof call to get all listening ports
+    // and filter afterwards. This is much faster than multiple lsof calls.
+    if ports.len() > LARGE_RANGE_THRESHOLD {
+        let lsof_args = vec![
             "-sTCP:LISTEN".to_string(),
             "-P".to_string(),
             "-n".to_string(),
+            "-iTCP".to_string(), // Get all TCP ports
         ];
-        for port in chunk {
-            lsof_args.push("-i".to_string());
-            lsof_args.push(format!(":{}", port));
-        }
 
         let output = std::process::Command::new("lsof").args(&lsof_args).output();
 
         match output {
             Ok(output) => {
-                if !output.status.success() {
-                    let stderr = String::from_utf8_lossy(&output.stderr);
-                    if !stderr.trim().is_empty() {
-                        log::debug!(
-                            "lsof exited with status {} for ports {:?}: {}",
-                            output.status,
-                            chunk,
-                            stderr.trim()
-                        );
-                    }
+                if output.status.success() || !output.stdout.is_empty() {
+                    let stdout = String::from_utf8_lossy(&output.stdout);
+                    parse_lsof_output(
+                        &stdout,
+                        &ports_filter,
+                        &ignore_ports,
+                        &ignore_processes,
+                        &mut processes,
+                    );
                 }
-
-                let stdout = String::from_utf8_lossy(&output.stdout);
-                parse_lsof_output(
-                    &stdout,
-                    &ports_filter,
-                    &ignore_ports,
-                    &ignore_processes,
-                    &mut processes,
-                );
             }
             Err(e) => {
-                log::warn!("Failed to run lsof for ports {:?}: {}", chunk, e);
+                log::warn!("Failed to run lsof for all ports: {}", e);
+            }
+        }
+    } else {
+        // For smaller port ranges, use the chunked approach
+        for chunk in ports.chunks(MAX_PORTS_PER_LSOF) {
+            // Build lsof command with multiple -i flags for each chunk of ports
+            let mut lsof_args = vec![
+                "-sTCP:LISTEN".to_string(),
+                "-P".to_string(),
+                "-n".to_string(),
+            ];
+            for port in chunk {
+                lsof_args.push("-i".to_string());
+                lsof_args.push(format!(":{}", port));
+            }
+
+            let output = std::process::Command::new("lsof").args(&lsof_args).output();
+
+            match output {
+                Ok(output) => {
+                    if !output.status.success() {
+                        let stderr = String::from_utf8_lossy(&output.stderr);
+                        if !stderr.trim().is_empty() {
+                            log::debug!(
+                                "lsof exited with status {} for ports {:?}: {}",
+                                output.status,
+                                chunk,
+                                stderr.trim()
+                            );
+                        }
+                    }
+
+                    let stdout = String::from_utf8_lossy(&output.stdout);
+                    parse_lsof_output(
+                        &stdout,
+                        &ports_filter,
+                        &ignore_ports,
+                        &ignore_processes,
+                        &mut processes,
+                    );
+                }
+                Err(e) => {
+                    log::warn!("Failed to run lsof for ports {:?}: {}", chunk, e);
+                }
             }
         }
     }
