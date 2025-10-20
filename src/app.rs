@@ -375,82 +375,181 @@ impl PortKillApp {
         ports: &[u16],
         args: &Args,
     ) -> (usize, HashMap<u16, crate::types::ProcessInfo>) {
-        // Build lsof command with multiple -i flags for each port
-        let mut lsof_args = vec![
-            "-sTCP:LISTEN".to_string(),
-            "-P".to_string(),
-            "-n".to_string(),
-        ];
-        for port in ports {
-            lsof_args.push("-i".to_string());
-            lsof_args.push(format!(":{}", port));
+        use std::collections::HashSet;
+        
+        if ports.is_empty() {
+            return (0, HashMap::new());
         }
 
-        // Use lsof to get detailed process information
-        let output = std::process::Command::new("lsof").args(&lsof_args).output();
+        const MAX_PORTS_PER_LSOF: usize = 100;
+        const LARGE_RANGE_THRESHOLD: usize = 200;
+        
+        let mut processes = HashMap::new();
+        let ports_filter: HashSet<u16> = ports.iter().copied().collect();
+        let ignore_ports = args.get_ignore_ports_set();
+        let ignore_processes = args.get_ignore_processes_set();
 
-        match output {
-            Ok(output) => {
-                let stdout = String::from_utf8_lossy(&output.stdout);
-                let mut processes = HashMap::new();
+        // For large port ranges, use a single lsof call to get all listening ports
+        // and filter afterwards. This is much faster than multiple lsof calls
+        // and avoids exceeding command-line argument limits.
+        if ports.len() > LARGE_RANGE_THRESHOLD {
+            let lsof_args = vec![
+                "-sTCP:LISTEN".to_string(),
+                "-P".to_string(),
+                "-n".to_string(),
+                "-iTCP".to_string(), // Get all TCP ports
+            ];
 
-                // Get ignore sets for efficient lookup
-                let ignore_ports = args.get_ignore_ports_set();
-                let ignore_processes = args.get_ignore_processes_set();
+            let output = std::process::Command::new("lsof").args(&lsof_args).output();
 
-                for line in stdout.lines().skip(1) {
-                    // Skip header
-                    let parts: Vec<&str> = line.split_whitespace().collect();
-                    if parts.len() >= 9 {
-                        if let (Ok(pid), Ok(port)) = (
-                            parts[1].parse::<i32>(),
-                            parts[8].split(':').last().unwrap_or("0").parse::<u16>(),
-                        ) {
-                            let command = parts[0].to_string();
-                            let name = parts[0].to_string();
-
-                            // Check if this process should be ignored
-                            let should_ignore =
-                                ignore_ports.contains(&port) || ignore_processes.contains(&name);
-
-                            if !should_ignore {
-                                log::debug!("Creating ProcessInfo (app.rs) for PID {} on port {} with command_line: None, working_directory: None", pid, port);
-
-                                let mut process_info = crate::types::ProcessInfo {
-                                    pid,
-                                    port,
-                                    command,
-                                    name,
-                                    container_id: None,
-                                    container_name: None,
-                                    command_line: None,
-                                    working_directory: None,
-                                    process_group: None,
-                                    project_name: None,
-                                    cpu_usage: None,
-                                    memory_usage: None,
-                                    memory_percentage: None,
-                                };
-
-                                // Determine process group and project name
-                                process_info.process_group = process_info.determine_process_group();
-                                process_info.project_name = process_info.extract_project_name();
-
-                                processes.insert(port, process_info);
-                            } else {
-                                info!("Ignoring process {} (PID {}) on port {} (ignored by user configuration)", name, pid, port);
-                            }
-                        }
+            match output {
+                Ok(output) => {
+                    if output.status.success() || !output.stdout.is_empty() {
+                        let stdout = String::from_utf8_lossy(&output.stdout);
+                        Self::parse_lsof_output_filtered(
+                            &stdout,
+                            &ports_filter,
+                            &ignore_ports,
+                            &ignore_processes,
+                            &mut processes,
+                        );
                     }
                 }
-
-                (processes.len(), processes)
+                Err(e) => {
+                    log::warn!("Failed to run lsof for all ports: {}", e);
+                }
             }
-            Err(_) => (0, HashMap::new()),
+        } else {
+            // For smaller port ranges, use the chunked approach
+            for chunk in ports.chunks(MAX_PORTS_PER_LSOF) {
+                // Build lsof command with multiple -i flags for each chunk of ports
+                let mut lsof_args = vec![
+                    "-sTCP:LISTEN".to_string(),
+                    "-P".to_string(),
+                    "-n".to_string(),
+                ];
+                for port in chunk {
+                    lsof_args.push("-i".to_string());
+                    lsof_args.push(format!(":{}", port));
+                }
+
+                let output = std::process::Command::new("lsof").args(&lsof_args).output();
+
+                match output {
+                    Ok(output) => {
+                        if !output.status.success() {
+                            let stderr = String::from_utf8_lossy(&output.stderr);
+                            if !stderr.trim().is_empty() {
+                                log::debug!(
+                                    "lsof exited with status {} for ports {:?}: {}",
+                                    output.status,
+                                    chunk,
+                                    stderr.trim()
+                                );
+                            }
+                        }
+
+                        let stdout = String::from_utf8_lossy(&output.stdout);
+                        Self::parse_lsof_output_filtered(
+                            &stdout,
+                            &ports_filter,
+                            &ignore_ports,
+                            &ignore_processes,
+                            &mut processes,
+                        );
+                    }
+                    Err(e) => {
+                        log::warn!("Failed to run lsof for ports {:?}: {}", chunk, e);
+                    }
+                }
+            }
+        }
+
+        (processes.len(), processes)
+    }
+
+    fn parse_lsof_output_filtered(
+        stdout: &str,
+        ports_filter: &std::collections::HashSet<u16>,
+        ignore_ports: &std::collections::HashSet<u16>,
+        ignore_processes: &std::collections::HashSet<String>,
+        processes: &mut HashMap<u16, crate::types::ProcessInfo>,
+    ) {
+        for line in stdout.lines().skip(1) {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() < 9 {
+                continue;
+            }
+
+            let pid = match parts[1].parse::<i32>() {
+                Ok(pid) => pid,
+                Err(_) => continue,
+            };
+
+            let port_str = parts[8].split(':').last().unwrap_or("0");
+            let port = match port_str.parse::<u16>() {
+                Ok(port) => port,
+                Err(_) => continue,
+            };
+
+            // Filter by port range
+            if !ports_filter.is_empty() && !ports_filter.contains(&port) {
+                continue;
+            }
+
+            // Check ignore lists
+            if ignore_ports.contains(&port) {
+                log::info!(
+                    "Ignoring process {} (PID {}) on port {} (ignored port by user configuration)",
+                    parts[0],
+                    pid,
+                    port
+                );
+                continue;
+            }
+
+            if ignore_processes.contains(parts[0]) {
+                log::info!(
+                    "Ignoring process {} (PID {}) on port {} (ignored process by user configuration)",
+                    parts[0],
+                    pid,
+                    port
+                );
+                continue;
+            }
+
+            log::debug!(
+                "Creating ProcessInfo (app.rs) for PID {} on port {} with command_line: None, working_directory: None",
+                pid,
+                port
+            );
+
+            let mut process_info = crate::types::ProcessInfo {
+                pid,
+                port,
+                command: parts[0].to_string(),
+                name: parts[0].to_string(),
+                container_id: None,
+                container_name: None,
+                command_line: None,
+                working_directory: None,
+                process_group: None,
+                project_name: None,
+                cpu_usage: None,
+                memory_usage: None,
+                memory_percentage: None,
+            };
+
+            process_info.process_group = process_info.determine_process_group();
+            process_info.project_name = process_info.extract_project_name();
+
+            processes.insert(port, process_info);
         }
     }
 
     pub fn kill_all_processes(ports: &[u16], args: &Args) -> Result<()> {
+        use std::collections::HashSet;
+        
         let port_list = ports
             .iter()
             .map(|p| p.to_string())
@@ -458,54 +557,75 @@ impl PortKillApp {
             .join(", ");
         info!("Killing all processes on ports {}...", port_list);
 
-        // Build lsof command with multiple -i flags for each port
-        let mut lsof_args = vec![
-            "-sTCP:LISTEN".to_string(),
-            "-P".to_string(),
-            "-n".to_string(),
-        ];
-        for port in ports {
-            lsof_args.push("-i".to_string());
-            lsof_args.push(format!(":{}", port));
+        if ports.is_empty() {
+            info!("No ports specified");
+            return Ok(());
         }
 
-        // Get all PIDs on the monitored ports
-        let output = match std::process::Command::new("lsof").args(&lsof_args).output() {
-            Ok(output) => output,
-            Err(e) => {
-                error!("Failed to run lsof command: {}", e);
-                return Err(anyhow::anyhow!("Failed to run lsof: {}", e));
-            }
-        };
-
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let lines: Vec<&str> = stdout.lines().collect();
-
-        // Get ignore sets for efficient lookup
+        const MAX_PORTS_PER_LSOF: usize = 100;
+        const LARGE_RANGE_THRESHOLD: usize = 200;
+        
+        let ports_filter: HashSet<u16> = ports.iter().copied().collect();
         let ignore_ports = args.get_ignore_ports_set();
         let ignore_processes = args.get_ignore_processes_set();
 
         let mut pids_to_kill = Vec::new();
 
-        for line in lines {
-            let parts: Vec<&str> = line.split_whitespace().collect();
-            if parts.len() >= 9 {
-                if let (Ok(pid), Ok(port)) = (
-                    parts[1].parse::<i32>(),
-                    parts[8].split(':').last().unwrap_or("0").parse::<u16>(),
-                ) {
-                    let name = parts[0].to_string();
+        // For large port ranges, use a single lsof call to get all listening ports
+        // and filter afterwards. This avoids exceeding command-line argument limits.
+        if ports.len() > LARGE_RANGE_THRESHOLD {
+            let lsof_args = vec![
+                "-sTCP:LISTEN".to_string(),
+                "-P".to_string(),
+                "-n".to_string(),
+                "-iTCP".to_string(), // Get all TCP ports
+            ];
 
-                    // Check if this process should be ignored
-                    let should_ignore =
-                        ignore_ports.contains(&port) || ignore_processes.contains(&name);
-
-                    if !should_ignore {
-                        pids_to_kill.push(pid);
-                    } else {
-                        info!("Ignoring process {} (PID {}) on port {} during kill operation (ignored by user configuration)", name, pid, port);
-                    }
+            let output = match std::process::Command::new("lsof").args(&lsof_args).output() {
+                Ok(output) => output,
+                Err(e) => {
+                    error!("Failed to run lsof command: {}", e);
+                    return Err(anyhow::anyhow!("Failed to run lsof: {}", e));
                 }
+            };
+
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            Self::extract_pids_from_lsof_output(
+                &stdout,
+                &ports_filter,
+                &ignore_ports,
+                &ignore_processes,
+                &mut pids_to_kill,
+            );
+        } else {
+            // For smaller port ranges, use the chunked approach
+            for chunk in ports.chunks(MAX_PORTS_PER_LSOF) {
+                let mut lsof_args = vec![
+                    "-sTCP:LISTEN".to_string(),
+                    "-P".to_string(),
+                    "-n".to_string(),
+                ];
+                for port in chunk {
+                    lsof_args.push("-i".to_string());
+                    lsof_args.push(format!(":{}", port));
+                }
+
+                let output = match std::process::Command::new("lsof").args(&lsof_args).output() {
+                    Ok(output) => output,
+                    Err(e) => {
+                        error!("Failed to run lsof command: {}", e);
+                        continue;
+                    }
+                };
+
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                Self::extract_pids_from_lsof_output(
+                    &stdout,
+                    &ports_filter,
+                    &ignore_ports,
+                    &ignore_processes,
+                    &mut pids_to_kill,
+                );
             }
         }
 
@@ -529,6 +649,60 @@ impl PortKillApp {
 
         info!("Finished killing all processes");
         Ok(())
+    }
+
+    fn extract_pids_from_lsof_output(
+        stdout: &str,
+        ports_filter: &std::collections::HashSet<u16>,
+        ignore_ports: &std::collections::HashSet<u16>,
+        ignore_processes: &std::collections::HashSet<String>,
+        pids_to_kill: &mut Vec<i32>,
+    ) {
+        for line in stdout.lines().skip(1) {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() < 9 {
+                continue;
+            }
+
+            let pid = match parts[1].parse::<i32>() {
+                Ok(pid) => pid,
+                Err(_) => continue,
+            };
+
+            let port_str = parts[8].split(':').last().unwrap_or("0");
+            let port = match port_str.parse::<u16>() {
+                Ok(port) => port,
+                Err(_) => continue,
+            };
+
+            // Filter by port range
+            if !ports_filter.is_empty() && !ports_filter.contains(&port) {
+                continue;
+            }
+
+            let name = parts[0].to_string();
+
+            // Check if this process should be ignored
+            if ignore_ports.contains(&port) {
+                info!(
+                    "Ignoring process {} (PID {}) on port {} during kill operation (ignored by user configuration)",
+                    name, pid, port
+                );
+                continue;
+            }
+
+            if ignore_processes.contains(&name) {
+                info!(
+                    "Ignoring process {} (PID {}) on port {} during kill operation (ignored by user configuration)",
+                    name, pid, port
+                );
+                continue;
+            }
+
+            if !pids_to_kill.contains(&pid) {
+                pids_to_kill.push(pid);
+            }
+        }
     }
 
     #[cfg(not(target_os = "windows"))]

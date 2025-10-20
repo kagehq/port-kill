@@ -250,6 +250,7 @@ impl ProcessMonitor {
         Ok(processes)
     }
 
+    #[allow(dead_code)]
     async fn get_process_on_port(&self, port: u16) -> Result<ProcessInfo> {
         #[cfg(target_os = "windows")]
         {
@@ -307,6 +308,7 @@ impl ProcessMonitor {
     }
 
     #[cfg(not(target_os = "windows"))]
+    #[allow(dead_code)]
     async fn get_process_details(&self, pid: i32, port: u16) -> Result<ProcessInfo> {
         // Get process command and name using ps
         let output = Command::new("ps")
@@ -505,6 +507,7 @@ impl ProcessMonitor {
     }
 
     #[cfg(not(target_os = "windows"))]
+    #[allow(dead_code)]
     async fn get_process_verbose_info(&self, pid: i32) -> (Option<String>, Option<String>) {
         let mut command_line = None;
         let mut working_directory = None;
@@ -581,6 +584,7 @@ impl ProcessMonitor {
         (command_line, working_directory)
     }
 
+    #[allow(dead_code)]
     fn truncate_command_line(cmd: &str) -> String {
         // Split the command into parts
         let parts: Vec<&str> = cmd.split_whitespace().collect();
@@ -600,6 +604,7 @@ impl ProcessMonitor {
         }
     }
 
+    #[allow(dead_code)]
     fn truncate_directory_path(dir: &str) -> String {
         // Split the path and get the last two parts (username/project)
         let parts: Vec<&str> = dir.split('/').collect();
@@ -685,6 +690,7 @@ impl ProcessMonitor {
     }
 
     #[cfg(not(target_os = "windows"))]
+    #[allow(dead_code)]
     async fn get_docker_container_info(&self, pid: i32) -> (Option<String>, Option<String>) {
         // Try to find the container ID for this PID
         let container_id = match self.find_container_id_for_pid(pid).await {
@@ -767,6 +773,7 @@ impl ProcessMonitor {
     }
 
     #[cfg(not(target_os = "windows"))]
+    #[allow(dead_code)]
     async fn get_container_name(&self, container_id: &str) -> Result<String> {
         // Get container name using docker inspect
         let output = Command::new("docker")
@@ -1022,6 +1029,7 @@ impl ProcessMonitor {
     }
 
     /// Enhance process name with better context and descriptions
+    #[allow(dead_code)]
     fn enhance_process_name(process_info: &ProcessInfo) -> String {
         let original_name = &process_info.name;
 
