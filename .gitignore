@@ -27,6 +27,4 @@ mcp/node_modules/
 dashboard/node_modules/
 
 # Dashboard (excluded from repo)
-dashboard/
-dashboard
 REMOVED.md
