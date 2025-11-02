@@ -201,7 +201,51 @@ All cache operations are safe by default:
 
 ![Port Kill Dashboard](assets/portkill-dashboard.png)
 
-Check the [Kill Suite](https://kagehq.com) website
+Port Kill includes a modern web dashboard for monitoring and managing processes with a beautiful UI. The dashboard provides real-time process monitoring, system resource tracking, history analytics, and security auditing.
+
+### Running the Dashboard Locally
+
+1. **Navigate to the dashboard directory:**
+   ```bash
+   cd dashboard
+   ```
+
+2. **Install dependencies (first time only):**
+   ```bash
+   npm install
+   ```
+
+3. **Start the dashboard:**
+   ```bash
+   npm run dev
+   ```
+
+4. **Open in your browser:**
+   ```
+   http://localhost:3002
+   ```
+
+The dashboard will automatically connect to port-kill and display:
+- 📊 Real-time process monitoring on all ports
+- 💻 System resource usage (CPU, memory, disk)
+- 📈 Process history and analytics
+- 🔒 Security audit information
+- 🎯 Port guard status
+
+**Quick start script:**
+```bash
+# From project root - starts dashboard in one command
+./run-dashboard.sh
+```
+
+Or on Windows:
+```powershell
+.\run-dashboard.bat
+```
+
+For more details, see the [dashboard README](dashboard/README.md).
+
+Check out the full [Kill Suite](https://kagehq.com) for additional tools and features.
 
 ## MCP (use Port Kill from Cursor, Claude etc.)
 

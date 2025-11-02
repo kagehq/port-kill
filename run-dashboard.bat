@@ -23,20 +23,20 @@ if not exist "target\release\port-kill-console.exe" (
 echo ✅ Rust application built successfully
 
 REM Check if dashboard directory exists
-if not exist "port-kill-dashboard" (
-    echo ❌ Error: Dashboard directory not found. Please ensure port-kill-dashboard exists.
+if not exist "dashboard" (
+    echo ❌ Error: Dashboard directory not found. Please ensure dashboard exists.
     exit /b 1
 )
 
 REM Install dashboard dependencies if needed
-if not exist "port-kill-dashboard\node_modules" (
+if not exist "dashboard\node_modules" (
     echo 📦 Installing dashboard dependencies...
-    cd port-kill-dashboard
+    cd dashboard
     npm install
     cd ..
 )
 
 REM Start the dashboard
-echo 🌐 Starting dashboard on http://localhost:3001...
-cd port-kill-dashboard
+echo 🌐 Starting dashboard on http://localhost:3002...
+cd dashboard
 npm run dev

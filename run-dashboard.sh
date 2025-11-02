@@ -26,20 +26,20 @@ fi
 echo "✅ Rust application built successfully"
 
 # Check if dashboard directory exists
-if [ ! -d "port-kill-dashboard" ]; then
-    echo "❌ Error: Dashboard directory not found. Please ensure port-kill-dashboard exists."
+if [ ! -d "dashboard" ]; then
+    echo "❌ Error: Dashboard directory not found. Please ensure dashboard exists."
     exit 1
 fi
 
 # Install dashboard dependencies if needed
-if [ ! -d "port-kill-dashboard/node_modules" ]; then
+if [ ! -d "dashboard/node_modules" ]; then
     echo "📦 Installing dashboard dependencies..."
-    cd port-kill-dashboard
+    cd dashboard
     npm install
     cd ..
 fi
 
 # Start the dashboard
-echo "🌐 Starting dashboard on http://localhost:3001..."
-cd port-kill-dashboard
+echo "🌐 Starting dashboard on http://localhost:3002..."
+cd dashboard
 npm run dev
