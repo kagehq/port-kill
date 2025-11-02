@@ -201,7 +201,7 @@ All cache operations are safe by default:
 
 ![Port Kill Dashboard](assets/portkill-dashboard.png)
 
-Port Kill includes a modern web dashboard for monitoring and managing processes with a beautiful UI. The dashboard provides real-time process monitoring, system resource tracking, history analytics, and security auditing.
+The dashboard provides real-time process monitoring, system resource tracking, history analytics, and security auditing.
 
 ### Running the Dashboard Locally
 
@@ -226,11 +226,11 @@ Port Kill includes a modern web dashboard for monitoring and managing processes 
    ```
 
 The dashboard will automatically connect to port-kill and display:
-- 📊 Real-time process monitoring on all ports
-- 💻 System resource usage (CPU, memory, disk)
-- 📈 Process history and analytics
-- 🔒 Security audit information
-- 🎯 Port guard status
+- Real-time process monitoring on all ports
+- System resource usage (CPU, memory, disk)
+- Process history and analytics
+- Security audit information
+- Port guard status
 
 **Quick start script:**
 ```bash
