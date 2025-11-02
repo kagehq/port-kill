@@ -5,7 +5,7 @@
 
 set -e
 
-REPO="kagehq/port-kill"
+REPO="treadiehq/port-kill"
 LATEST_RELEASE_URL="https://api.github.com/repos/$REPO/releases/latest"
 
 echo "🚀 Port Kill Release Installer"

@@ -64,7 +64,7 @@
 
           meta = with pkgs.lib; {
             description = "A CLI tool to help you find and free ports blocking your dev work";
-            homepage = "https://github.com/kagehq/port-kill";
+            homepage = "https://github.com/treadiehq/port-kill";
             license = licenses.mit;
             maintainers = [ ];
             platforms = platforms.all;

@@ -2,10 +2,10 @@
 name = "port-kill"
 version = "0.5.18"
 edition = "2021"
-authors = ["Kage <info@kagehq.com>"]
+authors = ["Treadie <info@treadie.com>"]
 description = "A CLI tool to help you find and free ports blocking your dev work, plus manage development caches"
 license = "FSL-1.1-MIT"
-repository = "https://github.com/kagehq/port-kill"
+repository = "https://github.com/treadiehq/port-kill"
 build = "build.rs"
 
 [[bin]]

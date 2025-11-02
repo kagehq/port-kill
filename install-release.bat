@@ -2,7 +2,7 @@
 setlocal enableextensions
 
 rem ---- Config
-set "REPO=kagehq/port-kill"
+set "REPO=treadiehq/port-kill"
 set "BASE_URL=https://github.com/%REPO%/releases/latest/download"
 set "INSTALL_DIR=%USERPROFILE%\AppData\Local\port-kill"
 
@@ -67,7 +67,7 @@ echo(   "%INSTALL_DIR%\port-kill-console.exe" --version
 echo(
 echo(❌ If you get "not recognized" error after restarting:
 echo(   Run diagnostics: 
-echo(   powershell -Command "Invoke-WebRequest -UseBasicParsing -Uri 'https://raw.githubusercontent.com/kagehq/port-kill/main/diagnose-installation.bat' -OutFile 'diagnose.bat'" ^&^& .\diagnose.bat
+echo(   powershell -Command "Invoke-WebRequest -UseBasicParsing -Uri 'https://raw.githubusercontent.com/treadiehq/port-kill/main/diagnose-installation.bat' -OutFile 'diagnose.bat'" ^&^& .\diagnose.bat
 echo(
 echo(📖 Quick start (after restarting terminal):
 echo(   port-kill --list

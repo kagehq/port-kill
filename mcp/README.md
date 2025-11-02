@@ -27,7 +27,7 @@ Add the following to your MCP config e.g. `.cursor/mcp.json`
   "mcpServers": {
     "port-kill-mcp": {
       "command": "npx",
-      "args": ["-y", "https://gitpkg.vercel.app/kagehq/port-kill/mcp?main"]
+      "args": ["-y", "https://gitpkg.vercel.app/treadiehq/port-kill/mcp?main"]
     }
   }
 }
@@ -35,7 +35,7 @@ Add the following to your MCP config e.g. `.cursor/mcp.json`
 
 ## Installation From Source
 
-Alternatively, if you don't want to use `npx 'https://gitpkg.vercel.app/kagehq/port-kill/mcp?main'`.
+Alternatively, if you don't want to use `npx 'https://gitpkg.vercel.app/treadiehq/port-kill/mcp?main'`.
 
 Checkout the repo, build the server & install `port-kill-mcp` globally:
 ```bash

@@ -7,7 +7,7 @@ A short, practical guide to install and use Port Kill on Windows.
 PowerShell or CMD (simple):
 
 ```powershell
-curl.exe -L "https://raw.githubusercontent.com/kagehq/port-kill/main/install-release.bat" -o install-release.bat
+curl.exe -L "https://raw.githubusercontent.com/treadiehq/port-kill/main/install-release.bat" -o install-release.bat
 .\\install-release.bat
 ```
 
@@ -17,7 +17,7 @@ Alternative (PowerShell with cache-bypass):
 
 ```powershell
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-Invoke-WebRequest -UseBasicParsing -Headers @{Pragma='no-cache'; 'Cache-Control'='no-cache'} -Uri "https://raw.githubusercontent.com/kagehq/port-kill/main/install-release.bat" -OutFile "install-release.bat"
+Invoke-WebRequest -UseBasicParsing -Headers @{Pragma='no-cache'; 'Cache-Control'='no-cache'} -Uri "https://raw.githubusercontent.com/treadiehq/port-kill/main/install-release.bat" -OutFile "install-release.bat"
 .\install-release.bat
 ```
 
@@ -25,7 +25,7 @@ Want to build from source?
 
 ```powershell
 # Requires Rust (https://rustup.rs/)
-git clone https://github.com/kagehq/port-kill.git
+git clone https://github.com/treadiehq/port-kill.git
 cd port-kill
 ./build-windows.bat
 ```
@@ -33,11 +33,11 @@ cd port-kill
 Manual fallback (direct download of release assets):
 
 ```powershell
-$tag = (Invoke-RestMethod "https://api.github.com/repos/kagehq/port-kill/releases/latest").tag_name
+$tag = (Invoke-RestMethod "https://api.github.com/repos/treadiehq/port-kill/releases/latest").tag_name
 $dir = "$env:USERPROFILE\AppData\Local\port-kill"; New-Item -ItemType Directory -Force -Path $dir | Out-Null
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-Invoke-WebRequest -UseBasicParsing -Uri "https://github.com/kagehq/port-kill/releases/download/$tag/port-kill" -OutFile "$dir\port-kill.exe"
-Invoke-WebRequest -UseBasicParsing -Uri "https://github.com/kagehq/port-kill/releases/download/$tag/port-kill-console" -OutFile "$dir\port-kill-console.exe"
+Invoke-WebRequest -UseBasicParsing -Uri "https://github.com/treadiehq/port-kill/releases/download/$tag/port-kill" -OutFile "$dir\port-kill.exe"
+Invoke-WebRequest -UseBasicParsing -Uri "https://github.com/treadiehq/port-kill/releases/download/$tag/port-kill-console" -OutFile "$dir\port-kill-console.exe"
 [Environment]::SetEnvironmentVariable('PATH', ([Environment]::GetEnvironmentVariable('PATH','User') + ";$dir"), 'User')
 ```
 
@@ -172,12 +172,12 @@ This is the #1 issue Windows users face. Here's how to solve it:
 
 3. **Run diagnostics** to identify what's wrong:
    ```powershell
-   powershell -Command "Invoke-WebRequest -UseBasicParsing -Uri 'https://raw.githubusercontent.com/kagehq/port-kill/main/diagnose-installation.bat' -OutFile 'diagnose.bat'"; .\diagnose.bat
+   powershell -Command "Invoke-WebRequest -UseBasicParsing -Uri 'https://raw.githubusercontent.com/treadiehq/port-kill/main/diagnose-installation.bat' -OutFile 'diagnose.bat'"; .\diagnose.bat
    ```
 
 4. **Reinstall** (if binaries are missing):
    ```powershell
-   powershell -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -UseBasicParsing -Headers @{Pragma='no-cache'; 'Cache-Control'='no-cache'} -Uri 'https://raw.githubusercontent.com/kagehq/port-kill/main/install-release.bat' -OutFile 'install-release.bat'"; .\install-release.bat
+   powershell -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -UseBasicParsing -Headers @{Pragma='no-cache'; 'Cache-Control'='no-cache'} -Uri 'https://raw.githubusercontent.com/treadiehq/port-kill/main/install-release.bat' -OutFile 'install-release.bat'"; .\install-release.bat
    ```
 
 ### Other Common Issues

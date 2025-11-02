@@ -5,7 +5,7 @@ echo Port Kill Installation Diagnostic Tool
 echo =====================================
 echo.
 
-set "REPO=kagehq/port-kill"
+set "REPO=treadiehq/port-kill"
 set "BASE_URL=https://github.com/%REPO%/releases/latest/download"
 set "INSTALL_DIR=%USERPROFILE%\AppData\Local\port-kill"
 
@@ -87,7 +87,7 @@ if %errorlevel% neq 0 (
     echo    "%INSTALL_DIR%\port-kill-console.exe" --version
     echo.
     echo 🔧 SOLUTION C - Reinstall (if files are missing):
-    echo    powershell -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -UseBasicParsing -Headers @{Pragma='no-cache'; 'Cache-Control'='no-cache'} -Uri 'https://raw.githubusercontent.com/kagehq/port-kill/main/install-release.bat' -OutFile 'install-release.bat'" ^&^& .\install-release.bat
+    echo    powershell -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -UseBasicParsing -Headers @{Pragma='no-cache'; 'Cache-Control'='no-cache'} -Uri 'https://raw.githubusercontent.com/treadiehq/port-kill/main/install-release.bat' -OutFile 'install-release.bat'" ^&^& .\install-release.bat
 ) else (
     echo.
     echo ✅ PATH is configured correctly!

@@ -15,10 +15,10 @@ Join our Discord community for discussions, support, and updates:
 
 ```bash
 # macOS/Linux (release installer)
-curl -fsSL https://raw.githubusercontent.com/kagehq/port-kill/main/install-release.sh | bash
+curl -fsSL https://raw.githubusercontent.com/treadiehq/port-kill/main/install-release.sh | bash
 
 # Windows (PowerShell or CMD)
-curl.exe -L "https://raw.githubusercontent.com/kagehq/port-kill/main/install-release.bat" -o install-release.bat
+curl.exe -L "https://raw.githubusercontent.com/treadiehq/port-kill/main/install-release.bat" -o install-release.bat
 .\\install-release.bat
 ```
 
@@ -31,7 +31,7 @@ If you get `'port-kill' is not recognized` error after installing:
 1. **Close and reopen your terminal completely** (required for PATH changes)
 2. **Run diagnostics** to identify the issue:
    ```powershell
-   powershell -Command "Invoke-WebRequest -UseBasicParsing -Uri 'https://raw.githubusercontent.com/kagehq/port-kill/main/diagnose-installation.bat' -OutFile 'diagnose.bat'"; .\diagnose.bat
+   powershell -Command "Invoke-WebRequest -UseBasicParsing -Uri 'https://raw.githubusercontent.com/treadiehq/port-kill/main/diagnose-installation.bat' -OutFile 'diagnose.bat'"; .\diagnose.bat
    ```
 3. **Test with full path** (works without PATH):
    ```powershell
@@ -245,11 +245,11 @@ Or on Windows:
 
 For more details, see the [dashboard README](dashboard/README.md).
 
-Check out the full [Kill Suite](https://kagehq.com) for additional tools and features.
+Check out the full [Kill Suite](https://treadie.com) for additional tools and features.
 
 ## MCP (use Port Kill from Cursor, Claude etc.)
 
-Add `npx -y 'https://gitpkg.vercel.app/kagehq/port-kill/mcp?main'` to your MCP config.
+Add `npx -y 'https://gitpkg.vercel.app/treadiehq/port-kill/mcp?main'` to your MCP config.
 
 ### Available Tools
 
@@ -272,7 +272,7 @@ For example for Cursor add to `.cursor/mcp.json`:
    "mcpServers": {
       "port-kill-mcp": {
          "command": "npx",
-         "args": ["-y", "https://gitpkg.vercel.app/kagehq/port-kill/mcp?main"]
+         "args": ["-y", "https://gitpkg.vercel.app/treadiehq/port-kill/mcp?main"]
       }
    }
 }
@@ -285,7 +285,7 @@ Notes:
    "mcpServers": {
       "port-kill-mcp": {
          "command": "npx",
-         "args": ["-y", "https://gitpkg.vercel.app/kagehq/port-kill/mcp?main"],
+         "args": ["-y", "https://gitpkg.vercel.app/treadiehq/port-kill/mcp?main"],
          "env": {
             "PORT_KILL_BIN": "/absolute/path/to/port-kill-console"
          }

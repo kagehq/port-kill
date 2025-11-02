@@ -2,7 +2,7 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-const GITHUB_API_URL: &str = "https://api.github.com/repos/kagehq/port-kill/releases/latest";
+const GITHUB_API_URL: &str = "https://api.github.com/repos/treadiehq/port-kill/releases/latest";
 const CHECK_INTERVAL_DAYS: u64 = 1; // Check for updates once per day
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -253,7 +253,7 @@ fn get_platform_download_url() -> Result<String> {
     };
 
     Ok(format!(
-        "https://github.com/kagehq/port-kill/releases/download/{}/{}",
+        "https://github.com/treadiehq/port-kill/releases/download/{}/{}",
         tag_name, binary_name
     ))
 }
@@ -266,7 +266,7 @@ pub fn print_update_notification(update_info: &UpdateInfo) {
     println!("Latest version:  {}", update_info.latest_version);
     println!();
     println!("📥 To update:");
-    println!("   curl -fsSL https://raw.githubusercontent.com/kagehq/port-kill/main/install-release.sh | bash");
+    println!("   curl -fsSL https://raw.githubusercontent.com/treadiehq/port-kill/main/install-release.sh | bash");
     println!();
     println!("🔗 Release notes: {}", update_info.release_url);
     println!();

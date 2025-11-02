@@ -63,7 +63,7 @@ Windows users: see the quick start at [WINDOWS.md](WINDOWS.md).
 
 ## Dashboard
 
-A web dashboard is available on the [Kill Suite](https://kagehq.com) website, providing a rich graphical interface for monitoring and managing processes. The dashboard runs independently as a Nuxt.js application and communicates with the Port Kill binary via HTTP API.
+A web dashboard is available on the [Kill Suite](https://treadie.com) website, providing a rich graphical interface for monitoring and managing processes. The dashboard runs independently as a Nuxt.js application and communicates with the Port Kill binary via HTTP API.
 
 **Features:**
 - Real-time process monitoring with auto-refresh
@@ -90,7 +90,7 @@ Prerequisites:
 
 Clone and install (CLI only):
 ```bash
-git clone https://github.com/kagehq/port-kill.git
+git clone https://github.com/treadiehq/port-kill.git
 cd port-kill
 ./install.sh
 ```
@@ -574,21 +574,21 @@ The latest binaries for all platforms are automatically built and released on Gi
 #### Quick Install (When Releases Are Available)
 ```bash
 # macOS/Linux: Download and run the installer
-curl -fsSL https://raw.githubusercontent.com/kagehq/port-kill/main/install-release.sh | bash
+curl -fsSL https://raw.githubusercontent.com/treadiehq/port-kill/main/install-release.sh | bash
 
 # Windows: Download and run the installer
 # Option 1: Download and run manually
-Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/kagehq/port-kill/main/install-release.bat' -OutFile 'install-release.bat'
+Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/treadiehq/port-kill/main/install-release.bat' -OutFile 'install-release.bat'
 # .\install-release.bat
 
 # Option 2: One-liner (PowerShell)
-powershell -Command "Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/kagehq/port-kill/main/install-release.bat' -OutFile 'install-release.bat'; .\install-release.bat"
+powershell -Command "Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/treadiehq/port-kill/main/install-release.bat' -OutFile 'install-release.bat'; .\install-release.bat"
 ```
 
 **Note**: If no releases are available yet, the install scripts will guide you to build from source instead.
 
 #### Manual Download (When Releases Are Available)
-1. **Download from Releases**: Go to [GitHub Releases](https://github.com/kagehq/port-kill/releases) and download the appropriate binary for your platform
+1. **Download from Releases**: Go to [GitHub Releases](https://github.com/treadiehq/port-kill/releases) and download the appropriate binary for your platform
 2. **Direct Downloads**:
    - **macOS**: `port-kill-macos` (system tray) or `port-kill-console-macos` (console mode)
    - **Linux**: `port-kill-linux` (system tray) or `port-kill-console-linux` (console mode)  
