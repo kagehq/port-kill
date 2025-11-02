@@ -1128,6 +1128,27 @@ pub fn get_processes_on_ports(
         return (0, std::collections::HashMap::new());
     }
 
+    #[cfg(target_os = "windows")]
+    {
+        // Windows: Use netstat instead of lsof
+        return get_processes_on_ports_windows(ports, args);
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        // Unix-like systems: Use lsof
+        return get_processes_on_ports_unix(ports, args);
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn get_processes_on_ports_unix(
+    ports: &[u16],
+    args: &crate::cli::Args,
+) -> (
+    usize,
+    std::collections::HashMap<u16, crate::types::ProcessInfo>,
+) {
     const MAX_PORTS_PER_LSOF: usize = 100;
     const LARGE_RANGE_THRESHOLD: usize = 200; // If more than 200 ports, use optimized scanning
     
@@ -1212,6 +1233,163 @@ pub fn get_processes_on_ports(
     }
 
     (processes.len(), processes)
+}
+
+#[cfg(target_os = "windows")]
+fn get_processes_on_ports_windows(
+    ports: &[u16],
+    args: &crate::cli::Args,
+) -> (
+    usize,
+    std::collections::HashMap<u16, crate::types::ProcessInfo>,
+) {
+    let mut processes = std::collections::HashMap::new();
+    let ports_filter: HashSet<u16> = ports.iter().copied().collect();
+    let ignore_ports = args.get_ignore_ports_set();
+    let ignore_processes = args.get_ignore_processes_set();
+
+    // On Windows, use netstat to find all listening TCP ports
+    let output = std::process::Command::new("netstat")
+        .args(&["-ano", "-p", "TCP"])
+        .output();
+
+    match output {
+        Ok(output) => {
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                parse_netstat_output(
+                    &stdout,
+                    &ports_filter,
+                    &ignore_ports,
+                    &ignore_processes,
+                    &mut processes,
+                );
+            }
+        }
+        Err(e) => {
+            log::warn!("Failed to run netstat: {}", e);
+        }
+    }
+
+    (processes.len(), processes)
+}
+
+#[cfg(target_os = "windows")]
+fn parse_netstat_output(
+    stdout: &str,
+    ports_filter: &HashSet<u16>,
+    ignore_ports: &HashSet<u16>,
+    ignore_processes: &HashSet<String>,
+    processes: &mut HashMap<u16, crate::types::ProcessInfo>,
+) {
+    for line in stdout.lines() {
+        // netstat output format: Proto  Local Address  Foreign Address  State  PID
+        // Example: TCP    0.0.0.0:8080     0.0.0.0:0     LISTENING    1234
+        if !line.contains("LISTENING") {
+            continue;
+        }
+
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() < 5 {
+            continue;
+        }
+
+        // Extract port from local address (e.g., "0.0.0.0:8080" or "[::]:8080")
+        let local_addr = parts[1];
+        let port = if let Some(port_str) = local_addr.split(':').last() {
+            match port_str.parse::<u16>() {
+                Ok(p) => p,
+                Err(_) => continue,
+            }
+        } else {
+            continue;
+        };
+
+        // Filter by port range
+        if !ports_filter.is_empty() && !ports_filter.contains(&port) {
+            continue;
+        }
+
+        // Check ignore lists
+        if ignore_ports.contains(&port) {
+            log::info!(
+                "Ignoring port {} (ignored by user configuration)",
+                port
+            );
+            continue;
+        }
+
+        // Extract PID
+        let pid = match parts[4].parse::<i32>() {
+            Ok(p) => p,
+            Err(_) => continue,
+        };
+
+        // Get process name using tasklist
+        let process_name = get_process_name_windows(pid).unwrap_or_else(|| "Unknown".to_string());
+
+        if ignore_processes.contains(&process_name) {
+            log::info!(
+                "Ignoring process {} (PID {}) on port {} (ignored by user configuration)",
+                process_name,
+                pid,
+                port
+            );
+            continue;
+        }
+
+        log::debug!(
+            "Creating ProcessInfo (netstat) for PID {} on port {}",
+            pid,
+            port
+        );
+
+        let mut process_info = crate::types::ProcessInfo {
+            pid,
+            port,
+            command: process_name.clone(),
+            name: process_name,
+            container_id: None,
+            container_name: None,
+            command_line: None,
+            working_directory: None,
+            process_group: None,
+            project_name: None,
+            cpu_usage: None,
+            memory_usage: None,
+            memory_percentage: None,
+        };
+
+        process_info.process_group = process_info.determine_process_group();
+        process_info.project_name = process_info.extract_project_name();
+
+        processes.insert(port, process_info);
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn get_process_name_windows(pid: i32) -> Option<String> {
+    let output = std::process::Command::new("tasklist")
+        .args(&["/FI", &format!("PID eq {}", pid), "/FO", "CSV", "/NH"])
+        .output();
+
+    match output {
+        Ok(output) => {
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                // CSV format: "process_name.exe","PID","Session Name","Session#","Mem Usage"
+                if let Some(line) = stdout.lines().next() {
+                    // Extract the first field (process name) from CSV
+                    if let Some(name) = line.split(',').next() {
+                        return Some(name.trim_matches('"').to_string());
+                    }
+                }
+            }
+        }
+        Err(_) => {}
+    }
+
+    None
 }
 
 fn parse_lsof_output(

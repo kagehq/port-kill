@@ -375,11 +375,27 @@ impl PortKillApp {
         ports: &[u16],
         args: &Args,
     ) -> (usize, HashMap<u16, crate::types::ProcessInfo>) {
-        use std::collections::HashSet;
-        
         if ports.is_empty() {
             return (0, HashMap::new());
         }
+
+        #[cfg(target_os = "windows")]
+        {
+            return Self::get_processes_on_ports_windows(ports, args);
+        }
+
+        #[cfg(not(target_os = "windows"))]
+        {
+            return Self::get_processes_on_ports_unix(ports, args);
+        }
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    fn get_processes_on_ports_unix(
+        ports: &[u16],
+        args: &Args,
+    ) -> (usize, HashMap<u16, crate::types::ProcessInfo>) {
+        use std::collections::HashSet;
 
         const MAX_PORTS_PER_LSOF: usize = 100;
         const LARGE_RANGE_THRESHOLD: usize = 200;
@@ -468,6 +484,156 @@ impl PortKillApp {
         (processes.len(), processes)
     }
 
+    #[cfg(target_os = "windows")]
+    fn get_processes_on_ports_windows(
+        ports: &[u16],
+        args: &Args,
+    ) -> (usize, HashMap<u16, crate::types::ProcessInfo>) {
+        use std::collections::HashSet;
+
+        let mut processes = HashMap::new();
+        let ports_filter: HashSet<u16> = ports.iter().copied().collect();
+        let ignore_ports = args.get_ignore_ports_set();
+        let ignore_processes = args.get_ignore_processes_set();
+
+        // On Windows, use netstat to find all listening TCP ports
+        let output = std::process::Command::new("netstat")
+            .args(&["-ano", "-p", "TCP"])
+            .output();
+
+        match output {
+            Ok(output) => {
+                if output.status.success() {
+                    let stdout = String::from_utf8_lossy(&output.stdout);
+                    Self::parse_netstat_output(
+                        &stdout,
+                        &ports_filter,
+                        &ignore_ports,
+                        &ignore_processes,
+                        &mut processes,
+                    );
+                }
+            }
+            Err(e) => {
+                log::warn!("Failed to run netstat: {}", e);
+            }
+        }
+
+        (processes.len(), processes)
+    }
+
+    #[cfg(target_os = "windows")]
+    fn parse_netstat_output(
+        stdout: &str,
+        ports_filter: &std::collections::HashSet<u16>,
+        ignore_ports: &std::collections::HashSet<u16>,
+        ignore_processes: &std::collections::HashSet<String>,
+        processes: &mut HashMap<u16, crate::types::ProcessInfo>,
+    ) {
+        for line in stdout.lines() {
+            // netstat output format: Proto  Local Address  Foreign Address  State  PID
+            if !line.contains("LISTENING") {
+                continue;
+            }
+
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() < 5 {
+                continue;
+            }
+
+            // Extract port from local address
+            let local_addr = parts[1];
+            let port = if let Some(port_str) = local_addr.split(':').last() {
+                match port_str.parse::<u16>() {
+                    Ok(p) => p,
+                    Err(_) => continue,
+                }
+            } else {
+                continue;
+            };
+
+            // Filter by port range
+            if !ports_filter.is_empty() && !ports_filter.contains(&port) {
+                continue;
+            }
+
+            // Check ignore lists
+            if ignore_ports.contains(&port) {
+                log::info!("Ignoring port {} (ignored by user configuration)", port);
+                continue;
+            }
+
+            // Extract PID
+            let pid = match parts[4].parse::<i32>() {
+                Ok(p) => p,
+                Err(_) => continue,
+            };
+
+            // Get process name using tasklist
+            let process_name = Self::get_process_name_windows(pid).unwrap_or_else(|| "Unknown".to_string());
+
+            if ignore_processes.contains(&process_name) {
+                log::info!(
+                    "Ignoring process {} (PID {}) on port {} (ignored by user configuration)",
+                    process_name,
+                    pid,
+                    port
+                );
+                continue;
+            }
+
+            log::debug!(
+                "Creating ProcessInfo (netstat) for PID {} on port {}",
+                pid,
+                port
+            );
+
+            let mut process_info = crate::types::ProcessInfo {
+                pid,
+                port,
+                command: process_name.clone(),
+                name: process_name,
+                container_id: None,
+                container_name: None,
+                command_line: None,
+                working_directory: None,
+                process_group: None,
+                project_name: None,
+                cpu_usage: None,
+                memory_usage: None,
+                memory_percentage: None,
+            };
+
+            process_info.process_group = process_info.determine_process_group();
+            process_info.project_name = process_info.extract_project_name();
+
+            processes.insert(port, process_info);
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    fn get_process_name_windows(pid: i32) -> Option<String> {
+        let output = std::process::Command::new("tasklist")
+            .args(&["/FI", &format!("PID eq {}", pid), "/FO", "CSV", "/NH"])
+            .output();
+
+        match output {
+            Ok(output) => {
+                if output.status.success() {
+                    let stdout = String::from_utf8_lossy(&output.stdout);
+                    if let Some(line) = stdout.lines().next() {
+                        if let Some(name) = line.split(',').next() {
+                            return Some(name.trim_matches('"').to_string());
+                        }
+                    }
+                }
+            }
+            Err(_) => {}
+        }
+
+        None
+    }
+
     fn parse_lsof_output_filtered(
         stdout: &str,
         ports_filter: &std::collections::HashSet<u16>,
@@ -548,8 +714,6 @@ impl PortKillApp {
     }
 
     pub fn kill_all_processes(ports: &[u16], args: &Args) -> Result<()> {
-        use std::collections::HashSet;
-        
         let port_list = ports
             .iter()
             .map(|p| p.to_string())
@@ -561,6 +725,21 @@ impl PortKillApp {
             info!("No ports specified");
             return Ok(());
         }
+
+        #[cfg(target_os = "windows")]
+        {
+            return Self::kill_all_processes_windows(ports, args);
+        }
+
+        #[cfg(not(target_os = "windows"))]
+        {
+            return Self::kill_all_processes_unix(ports, args);
+        }
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    fn kill_all_processes_unix(ports: &[u16], args: &Args) -> Result<()> {
+        use std::collections::HashSet;
 
         const MAX_PORTS_PER_LSOF: usize = 100;
         const LARGE_RANGE_THRESHOLD: usize = 200;
@@ -649,6 +828,122 @@ impl PortKillApp {
 
         info!("Finished killing all processes");
         Ok(())
+    }
+
+    #[cfg(target_os = "windows")]
+    fn kill_all_processes_windows(ports: &[u16], args: &Args) -> Result<()> {
+        use std::collections::HashSet;
+
+        let ports_filter: HashSet<u16> = ports.iter().copied().collect();
+        let ignore_ports = args.get_ignore_ports_set();
+        let ignore_processes = args.get_ignore_processes_set();
+
+        let mut pids_to_kill = Vec::new();
+
+        // On Windows, use netstat to find all listening TCP ports
+        let output = match std::process::Command::new("netstat")
+            .args(&["-ano", "-p", "TCP"])
+            .output()
+        {
+            Ok(output) => output,
+            Err(e) => {
+                error!("Failed to run netstat command: {}", e);
+                return Err(anyhow::anyhow!("Failed to run netstat: {}", e));
+            }
+        };
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        Self::extract_pids_from_netstat_output(
+            &stdout,
+            &ports_filter,
+            &ignore_ports,
+            &ignore_processes,
+            &mut pids_to_kill,
+        );
+
+        if pids_to_kill.is_empty() {
+            info!("No processes found to kill (all were ignored or none found)");
+            return Ok(());
+        }
+
+        info!(
+            "Found {} processes to kill (after filtering ignored processes)",
+            pids_to_kill.len()
+        );
+
+        for pid in pids_to_kill {
+            info!("Attempting to kill process PID: {}", pid);
+            match Self::kill_process(pid) {
+                Ok(_) => info!("Successfully killed process PID: {}", pid),
+                Err(e) => error!("Failed to kill process {}: {}", pid, e),
+            }
+        }
+
+        info!("Finished killing all processes");
+        Ok(())
+    }
+
+    #[cfg(target_os = "windows")]
+    fn extract_pids_from_netstat_output(
+        stdout: &str,
+        ports_filter: &std::collections::HashSet<u16>,
+        ignore_ports: &std::collections::HashSet<u16>,
+        ignore_processes: &std::collections::HashSet<String>,
+        pids_to_kill: &mut Vec<i32>,
+    ) {
+        for line in stdout.lines() {
+            if !line.contains("LISTENING") {
+                continue;
+            }
+
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() < 5 {
+                continue;
+            }
+
+            // Extract port
+            let local_addr = parts[1];
+            let port = if let Some(port_str) = local_addr.split(':').last() {
+                match port_str.parse::<u16>() {
+                    Ok(p) => p,
+                    Err(_) => continue,
+                }
+            } else {
+                continue;
+            };
+
+            // Filter by port range
+            if !ports_filter.is_empty() && !ports_filter.contains(&port) {
+                continue;
+            }
+
+            // Check ignore lists
+            if ignore_ports.contains(&port) {
+                info!("Ignoring port {} during kill operation (ignored by user configuration)", port);
+                continue;
+            }
+
+            // Extract PID
+            let pid = match parts[4].parse::<i32>() {
+                Ok(p) => p,
+                Err(_) => continue,
+            };
+
+            // Get process name
+            let process_name = Self::get_process_name_windows(pid).unwrap_or_else(|| "Unknown".to_string());
+
+            if ignore_processes.contains(&process_name) {
+                info!(
+                    "Ignoring process {} (PID {}) on port {} during kill operation (ignored by user configuration)",
+                    process_name, pid, port
+                );
+                continue;
+            }
+
+            if !pids_to_kill.contains(&pid) {
+                pids_to_kill.push(pid);
+            }
+        }
     }
 
     fn extract_pids_from_lsof_output(
