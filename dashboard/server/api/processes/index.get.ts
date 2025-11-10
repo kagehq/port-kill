@@ -79,11 +79,17 @@ function findPortKillBinary(defaultPath: string): string | null {
   // Try common locations for port-kill-console
   const possiblePaths = [
     './target/release/port-kill-console',
+    './target/release/port-kill-console.exe',
     './target/debug/port-kill-console',
+    './target/debug/port-kill-console.exe',
     '../target/release/port-kill-console',
+    '../target/release/port-kill-console.exe',
     '../target/debug/port-kill-console',
+    '../target/debug/port-kill-console.exe',
     '/usr/local/bin/port-kill-console',
-    '/opt/homebrew/bin/port-kill-console'
+    '/opt/homebrew/bin/port-kill-console',
+    'C:\\Program Files\\port-kill\\port-kill-console.exe',
+    join(process.env.USERPROFILE || '', 'AppData', 'Local', 'port-kill', 'port-kill-console.exe')
   ]
   
   for (const path of possiblePaths) {

@@ -18,6 +18,8 @@ A modern web dashboard for monitoring and managing development processes and por
 - Node.js 20.19.0 or later
 - npm or yarn package manager
 - Port Kill Rust application (built and available)
+  - **Windows**: The binary should be at `target\release\port-kill-console.exe`
+  - **macOS/Linux**: The binary should be at `target/release/port-kill-console`
 
 ## Installation
 
