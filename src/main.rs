@@ -13,6 +13,7 @@ use port_kill::cache::{
     list::{list_caches, print_list_table},
     restore::restore_last_backup,
 };
+#[cfg(target_os = "macos")]
 use port_kill::update_check;
 #[cfg(target_os = "macos")]
 use port_kill::{app::PortKillApp, cli::Args, console_app::ConsolePortKillApp};
@@ -325,17 +326,17 @@ use port_kill::cache::{
     restore::restore_last_backup,
 };
 #[cfg(target_os = "windows")]
-use port_kill::{cli::Args, console_app::ConsolePortKillApp};
+use port_kill::{app::PortKillApp, cli::Args, console_app::ConsolePortKillApp};
 
 #[cfg(target_os = "windows")]
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
     // Parse command-line arguments
     let mut args = Args::parse();
 
     // Handle self-update
     if args.self_update {
-        match port_kill::update_check::self_update().await {
+        let rt = tokio::runtime::Runtime::new()?;
+        match rt.block_on(port_kill::update_check::self_update()) {
             Ok(()) => return Ok(()),
             Err(e) => {
                 eprintln!("⚠️  Self-update failed: {}", e);
@@ -347,7 +348,8 @@ async fn main() -> Result<()> {
     // Handle update check
     if args.check_updates {
         let current_version = env!("CARGO_PKG_VERSION");
-        match port_kill::update_check::check_for_updates(current_version).await {
+        let rt = tokio::runtime::Runtime::new()?;
+        match rt.block_on(port_kill::update_check::check_for_updates(current_version)) {
             Ok(Some(update_info)) => {
                 port_kill::update_check::print_update_check_result(&update_info);
                 return Ok(());
@@ -373,7 +375,8 @@ async fn main() -> Result<()> {
     // Check for updates only for long-running operations
     if !is_quick_operation {
         let current_version = env!("CARGO_PKG_VERSION");
-        if let Ok(Some(update_info)) = port_kill::update_check::check_for_updates(current_version).await {
+        let rt = tokio::runtime::Runtime::new()?;
+        if let Ok(Some(update_info)) = rt.block_on(port_kill::update_check::check_for_updates(current_version)) {
             port_kill::update_check::print_update_notification(&update_info);
         }
     }
@@ -474,17 +477,18 @@ async fn main() -> Result<()> {
     if let Some(cache_cmd) = args.cache.clone() {
         let c = cache_cmd.args();
         if c.list || c.dry_run {
-            let resp = list_caches(
-                &c.lang,
-                c.npx,
-                c.js_pm,
-                c.hf,
-                c.torch,
-                c.vercel,
-                c.cloudflare,
-                c.stale_days,
-            )
-            .await;
+            let resp = tokio::runtime::Runtime::new()
+                .unwrap()
+                .block_on(list_caches(
+                    &c.lang,
+                    c.npx,
+                    c.js_pm,
+                    c.hf,
+                    c.torch,
+                    c.vercel,
+                    c.cloudflare,
+                    c.stale_days,
+                ));
             if c.json {
                 print_or_json(&resp, true);
             } else {
@@ -493,24 +497,27 @@ async fn main() -> Result<()> {
             return Ok(());
         }
         if c.clean {
-            let resp = clean_caches(
-                &c.lang,
-                c.npx,
-                c.js_pm,
-                c.safe_delete,
-                c.force,
-                c.hf,
-                c.torch,
-                c.vercel,
-                c.cloudflare,
-                c.stale_days,
-            )
-            .await;
+            let resp = tokio::runtime::Runtime::new()
+                .unwrap()
+                .block_on(clean_caches(
+                    &c.lang,
+                    c.npx,
+                    c.js_pm,
+                    c.safe_delete,
+                    c.force,
+                    c.hf,
+                    c.torch,
+                    c.vercel,
+                    c.cloudflare,
+                    c.stale_days,
+                ));
             print_or_json(&resp, c.json);
             return Ok(());
         }
         if c.restore_last {
-            let resp = restore_last_backup().await;
+            let resp = tokio::runtime::Runtime::new()
+                .unwrap()
+                .block_on(restore_last_backup());
             print_or_json(&resp, c.json);
             if resp.error.is_some() {
                 std::process::exit(1);
@@ -518,77 +525,154 @@ async fn main() -> Result<()> {
             return Ok(());
         }
         if c.doctor {
-            let report = doctor().await;
+            let report = tokio::runtime::Runtime::new().unwrap().block_on(doctor());
             print_or_json(&report, c.json);
             return Ok(());
         }
     }
 
     // Handle new lifecycle management features
-    
+    // These run in console mode even from the GUI binary
+
     if let Some(port) = args.restart {
-        let app = ConsolePortKillApp::new(args)?;
-        app.restart_port(port).await?;
+        let rt = tokio::runtime::Runtime::new()?;
+        rt.block_on(async {
+            let app = ConsolePortKillApp::new(args)?;
+            app.restart_port(port).await
+        })?;
         return Ok(());
     }
 
     if args.show_restart_history {
-        let app = ConsolePortKillApp::new(args)?;
-        app.show_restart_history().await?;
+        let rt = tokio::runtime::Runtime::new()?;
+        rt.block_on(async {
+            let app = ConsolePortKillApp::new(args)?;
+            app.show_restart_history().await
+        })?;
         return Ok(());
     }
 
     if let Some(port) = args.clear_restart {
-        let app = ConsolePortKillApp::new(args)?;
-        app.clear_restart_history(port).await?;
+        let rt = tokio::runtime::Runtime::new()?;
+        rt.block_on(async {
+            let app = ConsolePortKillApp::new(args)?;
+            app.clear_restart_history(port).await
+        })?;
         return Ok(());
     }
 
     if args.detect {
-        let app = ConsolePortKillApp::new(args)?;
-        app.detect_services().await?;
+        let rt = tokio::runtime::Runtime::new()?;
+        rt.block_on(async {
+            let app = ConsolePortKillApp::new(args)?;
+            app.detect_services().await
+        })?;
         return Ok(());
     }
 
     if let Some(service_name) = args.start.clone() {
-        let app = ConsolePortKillApp::new(args)?;
-        app.start_service(&service_name).await?;
+        let rt = tokio::runtime::Runtime::new()?;
+        rt.block_on(async {
+            let app = ConsolePortKillApp::new(args)?;
+            app.start_service(&service_name).await
+        })?;
         return Ok(());
     }
 
     if args.init_config {
-        let app = ConsolePortKillApp::new(args)?;
-        app.init_config().await?;
+        let rt = tokio::runtime::Runtime::new()?;
+        rt.block_on(async {
+            let app = ConsolePortKillApp::new(args)?;
+            app.init_config().await
+        })?;
         return Ok(());
     }
 
     if args.up {
-        let app = ConsolePortKillApp::new(args)?;
-        app.orchestrate_up().await?;
+        let rt = tokio::runtime::Runtime::new()?;
+        rt.block_on(async {
+            let app = ConsolePortKillApp::new(args)?;
+            app.orchestrate_up().await
+        })?;
         return Ok(());
     }
 
     if args.down {
-        let app = ConsolePortKillApp::new(args)?;
-        app.orchestrate_down().await?;
+        let rt = tokio::runtime::Runtime::new()?;
+        rt.block_on(async {
+            let app = ConsolePortKillApp::new(args)?;
+            app.orchestrate_down().await
+        })?;
         return Ok(());
     }
 
     if let Some(service_name) = args.restart_service.clone() {
-        let app = ConsolePortKillApp::new(args)?;
-        app.orchestrate_restart(&service_name).await?;
+        let rt = tokio::runtime::Runtime::new()?;
+        rt.block_on(async {
+            let app = ConsolePortKillApp::new(args)?;
+            app.orchestrate_restart(&service_name).await
+        })?;
         return Ok(());
     }
 
     if args.status {
-        let app = ConsolePortKillApp::new(args)?;
-        app.orchestrate_status().await?;
+        let rt = tokio::runtime::Runtime::new()?;
+        rt.block_on(async {
+            let app = ConsolePortKillApp::new(args)?;
+            app.orchestrate_status().await
+        })?;
         return Ok(());
     }
 
-    // Create and run the console application
-    let app = ConsolePortKillApp::new(args)?;
-    app.run().await?;
+    // Route console-style invocations (explicit --console, one-shot operations,
+    // scripting, JSON output, etc.) to the console app so CLI usage keeps working.
+    // Only a plain monitoring invocation starts the tray UI below.
+    let wants_console = args.console
+        || args.list
+        || !args.positional_ports.is_empty()
+        || args.clear.is_some()
+        || args.kill.is_some()
+        || args.kill_all
+        || args.reset
+        || args.kill_file.is_some()
+        || args.kill_ext.is_some()
+        || args.list_file.is_some()
+        || args.json
+        || args.monitor_endpoint.is_some()
+        || args.guard.is_some()
+        || args.guard_mode
+        || args.audit
+        || args.script.is_some()
+        || args.script_file.is_some();
+
+    if wants_console {
+        let rt = tokio::runtime::Runtime::new()?;
+        rt.block_on(async {
+            let app = ConsolePortKillApp::new(args)?;
+            app.run().await
+        })?;
+        info!("Port Kill application stopped");
+        return Ok(());
+    }
+
+    // Create and run the application (GUI tray mode, like macOS).
+    // If the tray cannot be created (e.g. headless session), fall back to console mode.
+    let gui_result = match PortKillApp::new(args.clone()) {
+        Ok(app) => app.run(),
+        Err(e) => Err(e),
+    };
+
+    if let Err(e) = gui_result {
+        log::warn!(
+            "Tray mode failed on Windows ({}). Falling back to console mode...",
+            e
+        );
+        let rt = tokio::runtime::Runtime::new()?;
+        rt.block_on(async {
+            let app = ConsolePortKillApp::new(args)?;
+            app.run().await
+        })?;
+    }
 
     info!("Port Kill application stopped");
     Ok(())

@@ -6,12 +6,12 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::sync::Mutex as StdMutex;
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 use tray_icon::{menu::MenuEvent, TrayIcon, TrayIconBuilder};
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 use winit::event_loop::EventLoop;
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 pub struct PortKillApp {
     tray_icon: Arc<StdMutex<Option<TrayIcon>>>,
     menu_event_receiver: Receiver<MenuEvent>,
@@ -21,7 +21,7 @@ pub struct PortKillApp {
     menu_id_to_port: Arc<StdMutex<HashMap<String, u16>>>,
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 impl PortKillApp {
     pub fn new(args: Args) -> Result<Self> {
         // Create channels for communication
@@ -49,11 +49,18 @@ impl PortKillApp {
         // Now create the tray icon after the event loop is created
         info!("Creating tray icon...");
         let initial_menu = self.tray_menu.get_current_menu()?;
-        let tray_icon = TrayIconBuilder::new()
-            .with_tooltip("Port Kill - Development Port Monitor (Click or press Cmd+Shift+P)")
+        #[cfg(target_os = "macos")]
+        let tooltip = "Port Kill - Development Port Monitor (Click or press Cmd+Shift+P)";
+        #[cfg(target_os = "windows")]
+        let tooltip = "Port Kill - Development Port Monitor (Click for menu)";
+        let builder = TrayIconBuilder::new()
+            .with_tooltip(tooltip)
             .with_menu(Box::new(initial_menu))
-            .with_icon(self.tray_menu.icon.clone())
-            .build()?;
+            .with_icon(self.tray_menu.icon.clone());
+        // On Windows, also open the menu with a left click (right click always works)
+        #[cfg(target_os = "windows")]
+        let builder = builder.with_menu_on_left_click(true);
+        let tray_icon = builder.build()?;
 
         info!("Tray icon created successfully!");
 
@@ -64,6 +71,7 @@ impl PortKillApp {
 
         // For now, let's manually check for processes every 5 seconds in the event loop
         let tray_icon = self.tray_icon.clone();
+        #[cfg(target_os = "macos")]
         let mut last_check = std::time::Instant::now();
         let mut last_process_count = 0;
         let mut last_menu_update = std::time::Instant::now();
@@ -73,11 +81,23 @@ impl PortKillApp {
 
         // Give the tray icon time to appear
         info!("Waiting for tray icon to appear...");
-        println!("🔍 Look for a white square with red/green center in your status bar!");
-        println!("   It should be in the top-right area of your screen.");
-        println!(
-            "💡 When in full-screen mode, use console mode: ./run.sh --console --ports 3000,8000"
-        );
+        #[cfg(target_os = "macos")]
+        {
+            println!("🔍 Look for a white square with red/green center in your status bar!");
+            println!("   It should be in the top-right area of your screen.");
+            println!(
+                "💡 When in full-screen mode, use console mode: ./run.sh --console --ports 3000,8000"
+            );
+        }
+        #[cfg(target_os = "windows")]
+        {
+            println!("🔍 Look for a white square with red/green center in your system tray!");
+            println!("   It should be in the bottom-right area of your screen (near the clock).");
+            println!("   If you don't see it, check the hidden icons overflow (^ arrow).");
+            println!(
+                "💡 Prefer a terminal? Use console mode: port-kill.exe --console --ports 3000,8000"
+            );
+        }
 
         // Set up menu event handling
         let menu_event_receiver = self.menu_event_receiver.clone();
@@ -85,8 +105,41 @@ impl PortKillApp {
         let menu_id_to_port = self.menu_id_to_port.clone();
         let args = self.args.clone();
 
+        // On Windows, run process scans on a dedicated thread so the win32
+        // message pump (and therefore the tray menu) never blocks on
+        // netstat/tasklist. Results are picked up by the event loop below.
+        #[cfg(target_os = "windows")]
+        let scan_receiver = {
+            let (scan_sender, scan_receiver) = crossbeam_channel::unbounded::<(
+                usize,
+                HashMap<u16, crate::types::ProcessInfo>,
+            )>();
+            let scan_args = args.clone();
+            std::thread::spawn(move || loop {
+                let ports = scan_args.get_ports_to_monitor();
+                let result = if scan_args.verbose {
+                    Self::get_processes_on_ports_verbose(&ports, &scan_args)
+                } else {
+                    Self::get_processes_on_ports(&ports, &scan_args)
+                };
+                if scan_sender.send(result).is_err() {
+                    // Event loop is gone; stop scanning
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_secs(5));
+            });
+            scan_receiver
+        };
+
         // Run the event loop
         event_loop.run(move |_event, _elwt| {
+            // On Windows, wake up at most every 100ms instead of busy-polling;
+            // tray/menu messages still wake the loop immediately.
+            #[cfg(target_os = "windows")]
+            _elwt.set_control_flow(winit::event_loop::ControlFlow::WaitUntil(
+                std::time::Instant::now() + std::time::Duration::from_millis(100),
+            ));
+
             // Handle menu events with crash-safe approach
             if let Ok(event) = menu_event_receiver.try_recv() {
                 info!("Menu event received: {:?}", event);
@@ -173,12 +226,24 @@ impl PortKillApp {
                 }
             }
             
-            // Check for processes every 5 seconds (less frequent to avoid crashes)
-            if last_check.elapsed() >= std::time::Duration::from_secs(5) {
+            // Get the latest scan results.
+            // - Windows: scans arrive from the background thread; drain the
+            //   channel and keep only the freshest result.
+            // - macOS: scan inline every 5 seconds (original behavior).
+            #[cfg(target_os = "windows")]
+            let scan_result = {
+                let mut latest = None;
+                while let Ok(result) = scan_receiver.try_recv() {
+                    latest = Some(result);
+                }
+                latest
+            };
+            #[cfg(target_os = "macos")]
+            let scan_result = if last_check.elapsed() >= std::time::Duration::from_secs(5) {
                 last_check = std::time::Instant::now();
-                
+
                 // Get detailed process information with crash-safe approach
-                let (process_count, processes) = if args.verbose {
+                let result = if args.verbose {
                     // Use ProcessMonitor for verbose information
                     match std::panic::catch_unwind(|| {
                         Self::get_processes_on_ports_verbose(&args.get_ports_to_monitor(), &args)
@@ -201,7 +266,12 @@ impl PortKillApp {
                         }
                     }
                 };
-                
+                Some(result)
+            } else {
+                None
+            };
+
+            if let Some((process_count, processes)) = scan_result {
                 let status_info = StatusBarInfo::from_process_count(process_count);
                 println!("🔄 Port Status: {} - {}", status_info.text, status_info.tooltip);
                 
@@ -277,7 +347,14 @@ impl PortKillApp {
                         // Only update menu if process count changed significantly and we're not killing processes
                         // Add extra delay after killing processes to prevent crashes
                         let process_count_changed = process_count != last_process_count;
-                        let enough_time_passed = last_menu_update.elapsed() >= std::time::Duration::from_secs(10); // Increased delay
+                        // macOS needs a long delay between menu updates to avoid issue #30;
+                        // on Windows menu swaps are cheap and safe, so refresh sooner.
+                        #[cfg(target_os = "macos")]
+                        const MENU_UPDATE_MIN_INTERVAL_SECS: u64 = 10;
+                        #[cfg(target_os = "windows")]
+                        const MENU_UPDATE_MIN_INTERVAL_SECS: u64 = 3;
+                        let enough_time_passed = last_menu_update.elapsed()
+                            >= std::time::Duration::from_secs(MENU_UPDATE_MIN_INTERVAL_SECS);
                         let not_killing = !is_killing_processes.load(Ordering::Relaxed);
                         // Also check that we haven't had a menu interaction recently (prevents crash from issue #30)
                         let no_recent_interaction = last_menu_interaction.elapsed() >= std::time::Duration::from_secs(2);
@@ -285,7 +362,14 @@ impl PortKillApp {
                         if not_killing && process_count_changed && enough_time_passed && no_recent_interaction {
                             info!("Process count changed from {} to {}, updating menu...", last_process_count, process_count);
 
-                            // Additional validation: ensure all processes in the list are still running
+                            // Additional validation: ensure all processes in the list are still running.
+                            // On Windows the scan result is already a fresh netstat snapshot from the
+                            // background thread, and per-PID tasklist checks would block the UI thread,
+                            // so skip the extra validation there.
+                            #[cfg(target_os = "windows")]
+                            let valid_processes: HashMap<u16, crate::types::ProcessInfo> =
+                                processes.clone();
+                            #[cfg(not(target_os = "windows"))]
                             let valid_processes: HashMap<u16, crate::types::ProcessInfo> = processes
                                 .iter()
                                 .filter(|(_, process_info)| Self::is_process_still_running(process_info.pid))
@@ -306,17 +390,19 @@ impl PortKillApp {
                                     TrayMenu::create_menu_with_verbose(&valid_processes, args.show_pid, args.verbose)
                                 }) {
                                     Ok(Ok((new_menu, new_menu_id_to_port))) => {
-                                        // SAFETY FIX: Clear the old menu first and wait for macOS to finish cleanup
-                                        // This prevents a use-after-free crash when macOS tries to unregister
-                                        // key equivalents from menu items that are being deallocated.
+                                        // SAFETY FIX (macOS only): Clear the old menu first and wait for
+                                        // macOS to finish cleanup. This prevents a use-after-free crash
+                                        // when macOS tries to unregister key equivalents from menu items
+                                        // that are being deallocated.
                                         // See: https://github.com/treadiehq/port-kill/issues/30
-                                        let none_menu: Option<Box<dyn tray_icon::menu::ContextMenu>> = None;
-                                        icon.set_menu(none_menu);
-                                        
-                                        // Give macOS time to fully release the old menu resources
-                                        // This delay is critical to prevent the segfault
-                                        std::thread::sleep(std::time::Duration::from_millis(50));
-                                        
+                                        // Windows swaps the menu handle atomically, so no delay needed.
+                                        #[cfg(target_os = "macos")]
+                                        {
+                                            let none_menu: Option<Box<dyn tray_icon::menu::ContextMenu>> = None;
+                                            icon.set_menu(none_menu);
+                                            std::thread::sleep(std::time::Duration::from_millis(50));
+                                        }
+
                                         // Now set the new menu
                                         icon.set_menu(Some(Box::new(new_menu)));
                                         
@@ -541,6 +627,10 @@ impl PortKillApp {
         ignore_processes: &std::collections::HashSet<String>,
         processes: &mut HashMap<u16, crate::types::ProcessInfo>,
     ) {
+        // Resolve all process names with a single tasklist call instead of one
+        // call per PID (each invocation costs ~100-300ms).
+        let name_by_pid = Self::get_process_names_windows();
+
         for line in stdout.lines() {
             // netstat output format: Proto  Local Address  Foreign Address  State  PID
             if !line.contains("LISTENING") {
@@ -580,8 +670,11 @@ impl PortKillApp {
                 Err(_) => continue,
             };
 
-            // Get process name using tasklist
-            let process_name = Self::get_process_name_windows(pid).unwrap_or_else(|| "Unknown".to_string());
+            // Get process name from the batch tasklist snapshot
+            let process_name = name_by_pid
+                .get(&pid)
+                .cloned()
+                .unwrap_or_else(|| "Unknown".to_string());
 
             if ignore_processes.contains(&process_name) {
                 log::info!(
@@ -622,27 +715,35 @@ impl PortKillApp {
         }
     }
 
+    /// Resolve all process names in one tasklist invocation.
+    /// CSV format: "name","pid","session name","session#","mem usage"
     #[cfg(target_os = "windows")]
-    fn get_process_name_windows(pid: i32) -> Option<String> {
+    fn get_process_names_windows() -> HashMap<i32, String> {
+        let mut name_by_pid = HashMap::new();
+
         let output = std::process::Command::new("tasklist")
-            .args(&["/FI", &format!("PID eq {}", pid), "/FO", "CSV", "/NH"])
+            .args(&["/FO", "CSV", "/NH"])
             .output();
 
-        match output {
-            Ok(output) => {
-                if output.status.success() {
-                    let stdout = String::from_utf8_lossy(&output.stdout);
-                    if let Some(line) = stdout.lines().next() {
-                        if let Some(name) = line.split(',').next() {
-                            return Some(name.trim_matches('"').to_string());
-                        }
-                    }
+        if let Ok(output) = output {
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                for line in stdout.lines() {
+                    let mut cols = line.split("\",\"");
+                    let name = match cols.next() {
+                        Some(name) => name.trim_start_matches('"'),
+                        None => continue,
+                    };
+                    let pid = match cols.next().and_then(|p| p.trim_matches('"').parse::<i32>().ok()) {
+                        Some(pid) => pid,
+                        None => continue,
+                    };
+                    name_by_pid.insert(pid, name.to_string());
                 }
             }
-            Err(_) => {}
         }
 
-        None
+        name_by_pid
     }
 
     fn parse_lsof_output_filtered(
@@ -902,6 +1003,9 @@ impl PortKillApp {
         ignore_processes: &std::collections::HashSet<String>,
         pids_to_kill: &mut Vec<i32>,
     ) {
+        // Single batch lookup instead of one tasklist call per PID
+        let name_by_pid = Self::get_process_names_windows();
+
         for line in stdout.lines() {
             if !line.contains("LISTENING") {
                 continue;
@@ -940,8 +1044,11 @@ impl PortKillApp {
                 Err(_) => continue,
             };
 
-            // Get process name
-            let process_name = Self::get_process_name_windows(pid).unwrap_or_else(|| "Unknown".to_string());
+            // Get process name from the batch tasklist snapshot
+            let process_name = name_by_pid
+                .get(&pid)
+                .cloned()
+                .unwrap_or_else(|| "Unknown".to_string());
 
             if ignore_processes.contains(&process_name) {
                 info!(
@@ -1129,29 +1236,16 @@ impl PortKillApp {
         Self::kill_process(process_info.pid)
     }
 
-    /// Check if a process is still running by its PID
+    /// Check if a process is still running by its PID.
+    /// Only used on non-Windows: the Windows menu update path relies on the
+    /// fresh netstat snapshot instead of per-PID checks.
+    #[cfg(not(target_os = "windows"))]
     fn is_process_still_running(pid: i32) -> bool {
-        #[cfg(not(target_os = "windows"))]
-        {
-            // On Unix-like systems, use ps to check if process exists
-            std::process::Command::new("ps")
-                .args(&["-p", &pid.to_string()])
-                .output()
-                .map(|output| output.status.success())
-                .unwrap_or(false)
-        }
-
-        #[cfg(target_os = "windows")]
-        {
-            // On Windows, use tasklist to check if process exists
-            std::process::Command::new("tasklist")
-                .args(&["/FI", &format!("PID eq {}", pid)])
-                .output()
-                .map(|output| {
-                    let stdout = String::from_utf8_lossy(&output.stdout);
-                    stdout.contains(&pid.to_string())
-                })
-                .unwrap_or(false)
-        }
+        // On Unix-like systems, use ps to check if process exists
+        std::process::Command::new("ps")
+            .args(&["-p", &pid.to_string()])
+            .output()
+            .map(|output| output.status.success())
+            .unwrap_or(false)
     }
 }

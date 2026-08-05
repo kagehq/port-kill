@@ -45,8 +45,8 @@ embed-resource = "1.8"
 default = []
 embed_icon = []
 
-# GUI-specific dependencies (only for macOS tray icon)
-[target.'cfg(target_os = "macos")'.dependencies]
+# GUI-specific dependencies (tray icon on macOS and Windows)
+[target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
 tray-icon = "0.10"
 winit = "0.29"
 

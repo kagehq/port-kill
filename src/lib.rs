@@ -17,8 +17,8 @@ pub mod system_monitor;
 pub mod types;
 pub mod update_check;
 
-// macOS-specific modules (only compiled on macOS)
-#[cfg(target_os = "macos")]
+// GUI modules (tray icon on macOS and Windows)
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 pub mod app;
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 pub mod tray_menu;

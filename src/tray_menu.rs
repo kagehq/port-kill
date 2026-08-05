@@ -3,13 +3,13 @@ use anyhow::Result;
 use crossbeam_channel::Sender;
 use log::debug;
 use std::collections::HashMap;
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 use tray_icon::{
     menu::{Menu, MenuEvent, MenuId, MenuItem, PredefinedMenuItem},
     Icon,
 };
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 #[derive(Clone)]
 pub struct TrayMenu {
     pub icon: Icon,
@@ -17,7 +17,7 @@ pub struct TrayMenu {
     show_pid: bool,
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 impl TrayMenu {
     pub fn new(_menu_sender: Sender<MenuEvent>) -> Result<Self> {
         // Create a simple icon (we'll use a text-based approach for now)
@@ -151,7 +151,7 @@ impl TrayMenu {
     }
 
     fn short_display_path(dir: &str) -> String {
-        let parts: Vec<&str> = dir.split('/').collect();
+        let parts: Vec<&str> = dir.split(['/', '\\']).collect();
         if parts.len() >= 2 {
             parts[parts.len() - 2..].join("/")
         } else {
