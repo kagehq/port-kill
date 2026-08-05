@@ -10,6 +10,7 @@ use nix::sys::signal::{kill, Signal};
 #[cfg(not(target_os = "windows"))]
 use nix::unistd::Pid;
 use std::collections::{HashMap, HashSet};
+#[cfg(not(target_os = "windows"))]
 use std::process::Command;
 use std::time::Duration;
 use tokio::time::sleep;
@@ -392,7 +393,7 @@ impl ProcessMonitor {
         #[cfg(target_os = "windows")]
         {
             // Windows: Use netstat to find processes listening on the port
-            let output = Command::new("netstat")
+            let output = crate::hidden_command::hidden_command("netstat")
                 .args(&["-ano"])
                 .output()
                 .context("Failed to execute netstat command")?;
@@ -522,7 +523,7 @@ impl ProcessMonitor {
     #[cfg(target_os = "windows")]
     async fn get_process_details_windows(&self, pid: i32, port: u16) -> Result<ProcessInfo> {
         // Get process name using tasklist
-        let output = Command::new("tasklist")
+        let output = crate::hidden_command::hidden_command("tasklist")
             .args(&["/FI", &format!("PID eq {}", pid), "/FO", "CSV", "/NH"])
             .output()
             .context("Failed to execute tasklist command")?;
@@ -762,7 +763,7 @@ impl ProcessMonitor {
         let mut working_directory = None;
 
         // Get command line using wmic
-        if let Ok(output) = Command::new("wmic")
+        if let Ok(output) = crate::hidden_command::hidden_command("wmic")
             .args(&[
                 "process",
                 "where",
@@ -790,7 +791,7 @@ impl ProcessMonitor {
         }
 
         // Get working directory using wmic
-        if let Ok(output) = Command::new("wmic")
+        if let Ok(output) = crate::hidden_command::hidden_command("wmic")
             .args(&[
                 "process",
                 "where",
@@ -849,7 +850,7 @@ impl ProcessMonitor {
     #[cfg(not(target_os = "windows"))]
     async fn find_container_id_for_pid(&self, pid: i32) -> Result<Option<String>> {
         // Use docker ps to get all running containers
-        let output = Command::new("docker")
+        let output = crate::hidden_command::hidden_command("docker")
             .args(&["ps", "--format", "table {{.ID}}\t{{.Names}}\t{{.Ports}}"])
             .output()
             .context("Failed to execute docker ps command")?;
@@ -880,7 +881,7 @@ impl ProcessMonitor {
     #[cfg(not(target_os = "windows"))]
     async fn container_has_pid(&self, container_id: &str, pid: i32) -> Result<bool> {
         // Use docker top to get processes in the container
-        let output = Command::new("docker")
+        let output = crate::hidden_command::hidden_command("docker")
             .args(&["top", container_id])
             .output()
             .context("Failed to execute docker top command")?;
@@ -911,7 +912,7 @@ impl ProcessMonitor {
     #[allow(dead_code)]
     async fn get_container_name(&self, container_id: &str) -> Result<String> {
         // Get container name using docker inspect
-        let output = Command::new("docker")
+        let output = crate::hidden_command::hidden_command("docker")
             .args(&["inspect", "--format", "{{.Name}}", container_id])
             .output()
             .context("Failed to execute docker inspect command")?;
@@ -992,7 +993,7 @@ impl ProcessMonitor {
         #[cfg(target_os = "windows")]
         {
             // Windows: Use taskkill
-            let output = Command::new("taskkill")
+            let output = crate::hidden_command::hidden_command("taskkill")
                 .args(&["/PID", &pid.to_string(), "/F"])
                 .output()
                 .context("Failed to execute taskkill command")?;
@@ -1072,7 +1073,7 @@ impl ProcessMonitor {
         info!("Stopping Docker container: {}", container_id);
 
         // First try graceful stop
-        let stop_output = Command::new("docker")
+        let stop_output = crate::hidden_command::hidden_command("docker")
             .args(&["stop", container_id])
             .output()
             .context("Failed to execute docker stop command")?;
@@ -1087,7 +1088,7 @@ impl ProcessMonitor {
             "Graceful stop failed, force removing container: {}",
             container_id
         );
-        let remove_output = Command::new("docker")
+        let remove_output = crate::hidden_command::hidden_command("docker")
             .args(&["rm", "-f", container_id])
             .output()
             .context("Failed to execute docker rm command")?;
@@ -1522,7 +1523,7 @@ fn get_processes_on_ports_windows_multi(
     let ignore_ports = args.get_ignore_ports_set();
     let ignore_processes = args.get_ignore_processes_set();
 
-    if let Ok(output) = std::process::Command::new("netstat")
+    if let Ok(output) = crate::hidden_command::hidden_command("netstat")
         .args(&["-ano", "-p", "TCP"])
         .output()
     {
@@ -1554,7 +1555,7 @@ fn get_processes_on_ports_windows(
     let ignore_processes = args.get_ignore_processes_set();
 
     // On Windows, use netstat to find all listening TCP ports
-    let output = std::process::Command::new("netstat")
+    let output = crate::hidden_command::hidden_command("netstat")
         .args(&["-ano", "-p", "TCP"])
         .output();
 
@@ -1674,7 +1675,7 @@ fn parse_netstat_output(
 
 #[cfg(target_os = "windows")]
 fn get_process_name_windows(pid: i32) -> Option<String> {
-    let output = std::process::Command::new("tasklist")
+    let output = crate::hidden_command::hidden_command("tasklist")
         .args(&["/FI", &format!("PID eq {}", pid), "/FO", "CSV", "/NH"])
         .output();
 
@@ -1911,7 +1912,7 @@ pub fn kill_all_processes(ports: &[u16], args: &crate::cli::Args) -> anyhow::Res
         return Ok(());
     }
 
-    let output = match std::process::Command::new("netstat")
+    let output = match crate::hidden_command::hidden_command("netstat")
         .args(&["-ano", "-p", "TCP"])
         .output()
     {
@@ -2215,12 +2216,10 @@ fn kill_process(pid: i32) -> anyhow::Result<()> {
 
     #[cfg(target_os = "windows")]
     {
-        use std::process::Command;
-
         log::info!("Killing process PID: {} on Windows", pid);
 
         // Use taskkill to terminate the process
-        let output = Command::new("taskkill")
+        let output = crate::hidden_command::hidden_command("taskkill")
             .args(&["/PID", &pid.to_string(), "/F"])
             .output();
 

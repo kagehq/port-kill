@@ -626,7 +626,7 @@ impl PortKillApp {
         let ignore_processes = args.get_ignore_processes_set();
 
         // On Windows, use netstat to find all listening TCP ports
-        let output = std::process::Command::new("netstat")
+        let output = crate::hidden_command::hidden_command("netstat")
             .args(&["-ano", "-p", "TCP"])
             .output();
 
@@ -751,7 +751,7 @@ impl PortKillApp {
     /// Resolve all process names in one tasklist invocation.
     #[cfg(target_os = "windows")]
     fn get_process_names_windows() -> HashMap<i32, String> {
-        let output = std::process::Command::new("tasklist")
+        let output = crate::hidden_command::hidden_command("tasklist")
             .args(&["/FO", "CSV", "/NH"])
             .output();
 
@@ -992,7 +992,7 @@ impl PortKillApp {
         let mut pids_to_kill = Vec::new();
 
         // On Windows, use netstat to find all listening TCP ports
-        let output = match std::process::Command::new("netstat")
+        let output = match crate::hidden_command::hidden_command("netstat")
             .args(&["-ano", "-p", "TCP"])
             .output()
         {
@@ -1209,12 +1209,10 @@ impl PortKillApp {
 
     #[cfg(target_os = "windows")]
     fn kill_process(pid: i32) -> Result<()> {
-        use std::process::Command;
-
         info!("Killing process PID: {} on Windows", pid);
 
         // Use taskkill to terminate the process
-        let output = Command::new("taskkill")
+        let output = crate::hidden_command::hidden_command("taskkill")
             .args(&["/PID", &pid.to_string(), "/F"])
             .output();
 

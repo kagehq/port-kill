@@ -4,6 +4,7 @@ pub mod command_line;
 pub mod console_app;
 pub mod endpoint_monitor;
 pub mod file_monitor;
+pub mod hidden_command;
 pub mod orchestrator;
 pub mod port_guard;
 pub mod preset_manager;

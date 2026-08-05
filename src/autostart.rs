@@ -21,7 +21,7 @@ pub fn is_enabled() -> bool {
 }
 
 fn query_registry() -> bool {
-    std::process::Command::new("reg")
+    crate::hidden_command::hidden_command("reg")
         .args(["query", RUN_KEY, "/v", VALUE_NAME])
         .output()
         .map(|output| output.status.success())
@@ -33,7 +33,7 @@ fn query_registry() -> bool {
 /// Returns the new state.
 pub fn toggle() -> Result<bool> {
     if is_enabled() {
-        let output = std::process::Command::new("reg")
+        let output = crate::hidden_command::hidden_command("reg")
             .args(["delete", RUN_KEY, "/v", VALUE_NAME, "/f"])
             .output()?;
         if !output.status.success() {
@@ -61,7 +61,7 @@ pub fn toggle() -> Result<bool> {
         } else {
             format!("\"{}\" {}", exe.display(), args.join(" "))
         };
-        let output = std::process::Command::new("reg")
+        let output = crate::hidden_command::hidden_command("reg")
             .args([
                 "add", RUN_KEY, "/v", VALUE_NAME, "/t", "REG_SZ", "/d", &command, "/f",
             ])

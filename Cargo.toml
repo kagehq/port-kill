@@ -45,13 +45,17 @@ embed-resource = "1.8"
 default = []
 embed_icon = []
 
-# GUI-specific dependencies (tray icon on macOS and Windows)
-[target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
+# GUI-specific dependencies (tray icon)
+# macOS keeps tray-icon 0.10 (its crash mitigations are tuned for it); Windows
+# uses a newer release because 0.10 ignored menu-on-left-click on Windows.
+[target.'cfg(target_os = "macos")'.dependencies]
 tray-icon = "0.10"
 winit = "0.29"
 
-# Windows-specific dependencies (console attach for the GUI-subsystem binary)
+# Windows-specific dependencies (tray + console attach for the GUI-subsystem binary)
 [target.'cfg(target_os = "windows")'.dependencies]
+tray-icon = "0.19"
+winit = "0.29"
 windows-sys = { version = "0.52", features = ["Win32_System_Console", "Win32_Foundation"] }
 
 # Unix-specific dependencies (for process management)
