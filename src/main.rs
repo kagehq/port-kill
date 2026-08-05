@@ -1,3 +1,8 @@
+// On Windows, build the tray binary as a GUI-subsystem app so launching it
+// from Explorer doesn't open a console window. CLI invocations from a
+// terminal re-attach to the parent console (see attach_parent_console).
+#![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
+
 #[cfg(target_os = "macos")]
 use anyhow::Result;
 #[cfg(target_os = "macos")]
@@ -328,8 +333,31 @@ use port_kill::cache::{
 #[cfg(target_os = "windows")]
 use port_kill::{app::PortKillApp, cli::Args, console_app::ConsolePortKillApp};
 
+/// With the "windows" subsystem there is no console by default. If the app was
+/// launched from a terminal, re-attach to it so CLI output (--list, --console,
+/// --help, etc.) still works; when launched from Explorer this is a no-op and
+/// no console window is created.
+#[cfg(target_os = "windows")]
+fn attach_parent_console() {
+    use windows_sys::Win32::Foundation::INVALID_HANDLE_VALUE;
+    use windows_sys::Win32::System::Console::{
+        AttachConsole, GetStdHandle, ATTACH_PARENT_PROCESS, STD_OUTPUT_HANDLE,
+    };
+    unsafe {
+        // Only attach when stdout is not already usable: if the caller
+        // redirected it (pipe, file, PowerShell capture), attaching would
+        // clobber those handles and the output would be lost.
+        let stdout = GetStdHandle(STD_OUTPUT_HANDLE);
+        if stdout == 0 || stdout == INVALID_HANDLE_VALUE {
+            AttachConsole(ATTACH_PARENT_PROCESS);
+        }
+    }
+}
+
 #[cfg(target_os = "windows")]
 fn main() -> Result<()> {
+    attach_parent_console();
+
     // Parse command-line arguments
     let mut args = Args::parse();
 

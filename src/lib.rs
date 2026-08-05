@@ -22,3 +22,7 @@ pub mod update_check;
 pub mod app;
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 pub mod tray_menu;
+
+// Windows-specific: "Start with Windows" registry management
+#[cfg(target_os = "windows")]
+pub mod autostart;

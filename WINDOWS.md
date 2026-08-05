@@ -151,11 +151,13 @@ port-kill.exe --ports 3000,8000,8080
 port-kill.exe --start-port 3000 --end-port 9000
 ```
 
-- A small square icon appears in the notification area (near the clock). If you don't see it, check the hidden icons overflow (`^` arrow).
-- The icon's center changes color with the number of detected processes: green (0), orange (1–9), red (10+).
-- **Right-click** the icon to open the menu:
+- A badge icon appears in the notification area (near the clock) showing the number of detected processes; its color follows the count: green (0), orange (1–9), red (10+). If you don't see it, check the hidden icons overflow (`^` arrow).
+- No console window opens when launched from Explorer — the app runs entirely in the tray. When run from a terminal, output still prints there.
+- Note: because `port-kill.exe` is a GUI app, Windows PowerShell 5.1 won't capture its output into a variable or pipeline (`$out = port-kill.exe --list` comes back empty). Redirection from `cmd` works fine (`port-kill.exe --list > out.txt`), and for scripting use `port-kill-console.exe`, which is a regular console app.
+- **Click (left or right)** the icon to open the menu:
   - **Kill All Processes** — kills everything on the monitored ports
-  - One entry per detected process (`Kill: Port 3000: node`) — click to kill just that one
+  - Processes grouped by type (`Docker (7)`, `Node (2)`, …) as submenus; single processes listed directly (`Kill: Port 3000: node`) — click to kill just that one
+  - **Start with Windows** — toggle to launch Port Kill at login with the same options (user-scoped `HKCU` Run key, no admin needed)
   - **Quit** — exits the app
 - The menu refreshes automatically as processes come and go (scans every 5 seconds).
 - `--show-pid` and `--verbose` add PIDs / command line details to the menu entries.

@@ -74,6 +74,11 @@ impl PortKillApp {
         #[cfg(target_os = "macos")]
         let mut last_check = std::time::Instant::now();
         let mut last_process_count = 0;
+        // Windows: track the exact process set currently shown in the menu, so
+        // it also refreshes when the set changes without the count changing
+        // (e.g. one process killed while another appears on a different port).
+        #[cfg(target_os = "windows")]
+        let mut last_displayed_processes: HashMap<u16, crate::types::ProcessInfo> = HashMap::new();
         let mut last_menu_update = std::time::Instant::now();
         let is_killing_processes = Arc::new(AtomicBool::new(false));
         // Track when menu was last interacted with to avoid updating during interaction
@@ -91,7 +96,8 @@ impl PortKillApp {
         }
         #[cfg(target_os = "windows")]
         {
-            println!("🔍 Look for a white square with red/green center in your system tray!");
+            println!("🔍 Look for the Port Kill badge in your system tray!");
+            println!("   It shows the number of detected processes (green 0, orange 1-9, red 10+).");
             println!("   It should be in the bottom-right area of your screen (near the clock).");
             println!("   If you don't see it, check the hidden icons overflow (^ arrow).");
             println!(
@@ -181,6 +187,15 @@ impl PortKillApp {
                             } else if menu_id == "quit" {
                                 info!("Quit clicked, exiting gracefully...");
                                 std::process::exit(0);
+                            } else if menu_id == "toggle_autostart" {
+                                #[cfg(target_os = "windows")]
+                                match crate::autostart::toggle() {
+                                    Ok(enabled) => {
+                                        info!("Start with Windows: {}", if enabled { "enabled" } else { "disabled" })
+                                    }
+                                    Err(e) => error!("Failed to toggle autostart: {}", e),
+                                }
+                                Ok(())
                             } else {
                                 // For individual process clicks, use the menu ID mapping
                                 info!("Individual process clicked (ID: {}), looking up port...", menu_id);
@@ -344,9 +359,15 @@ impl PortKillApp {
                             }
                         }
                         
-                        // Only update menu if process count changed significantly and we're not killing processes
-                        // Add extra delay after killing processes to prevent crashes
-                        let process_count_changed = process_count != last_process_count;
+                        // Only update the menu if its content is stale and we're not killing processes.
+                        // - Windows: compare the full process set; a killed process can be replaced
+                        //   by another one on a different port without changing the count, which
+                        //   would otherwise leave stale (dead) menu entries.
+                        // - macOS: compare only the count (original conservative behavior).
+                        #[cfg(target_os = "windows")]
+                        let menu_is_stale = processes != last_displayed_processes;
+                        #[cfg(not(target_os = "windows"))]
+                        let menu_is_stale = process_count != last_process_count;
                         // macOS needs a long delay between menu updates to avoid issue #30;
                         // on Windows menu swaps are cheap and safe, so refresh sooner.
                         #[cfg(target_os = "macos")]
@@ -358,8 +379,8 @@ impl PortKillApp {
                         let not_killing = !is_killing_processes.load(Ordering::Relaxed);
                         // Also check that we haven't had a menu interaction recently (prevents crash from issue #30)
                         let no_recent_interaction = last_menu_interaction.elapsed() >= std::time::Duration::from_secs(2);
-                        
-                        if not_killing && process_count_changed && enough_time_passed && no_recent_interaction {
+
+                        if not_killing && menu_is_stale && enough_time_passed && no_recent_interaction {
                             info!("Process count changed from {} to {}, updating menu...", last_process_count, process_count);
 
                             // Additional validation: ensure all processes in the list are still running.
@@ -383,8 +404,15 @@ impl PortKillApp {
                                       process_count, valid_process_count);
                             }
                             
-                            // Only proceed if we have valid processes
-                            if !valid_processes.is_empty() {
+                            // On Windows always rebuild (an empty menu still shows Kill All / Quit,
+                            // and stale dead entries must be removed); macOS keeps the original
+                            // behavior of skipping empty updates.
+                            #[cfg(target_os = "windows")]
+                            let rebuild_menu = true;
+                            #[cfg(not(target_os = "windows"))]
+                            let rebuild_menu = !valid_processes.is_empty();
+
+                            if rebuild_menu {
                                 // Use a try-catch approach to prevent crashes
                                 match std::panic::catch_unwind(|| {
                                     TrayMenu::create_menu_with_verbose(&valid_processes, args.show_pid, args.verbose)
@@ -412,6 +440,10 @@ impl PortKillApp {
                                         }
                                         
                                         last_process_count = valid_process_count;
+                                        #[cfg(target_os = "windows")]
+                                        {
+                                            last_displayed_processes = valid_processes.clone();
+                                        }
                                         last_menu_update = std::time::Instant::now();
                                         info!("Menu updated successfully for {} processes", valid_process_count);
                                     }
@@ -427,8 +459,8 @@ impl PortKillApp {
                                 last_process_count = 0;
                                 last_menu_update = std::time::Instant::now();
                             }
-                        } else if process_count_changed {
-                            info!("Process count changed from {} to {} but skipping menu update (killing: {}, time passed: {}, no recent interaction: {})",
+                        } else if menu_is_stale {
+                            info!("Process list changed ({} -> {} processes) but skipping menu update (killing: {}, time passed: {}, no recent interaction: {})",
                                   last_process_count, process_count, !not_killing, enough_time_passed, no_recent_interaction);
                         }
                     }
@@ -602,12 +634,16 @@ impl PortKillApp {
             Ok(output) => {
                 if output.status.success() {
                     let stdout = String::from_utf8_lossy(&output.stdout);
+                    // Resolve all process names with a single tasklist call
+                    // instead of one call per PID (each costs ~100-300ms).
+                    let name_by_pid = Self::get_process_names_windows();
                     Self::parse_netstat_output(
                         &stdout,
                         &ports_filter,
                         &ignore_ports,
                         &ignore_processes,
                         &mut processes,
+                        &name_by_pid,
                     );
                 }
             }
@@ -626,11 +662,8 @@ impl PortKillApp {
         ignore_ports: &std::collections::HashSet<u16>,
         ignore_processes: &std::collections::HashSet<String>,
         processes: &mut HashMap<u16, crate::types::ProcessInfo>,
+        name_by_pid: &HashMap<i32, String>,
     ) {
-        // Resolve all process names with a single tasklist call instead of one
-        // call per PID (each invocation costs ~100-300ms).
-        let name_by_pid = Self::get_process_names_windows();
-
         for line in stdout.lines() {
             // netstat output format: Proto  Local Address  Foreign Address  State  PID
             if !line.contains("LISTENING") {
@@ -716,31 +749,37 @@ impl PortKillApp {
     }
 
     /// Resolve all process names in one tasklist invocation.
-    /// CSV format: "name","pid","session name","session#","mem usage"
     #[cfg(target_os = "windows")]
     fn get_process_names_windows() -> HashMap<i32, String> {
-        let mut name_by_pid = HashMap::new();
-
         let output = std::process::Command::new("tasklist")
             .args(&["/FO", "CSV", "/NH"])
             .output();
 
-        if let Ok(output) = output {
-            if output.status.success() {
-                let stdout = String::from_utf8_lossy(&output.stdout);
-                for line in stdout.lines() {
-                    let mut cols = line.split("\",\"");
-                    let name = match cols.next() {
-                        Some(name) => name.trim_start_matches('"'),
-                        None => continue,
-                    };
-                    let pid = match cols.next().and_then(|p| p.trim_matches('"').parse::<i32>().ok()) {
-                        Some(pid) => pid,
-                        None => continue,
-                    };
-                    name_by_pid.insert(pid, name.to_string());
-                }
+        match output {
+            Ok(output) if output.status.success() => {
+                Self::parse_tasklist_csv(&String::from_utf8_lossy(&output.stdout))
             }
+            _ => HashMap::new(),
+        }
+    }
+
+    /// Parse `tasklist /FO CSV /NH` output into a PID -> name map.
+    /// CSV format: "name","pid","session name","session#","mem usage"
+    #[cfg(target_os = "windows")]
+    fn parse_tasklist_csv(stdout: &str) -> HashMap<i32, String> {
+        let mut name_by_pid = HashMap::new();
+
+        for line in stdout.lines() {
+            let mut cols = line.split("\",\"");
+            let name = match cols.next() {
+                Some(name) => name.trim_start_matches('"'),
+                None => continue,
+            };
+            let pid = match cols.next().and_then(|p| p.trim_matches('"').parse::<i32>().ok()) {
+                Some(pid) => pid,
+                None => continue,
+            };
+            name_by_pid.insert(pid, name.to_string());
         }
 
         name_by_pid
@@ -965,12 +1004,15 @@ impl PortKillApp {
         };
 
         let stdout = String::from_utf8_lossy(&output.stdout);
+        // Single batch lookup instead of one tasklist call per PID
+        let name_by_pid = Self::get_process_names_windows();
         Self::extract_pids_from_netstat_output(
             &stdout,
             &ports_filter,
             &ignore_ports,
             &ignore_processes,
             &mut pids_to_kill,
+            &name_by_pid,
         );
 
         if pids_to_kill.is_empty() {
@@ -1002,10 +1044,8 @@ impl PortKillApp {
         ignore_ports: &std::collections::HashSet<u16>,
         ignore_processes: &std::collections::HashSet<String>,
         pids_to_kill: &mut Vec<i32>,
+        name_by_pid: &HashMap<i32, String>,
     ) {
-        // Single batch lookup instead of one tasklist call per PID
-        let name_by_pid = Self::get_process_names_windows();
-
         for line in stdout.lines() {
             if !line.contains("LISTENING") {
                 continue;
@@ -1247,5 +1287,109 @@ impl PortKillApp {
             .output()
             .map(|output| output.status.success())
             .unwrap_or(false)
+    }
+}
+
+#[cfg(all(test, target_os = "windows"))]
+mod tests {
+    use super::PortKillApp;
+    use std::collections::{HashMap, HashSet};
+
+    const NETSTAT_SAMPLE: &str = "\
+  Proto  Local Address          Foreign Address        State           PID
+  TCP    0.0.0.0:3000           0.0.0.0:0              LISTENING       1234
+  TCP    127.0.0.1:8000         0.0.0.0:0              LISTENING       5678
+  TCP    [::]:3000              [::]:0                 LISTENING       1234
+  TCP    0.0.0.0:9999           0.0.0.0:0              ESTABLISHED     4321
+  garbage line that should be ignored
+";
+
+    fn names() -> HashMap<i32, String> {
+        HashMap::from([
+            (1234, "node.exe".to_string()),
+            (5678, "python.exe".to_string()),
+        ])
+    }
+
+    #[test]
+    fn parse_tasklist_csv_extracts_pid_and_name() {
+        let csv = "\
+\"System Idle Process\",\"0\",\"Services\",\"0\",\"8 K\"
+\"node.exe\",\"1234\",\"Console\",\"1\",\"120,532 K\"
+not a csv line
+";
+        let map = PortKillApp::parse_tasklist_csv(csv);
+        assert_eq!(map.get(&1234).map(String::as_str), Some("node.exe"));
+        assert_eq!(
+            map.get(&0).map(String::as_str),
+            Some("System Idle Process")
+        );
+        assert_eq!(map.len(), 2);
+    }
+
+    #[test]
+    fn parse_netstat_finds_listening_ports() {
+        let mut processes = HashMap::new();
+        PortKillApp::parse_netstat_output(
+            NETSTAT_SAMPLE,
+            &HashSet::from([3000u16, 8000]),
+            &HashSet::new(),
+            &HashSet::new(),
+            &mut processes,
+            &names(),
+        );
+
+        assert_eq!(processes.len(), 2);
+        assert_eq!(processes.get(&3000).unwrap().name, "node.exe");
+        assert_eq!(processes.get(&3000).unwrap().pid, 1234);
+        assert_eq!(processes.get(&8000).unwrap().name, "python.exe");
+    }
+
+    #[test]
+    fn parse_netstat_skips_non_listening_and_filtered_ports() {
+        let mut processes = HashMap::new();
+        PortKillApp::parse_netstat_output(
+            NETSTAT_SAMPLE,
+            &HashSet::from([9999u16]),
+            &HashSet::new(),
+            &HashSet::new(),
+            &mut processes,
+            &names(),
+        );
+
+        // 9999 is ESTABLISHED, not LISTENING
+        assert!(processes.is_empty());
+    }
+
+    #[test]
+    fn parse_netstat_respects_ignore_lists() {
+        let mut processes = HashMap::new();
+        PortKillApp::parse_netstat_output(
+            NETSTAT_SAMPLE,
+            &HashSet::from([3000u16, 8000]),
+            &HashSet::from([8000u16]),
+            &HashSet::from(["node.exe".to_string()]),
+            &mut processes,
+            &names(),
+        );
+
+        // node.exe ignored by name, 8000 ignored by port
+        assert!(processes.is_empty());
+    }
+
+    #[test]
+    fn extract_pids_dedupes_across_ipv4_and_ipv6() {
+        let mut pids = Vec::new();
+        PortKillApp::extract_pids_from_netstat_output(
+            NETSTAT_SAMPLE,
+            &HashSet::from([3000u16]),
+            &HashSet::new(),
+            &HashSet::new(),
+            &mut pids,
+            &names(),
+        );
+
+        // Port 3000 listens on IPv4 and IPv6 with the same PID: kill it once
+        assert_eq!(pids, vec![1234]);
     }
 }

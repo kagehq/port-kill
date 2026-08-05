@@ -50,6 +50,10 @@ embed_icon = []
 tray-icon = "0.10"
 winit = "0.29"
 
+# Windows-specific dependencies (console attach for the GUI-subsystem binary)
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys = { version = "0.52", features = ["Win32_System_Console", "Win32_Foundation"] }
+
 # Unix-specific dependencies (for process management)
 [target.'cfg(not(target_os = "windows"))'.dependencies]
 nix = { version = "0.27", features = ["signal", "process", "fs"] }
