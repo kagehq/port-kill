@@ -141,13 +141,34 @@ port-kill-console.exe cache --doctor --json
 
 ## 4) About the tray app
 
-You can try the tray binary `port-kill.exe`. On some Windows setups, the tray icon may fail and the app will fall back to console mode with a warning like:
+Running `port-kill.exe` without `--console` starts the system tray UI (same experience as macOS):
+
+```powershell
+# Start the tray app monitoring specific ports
+port-kill.exe --ports 3000,8000,8080
+
+# Or a range
+port-kill.exe --start-port 3000 --end-port 9000
+```
+
+- A badge icon appears in the notification area (near the clock) showing the number of detected processes; its color follows the count: green (0), orange (1–9), red (10+). If you don't see it, check the hidden icons overflow (`^` arrow).
+- No console window opens when launched from Explorer — the app runs entirely in the tray. When run from a terminal, output still prints there.
+- Note: because `port-kill.exe` is a GUI app, Windows PowerShell 5.1 won't capture its output into a variable or pipeline (`$out = port-kill.exe --list` comes back empty). Redirection from `cmd` works fine (`port-kill.exe --list > out.txt`), and for scripting use `port-kill-console.exe`, which is a regular console app.
+- **Click (left or right)** the icon to open the menu:
+  - **Kill All Processes** — kills everything on the monitored ports
+  - Processes grouped by type (`Docker (7)`, `Node (2)`, …) as submenus; single processes listed directly (`Kill: Port 3000: node`) — click to kill just that one
+  - **Start with Windows** — toggle to launch Port Kill at login with the same options (user-scoped `HKCU` Run key, no admin needed)
+  - **Quit** — exits the app
+- The menu refreshes automatically as processes come and go (scans every 5 seconds).
+- `--show-pid` and `--verbose` add PIDs / command line details to the menu entries.
+
+On some Windows setups (e.g. headless sessions), the tray icon may fail and the app will fall back to console mode with a warning like:
 
 ```
-Tray mode failed on Windows (Failed to create Windows tray item …). Falling back to console mode…
+Tray mode failed on Windows (…). Falling back to console mode…
 ```
 
-This is harmless. The console app has the same functionality and is the recommended way to use Port Kill on Windows.
+This is harmless. The console app has the same functionality.
 
 ## 5) Troubleshooting
 
